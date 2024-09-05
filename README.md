@@ -1,2 +1,2 @@
-# mas1004-2023
+# mas1004
 Data &amp; AI at Sogang University

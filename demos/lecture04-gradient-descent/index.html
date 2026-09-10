@@ -1271,10 +1271,10 @@ function tab3(){
   root.appendChild(h('div',{class:'head'},[h('h2',{text:'Measure, step, measure, step'}), h('span',{class:'k', text:'After every step the gradient belongs to the old position. Measure it again.'})]));
   root.appendChild(h('div',{class:'work three'},[
     h('div',{class:'plots'},[
-      h('div',{class:'card'},[h('h3',{text:'Data (blue), your curve (orange), residuals (green)'}), cv]),
+      h('div',{class:'card', id:'stage3-plot'},[h('h3',{text:'Data (blue), your curve (orange), residuals (green)'}), cv]),
       knobBox
     ]),
-    h('div',{class:'side'},[stepper.el, lr.el, score, h('div',{class:'card', id:'stage3-table'},[h('h3',{text:'Gradient at this position'}), table.el])]),
+    h('div',{class:'side', id:'stage3-controls'},[stepper.el, lr.el, score, h('div',{class:'card', id:'stage3-table'},[h('h3',{text:'Gradient at this position'}), table.el])]),
     h('div',{class:'side'},[
       h('div',{class:'card', id:'stage3-chart'},[h('h3',{text:'Loss against step'}), chart,
         h('div',{class:'tip', text:'Earlier runs stay in grey, up to three. Reset returns the knobs to the start and keeps them.'})]),

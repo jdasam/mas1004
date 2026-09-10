@@ -1,0 +1,1466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gradient Descent · MAS1004</title>
+<style>
+:root{
+  --surface:#fcfcfb; --panel:#ffffff; --ink:#0b0b0b; --sub:#52514e; --muted:#8a8985;
+  --rule:#dedcd6; --rule2:#c4c2bb; --accent:#b3001b;
+  --data:#2a78d6; --model:#eb6834; --resid:#1baf7a; --ok:#0ca30c; --bad:#d03b3b;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--surface); color:var(--ink);
+  font:400 18px/1.45 Inter,Pretendard,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased; min-height:100vh;
+}
+button,input,select{font-family:inherit;font-size:inherit}
+h1,h2,h3{margin:0;font-weight:600}
+sup{font-size:.7em}
+
+#topbar{
+  position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:24px;flex-wrap:wrap;
+  padding:10px 24px;background:rgba(252,252,251,.96);border-bottom:1px solid var(--rule);backdrop-filter:blur(6px);
+}
+.brand{font-size:1.2rem;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+.brand span{display:block;font-size:.78rem;font-weight:500;color:var(--sub);letter-spacing:.01em}
+.tabs{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+.tab{
+  padding:8px 16px;border-radius:10px;border:1px solid var(--rule2);background:#fff;color:var(--sub);
+  font-size:1rem;font-weight:600;cursor:pointer;transition:.12s;
+}
+.tab:hover{border-color:var(--ink);color:var(--ink)}
+.tab.active{background:var(--ink);border-color:var(--ink);color:#fff}
+.tab b{font-weight:700;margin-right:6px;opacity:.6}
+.tab.active b{opacity:.8}
+
+main{max-width:1720px;margin:0 auto;padding:18px 24px 60px}
+.stage{display:none}
+.stage.active{display:block}
+.head{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin:2px 0 14px}
+.head h2{font-size:1.45rem}
+.head .eq{font:600 1.15rem/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink);border:1px solid var(--rule2);padding:7px 12px;border-radius:9px;background:#fff}
+.head .eq i{font-style:normal;color:var(--model)}
+.head .k{font-size:.95rem;color:var(--sub)}
+
+.dsrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.ds{
+  padding:7px 14px;border-radius:999px;border:1px solid var(--rule2);background:#fff;color:var(--sub);
+  font-size:.95rem;font-weight:600;cursor:pointer;
+}
+.ds:hover{border-color:var(--ink);color:var(--ink)}
+.ds.active{border-color:var(--data);color:var(--data);background:#eef4fc}
+
+.work{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:18px;align-items:start}
+.work.wide{grid-template-columns:minmax(0,1fr) 560px}
+@media(max-width:1180px){.work,.work.wide{grid-template-columns:1fr}}
+.plots{display:grid;grid-template-columns:1fr;gap:14px}
+.plots.split{grid-template-columns:1fr 1fr}
+@media(max-width:980px){.plots.split{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:14px;padding:12px 14px 10px}
+.card h3{font-size:.95rem;color:var(--sub);font-weight:600;margin-bottom:6px}
+canvas{display:block;width:100%;touch-action:none}
+.legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:8px;font-size:.88rem;color:var(--sub)}
+.legend i{display:inline-block;width:18px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.legend .dot{width:10px;height:10px;border-radius:50%}
+.legend .dash{background:repeating-linear-gradient(90deg,var(--muted) 0 4px,transparent 4px 7px)}
+
+.side{display:flex;flex-direction:column;gap:14px}
+.question{border:1px solid var(--rule);border-left:4px solid var(--data);border-radius:12px;padding:12px 16px;background:#fff;font-size:1.05rem}
+.question .q{font-weight:600}
+.question .row{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+.question input{width:130px;padding:8px 10px;border:1px solid var(--rule2);border-radius:9px;font-weight:600;font-size:1.1rem}
+.question input:focus{outline:2px solid var(--data);outline-offset:1px}
+.question .unit{color:var(--sub);font-size:.95rem}
+.score{border:1px solid var(--rule);border-radius:12px;padding:12px 16px;background:#fff;transition:.2s}
+.score.good{border-color:var(--ok);box-shadow:0 0 0 2px rgba(12,163,12,.18)}
+.score .lbl{font-size:.88rem;color:var(--sub);font-weight:600}
+.score .big{font-size:3rem;font-weight:700;line-height:1.1;letter-spacing:-.02em}
+.score .sm{font-size:.95rem;color:var(--sub)}
+.score .sm b{color:var(--ink);font-weight:600}
+.score.hidden{display:none}
+
+.knobs{display:grid;grid-template-columns:1fr;gap:10px}
+.knobs.two{grid-template-columns:1fr 1fr}
+.knob{display:flex;align-items:center;gap:12px;padding:8px 10px;border:1px solid var(--rule);border-radius:12px;background:#fff;outline:none;--kc:var(--model)}
+.knob:focus{border-color:var(--ink)}
+.knob.drag{border-color:var(--ink)}
+.knob.sm{gap:8px;padding:6px 8px}
+.kdial{width:84px;height:84px;flex:none;cursor:ns-resize;touch-action:none}
+.knob.sm .kdial{width:62px;height:62px}
+.kdial svg{width:100%;height:100%;display:block}
+.k-track{fill:none;stroke:var(--rule);stroke-width:8;stroke-linecap:round}
+.k-val{fill:none;stroke:var(--kc);stroke-width:8;stroke-linecap:round}
+.k-face{fill:#fff;stroke:var(--rule2);stroke-width:1.5}
+.k-ind{stroke:var(--ink);stroke-width:4;stroke-linecap:round}
+.k-hub{fill:var(--ink)}
+.kinfo{display:flex;flex-direction:column;gap:4px;min-width:0}
+.klabel{font-size:1.05rem;font-weight:600;white-space:nowrap}
+.klabel span{color:var(--muted);font-weight:500;margin-left:6px;font-size:.88em}
+.knob.sm .klabel{font-size:.95rem}
+.kvalrow{display:flex;align-items:center;gap:6px}
+.kval{font:600 1.3rem/1 ui-monospace,SFMono-Regular,Menlo,monospace;min-width:5.6ch;text-align:right;font-variant-numeric:tabular-nums}
+.knob.sm .kval{font-size:1.05rem;min-width:5ch}
+.kstep{width:30px;height:30px;border-radius:8px;border:1px solid var(--rule2);background:#fff;font-size:1.1rem;line-height:1;cursor:pointer;color:var(--ink)}
+.kstep:hover{border-color:var(--ink)}
+.knob.sm .kstep{width:26px;height:26px;font-size:1rem}
+
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{
+  padding:10px 16px;border-radius:10px;border:1px solid var(--ink);background:var(--ink);color:#fff;
+  font-weight:600;font-size:1rem;cursor:pointer;transition:.12s;
+}
+.btn:hover{background:#333}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.ghost{background:#fff;color:var(--ink)}
+.btn.ghost:hover{background:#f2f1ee}
+.btn.auto{border-color:var(--accent);background:var(--accent)}
+.btn.auto:hover{background:#8f0016}
+.note{border:1px solid var(--rule);border-radius:12px;padding:11px 15px;background:#fff;font-size:.98rem;line-height:1.5}
+.note.warn{border-left:4px solid var(--bad)}
+.note.good{border-left:4px solid var(--ok)}
+.note.hide{display:none}
+.note b{font-weight:600}
+.ctl{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:.98rem}
+.ctl select{padding:7px 10px;border:1px solid var(--rule2);border-radius:9px;background:#fff;font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--rule2);border-radius:9px;overflow:hidden}
+.seg button{padding:7px 12px;border:none;background:#fff;color:var(--sub);font-weight:600;cursor:pointer}
+.seg button+button{border-left:1px solid var(--rule2)}
+.seg button.on{background:var(--ink);color:#fff}
+
+table.cost{border-collapse:collapse;width:100%;font-size:.95rem;font-variant-numeric:tabular-nums}
+table.cost th,table.cost td{border-bottom:1px solid var(--rule);padding:6px 8px;text-align:right;white-space:nowrap}
+table.cost th{color:var(--sub);font-weight:600}
+table.cost th:first-child,table.cost td:first-child{text-align:left}
+table.cost tr.now td{font-weight:600}
+table.cost tr.far td{color:var(--bad)}
+.tip{font-size:.85rem;color:var(--muted);margin-top:4px}
+kbd{font:600 .8em ui-monospace,Menlo,monospace;border:1px solid var(--rule2);border-radius:5px;padding:1px 5px;background:#fff}
+
+/* ---- lecture 4 ---- */
+.work.three{grid-template-columns:minmax(0,1fr) 400px 460px}
+@media(max-width:1500px){.work.three{grid-template-columns:minmax(0,1fr) 400px}}
+@media(max-width:1180px){.work.three{grid-template-columns:1fr}}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.thumbs{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;margin-top:10px}
+.thumbs.twelve{grid-template-columns:repeat(12,1fr)}
+.thumb{border:1px solid var(--rule);border-radius:10px;padding:4px;background:#fff;cursor:pointer}
+.thumb.on{border-color:var(--ink)}
+.thumb canvas{height:70px}
+.thumb div{font-size:.8rem;text-align:center;color:var(--sub);margin-top:2px}
+.readout{font:500 1.02rem/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
+.readout b{font-weight:600}
+.slider{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.slider input[type=range]{flex:1;min-width:160px}
+.slider .val{font:600 1.05rem ui-monospace,Menlo,monospace;min-width:7ch;text-align:right}
+table.grad{border-collapse:collapse;width:100%;font-size:.95rem;font-variant-numeric:tabular-nums}
+table.grad th,table.grad td{border-bottom:1px solid var(--rule);padding:6px 8px;text-align:right;white-space:nowrap}
+table.grad th{white-space:normal}
+table.grad th{color:var(--sub);font-weight:600}
+table.grad th:first-child,table.grad td:first-child{text-align:left}
+table.grad td.bar{width:120px;padding:0 4px}
+table.grad td.bar div{position:relative;height:14px}
+table.grad td.bar i{position:absolute;top:0;height:14px;background:var(--model);border-radius:3px}
+table.grad tr.max td{font-weight:600}
+table.grad.stale td{color:var(--muted)}
+table.grad.stale td.bar i{opacity:.3}
+.counter{font-size:.95rem;color:var(--sub)}
+.counter b{color:var(--ink);font-weight:600}
+.status{font:500 .98rem ui-monospace,Menlo,monospace;color:var(--sub)}
+.group{border:1px solid var(--rule);border-radius:12px;padding:8px 10px;background:#fff}
+.group h4{margin:0 0 6px;font-size:.9rem;color:var(--sub);font-weight:600}
+.group .knobs{gap:6px;grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:1180px){.group .knobs{grid-template-columns:1fr 1fr}}
+table.rec{border-collapse:collapse;width:100%;font-size:.95rem;font-variant-numeric:tabular-nums}
+table.rec th,table.rec td{border-bottom:1px solid var(--rule);padding:6px 8px;text-align:right;white-space:nowrap}
+table.rec th{color:var(--sub);font-weight:600}
+table.rec th:first-child,table.rec td:first-child,table.rec th:nth-child(2),table.rec td:nth-child(2){text-align:left}
+table.rec button{padding:3px 10px;border-radius:7px;border:1px solid var(--rule2);background:#fff;cursor:pointer;font-size:.85rem}
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="brand">Gradient Descent<span>MAS1004 &middot; Data &amp; AI &middot; Lecture 4</span></div>
+  <nav class="tabs" id="tabs"></nav>
+</header>
+<main id="main"></main>
+
+<script id="gd-core">
+/* =========================================================================
+   Core: data, two models, loss, numerical gradient, gradient descent,
+   loss curves and loss grids. No DOM access. Everything is deterministic.
+   ========================================================================= */
+var GD = (function(){
+'use strict';
+var DATA_VERSION = 1;   /* same as lecture 3: the points must be identical */
+var DELTA = 0.001;
+var DIVERGE = 1e6;
+
+
+/* ---- random numbers: copied from lecture 3 so the seeds give the same numbers ---- */
+function xmur3(str){
+  var h = 1779033703 ^ str.length;
+  for(var i = 0; i < str.length; i++){
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = h << 13 | h >>> 19;
+  }
+  return function(){
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return (h ^= h >>> 16) >>> 0;
+  };
+}
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function rngOf(key){ var h = xmur3('rs|v' + DATA_VERSION + '|' + key); h(); return mulberry32(h()); }
+function gauss(r){
+  var u = 0, v = 0;
+  while(u === 0) u = r();
+  while(v === 0) v = r();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+function clamp(v,lo,hi){ return v < lo ? lo : (v > hi ? hi : v); }
+function r2(v){ return Math.round(v*100)/100; }
+
+/* ---- the lecture 3 mystery basis and its hidden weights ---- */
+function basis8(x){
+  var u = x/3;
+  return [Math.sin(2*x), Math.cos(3*x), Math.exp(x)/20, Math.log(x + 4), u*u*u*u, u*u, u, 1];
+}
+function mysteryTruth(){
+  var r = rngOf('mystery-truth'), w = [], j;
+  for(j = 0; j < 8; j++){
+    var s = r() < 0.5 ? -1 : 1;
+    w.push(r2(s*(0.6 + 1.9*r())));
+  }
+  /* the constant term is chosen so that the function averages to zero on [-3, 3] */
+  var mean = 0, n = 600;
+  for(var i = 0; i < n; i++){
+    var b = basis8(-3 + 6*(i + 0.5)/n);
+    for(j = 0; j < 7; j++) mean += w[j]*b[j]/n;
+  }
+  w[7] = r2(-mean);
+  return w;
+}
+var TRUTH8 = mysteryTruth();
+function genData(r){
+  var pts = [];
+  for(var i = 0; i < 120; i++){
+    var x = -3 + 6*(i + r())/120;
+    var b = basis8(x), y = 0;
+    for(var j = 0; j < 8; j++) y += TRUTH8[j]*b[j];
+    pts.push([r2(x), r2(y + 0.08*gauss(r))]);
+  }
+  return pts;
+}
+var DATA = genData(rngOf('data|mystery'));
+var N = DATA.length;
+var XS = DATA.map(function(p){ return p[0]; }), YS = DATA.map(function(p){ return p[1]; });
+var B8 = XS.map(basis8);   /* cached basis values per data point */
+
+/* ---- models ---- */
+function knob(name, sub, min, max){ return {name:name, sub:sub, min:min, max:max, step:0.01, big:0.1, init:0}; }
+var M8 = {
+  key:'m8', label:'Eight knobs', k:8,
+  eq:'y = w₁ sin(2x) + w₂ cos(3x) + w₃ eˣ/20 + w₄ ln(x+4) + w₅ (x/3)⁴ + w₆ (x/3)² + w₇ (x/3) + w₈',
+  names:['w₁','w₂','w₃','w₄','w₅','w₆','w₇','w₈'],
+  subs:['sin(2x)','cos(3x)','eˣ/20','ln(x+4)','(x/3)⁴','(x/3)²','x/3','1'],
+  f:function(p, x){ var b = basis8(x), y = 0; for(var j = 0; j < 8; j++) y += p[j]*b[j]; return y; },
+  predictAt:function(p, i){ var b = B8[i], y = 0; for(var j = 0; j < 8; j++) y += p[j]*b[j]; return y; }
+};
+M8.knobs = M8.names.map(function(nm, j){ return knob(nm, M8.subs[j], -5, 5); });
+var FEAT = XS.map(function(x){ var u = x/3; return [Math.exp(x)/20, Math.log(x + 4), u*u*u*u, u*u, u]; });
+var M12 = {
+  key:'m12', label:'Twelve knobs', k:12,
+  eq:'y = w₁ sin(w₂x + w₃) + w₄ cos(w₅x + w₆) + w₇ eˣ/20 + w₈ ln(x+4) + w₉ (x/3)⁴ + w₁₀ (x/3)² + w₁₁ (x/3) + w₁₂',
+  names:['w₁','w₂','w₃','w₄','w₅','w₆','w₇','w₈','w₉','w₁₀','w₁₁','w₁₂'],
+  subs:['amplitude','frequency','phase','amplitude','frequency','phase','eˣ/20','ln(x+4)','(x/3)⁴','(x/3)²','x/3','1'],
+  groups:[{label:'w₁ sin(w₂x + w₃)', idx:[0,1,2]}, {label:'w₄ cos(w₅x + w₆)', idx:[3,4,5]}, {label:'the other terms', idx:[6,7,8,9,10,11]}],
+  f:function(p, x){
+    var u = x/3;
+    return p[0]*Math.sin(p[1]*x + p[2]) + p[3]*Math.cos(p[4]*x + p[5]) +
+      p[6]*Math.exp(x)/20 + p[7]*Math.log(x + 4) + p[8]*u*u*u*u + p[9]*u*u + p[10]*u + p[11];
+  },
+  predictAt:function(p, i){
+    var x = XS[i], f = FEAT[i];
+    return p[0]*Math.sin(p[1]*x + p[2]) + p[3]*Math.cos(p[4]*x + p[5]) +
+      p[6]*f[0] + p[7]*f[1] + p[8]*f[2] + p[9]*f[3] + p[10]*f[4] + p[11];
+  }
+};
+M12.knobs = M12.names.map(function(nm, j){
+  var s = M12.subs[j];
+  return s === 'frequency' ? knob(nm, s, 0, 6) : s === 'phase' ? knob(nm, s, -3.2, 3.2) : knob(nm, s, -5, 5);
+});
+function embed8(p8){ return [p8[0], 2, 0, p8[1], 3, 0, p8[2], p8[3], p8[4], p8[5], p8[6], p8[7]]; }
+var MODELS = {m8:M8, m12:M12};
+
+/* ---- loss: mean squared error over the 120 points ---- */
+function loss(model, p){
+  var s = 0;
+  for(var i = 0; i < N; i++){ var e = model.predictAt(p, i) - YS[i]; s += e*e; }
+  return s/N;
+}
+
+/* ---- numerical gradient: nudge each knob by delta, measure again ---- */
+function numericalGradient(model, p, delta){
+  delta = delta || DELTA;
+  var k = model.k, L0 = loss(model, p), slopes = new Array(k), nudged = new Array(k), q = p.slice();
+  for(var j = 0; j < k; j++){
+    q[j] = p[j] + delta;
+    nudged[j] = loss(model, q);
+    slopes[j] = (nudged[j] - L0)/delta;
+    q[j] = p[j];
+  }
+  return {lossNow:L0, slopes:slopes, lossNudged:nudged, evals:k + 1, delta:delta};
+}
+function step(p, slopes, lr){
+  return p.map(function(v, j){ return v - lr*slopes[j]; });
+}
+
+/* ---- runner: keeps the position, the last two gradients, the path and the counters ---- */
+function runner(model, p0, opts){
+  opts = opts || {};
+  var S = {
+    model:model, p:p0.slice(), lr:opts.lr === undefined ? 0.05 : opts.lr, delta:opts.delta || DELTA,
+    steps:0, evals:0, history:[loss(model, p0)], path:[p0.slice()],
+    grad:null, prevGrad:null, stale:true, diverged:false
+  };
+  S.measure = function(){
+    S.prevGrad = S.grad;
+    S.grad = numericalGradient(model, S.p, S.delta);
+    S.evals += S.grad.evals;
+    S.stale = false;
+    return S.grad;
+  };
+  S.takeStep = function(){
+    if(!S.grad || S.stale) throw new Error('Measure the gradient first');
+    S.p = step(S.p, S.grad.slopes, S.lr);
+    S.steps++;
+    var L = loss(model, S.p);
+    S.history.push(L); S.path.push(S.p.slice());
+    S.stale = true;
+    if(!isFinite(L) || L > DIVERGE) S.diverged = true;
+    return L;
+  };
+  S.cycle = function(n){
+    for(var t = 0; t < n && !S.diverged; t++){ S.measure(); S.takeStep(); }
+    return S;
+  };
+  S.setP = function(p){ S.p = p.slice(); S.stale = true; S.diverged = false; };
+  return S;
+}
+function run(model, p0, lr, nSteps, delta){
+  var S = runner(model, p0, {lr:lr, delta:delta}).cycle(nSteps);
+  return {p:S.p, loss:S.history[S.history.length - 1], steps:S.steps, evals:S.evals, history:S.history, path:S.path, diverged:S.diverged};
+}
+
+/* ---- pictures of the loss: one knob (curve) or two knobs (grid), the others frozen at p ---- */
+function lossCurve(model, p, j, lo, hi, n){
+  var xs = new Float64Array(n), ys = new Float64Array(n), q = p.slice();
+  for(var i = 0; i < n; i++){
+    var v = lo + (hi - lo)*i/(n - 1);
+    q[j] = v; xs[i] = v; ys[i] = loss(model, q);
+  }
+  return {xs:xs, ys:ys};
+}
+function slopeAt(model, p, j, delta){
+  var q = p.slice(), L0 = loss(model, p);
+  q[j] = p[j] + delta;
+  return (loss(model, q) - L0)/delta;
+}
+function lossGrid(model, p, ja, jb, aLo, aHi, bLo, bHi, n){
+  var grid = new Float64Array(n*n), q = p.slice(), lo = Infinity, hi = -Infinity;
+  for(var ib = 0; ib < n; ib++){
+    q[jb] = bLo + (bHi - bLo)*ib/(n - 1);
+    for(var ia = 0; ia < n; ia++){
+      q[ja] = aLo + (aHi - aLo)*ia/(n - 1);
+      var L = loss(model, q);
+      grid[ib*n + ia] = L;
+      if(L < lo) lo = L;
+      if(L > hi) hi = L;
+    }
+  }
+  return {grid:grid, n:n, lo:lo, hi:hi, aLo:aLo, aHi:aHi, bLo:bLo, bHi:bHi};
+}
+
+/* exact least squares for m8. Used only to set targets; never shown as a method. */
+function leastSquares8(){
+  var k = 8, A = [], i, j, l;
+  for(i = 0; i < k; i++) A.push(new Float64Array(k + 1));
+  for(l = 0; l < N; l++){
+    var b = B8[l];
+    for(i = 0; i < k; i++){
+      for(j = 0; j < k; j++) A[i][j] += b[i]*b[j];
+      A[i][k] += b[i]*YS[l];
+    }
+  }
+  for(i = 0; i < k; i++){
+    var piv = i;
+    for(j = i + 1; j < k; j++) if(Math.abs(A[j][i]) > Math.abs(A[piv][i])) piv = j;
+    var t = A[i]; A[i] = A[piv]; A[piv] = t;
+    for(j = 0; j < k; j++){
+      if(j === i) continue;
+      var f = A[j][i]/A[i][i];
+      for(l = i; l <= k; l++) A[j][l] -= f*A[i][l];
+    }
+  }
+  var p = [];
+  for(i = 0; i < k; i++) p.push(A[i][k]/A[i][i]);
+  return {p:p, loss:loss(M8, p)};
+}
+/* a seeded random start for m12: amplitudes away from zero so the frequency knobs have a slope */
+function randomStart12(seed){
+  var r = rngOf('start12|' + seed);
+  function amp(){ return (r() < 0.5 ? -1 : 1)*(0.5 + 2.5*r()); }
+  function uni(lo, hi){ return lo + (hi - lo)*r(); }
+  var p = [amp(), uni(0.5, 6), uni(-3, 3), amp(), uni(0.5, 6), uni(-3, 3)];
+  for(var j = 6; j < 12; j++) p.push(uni(-2, 2));
+  return p.map(r2);
+}
+
+/* ---- measured constants (test/calibrate.js). Re-run it if the data or the models change. ---- */
+var START = {
+  m8:[0,0,0,0,0,0,0,0],
+  m12:{ A:[2.01,2.23,-2.87,-1.24,0.64,-2.27,-0.69,-1.88,0.72,-0.9,-0.6,-0.47],
+        B:[2.38,0.57,-2.76,1.49,1.05,-1.44,-1.02,1.58,-0.53,0.88,-1.05,-0.63],
+        C:[-1.71,4.31,1.76,0.9,0.9,1.76,-0.76,-1.48,-1.39,0.81,0.93,-0.4] }
+};
+var LR = { m8:{small:0.0002, good:0.3, large:0.6}, m12:{good:0.07} };
+
+return { DATA_VERSION:DATA_VERSION, DELTA:DELTA, DIVERGE:DIVERGE,
+  DATA:DATA, N:N, TRUTH8:TRUTH8, MODELS:MODELS, embed8:embed8, loss:loss, clamp:clamp, rngOf:rngOf,
+  numericalGradient:numericalGradient, step:step, runner:runner, run:run,
+  lossCurve:lossCurve, slopeAt:slopeAt, lossGrid:lossGrid,
+  leastSquares8:leastSquares8, randomStart12:randomStart12, START:START, LR:LR };
+})();
+</script>
+
+<script id="gd-ui">
+/* =========================================================================
+   UI: tabs, knobs, plots, loss curves, gradient table, loss map.
+   The knob widget, the scatter plot and the helpers come from lecture 3.
+   ========================================================================= */
+(function(){
+'use strict';
+var MODELS = GD.MODELS, SVGNS = 'http://www.w3.org/2000/svg';
+/* ---------------- small helpers ---------------- */
+function h(tag, attrs, kids){
+  var e = document.createElement(tag), k;
+  if(attrs) for(k in attrs){
+    var v = attrs[k];
+    if(v === null || v === undefined) continue;
+    if(k === 'class') e.className = v;
+    else if(k === 'text') e.textContent = v;
+    else if(k === 'html') e.innerHTML = v;
+    else if(k.slice(0,2) === 'on') e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
+  }
+  (kids || []).forEach(function(c){
+    if(c === null || c === undefined || c === false) return;
+    e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  });
+  return e;
+}
+function sv(tag, attrs){
+  var e = document.createElementNS(SVGNS, tag), k;
+  for(k in attrs) if(attrs[k] !== null && attrs[k] !== undefined) e.setAttribute(k, attrs[k]);
+  return e;
+}
+function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+function fmt(v, d){ var s = v.toFixed(d); return s === '-' + (0).toFixed(d) ? (0).toFixed(d) : s; }
+function fmtP(v, step){ var d = step >= 1 ? 0 : step >= 0.1 ? 1 : 2; return fmt(v, d); }
+function fmtLoss(v){
+  if(!isFinite(v)) return '∞';
+  if(v >= 10000) return v.toExponential(2).replace('e+','e');
+  if(v >= 100) return v.toFixed(1);
+  if(v >= 10) return v.toFixed(2);
+  return v.toFixed(3);
+}
+function fmtCount(n){
+  if(n < 1e9) return Math.round(n).toLocaleString('en-US');
+  var e = Math.floor(Math.log10(n)), m = n/Math.pow(10, e);
+  return (m >= 9.95 ? '1.0' : m.toFixed(1)) + ' × 10' + sup(m >= 9.95 ? e + 1 : e);
+}
+function sup(n){ return '<sup>' + n + '</sup>'; }
+function humanTime(s){
+  if(s < 1e-3) return 'under 1 ms';
+  if(s < 1) return Math.round(s*1000) + ' ms';
+  if(s < 60) return s.toFixed(1) + ' s';
+  if(s < 3600) return (s/60).toFixed(1) + ' min';
+  if(s < 86400) return (s/3600).toFixed(1) + ' hours';
+  if(s < 86400*365.25) return (s/86400).toFixed(1) + ' days';
+  var y = s/(86400*365.25);
+  if(y < 1e4) return Math.round(y).toLocaleString('en-US') + ' years';
+  if(y < 1e9) return (y/1e6).toFixed(1) + ' million years';
+  return (y/1e9).toFixed(1) + ' billion years';
+}
+function qparams(){
+  var out = {}, all = (location.search||'').replace(/^\?/,'') + '&' + (location.hash||'').replace(/^#/,'');
+  all.split('&').forEach(function(kv){
+    if(!kv) return;
+    var i = kv.indexOf('='), key = i < 0 ? kv : kv.slice(0,i);
+    out[key] = i < 0 ? '1' : decodeURIComponent(kv.slice(i+1));
+  });
+  return out;
+}
+var QP = qparams();
+
+var C = {
+  surface:'#fcfcfb', grid:'#ebe9e4', axis:'#b5b3ac', tick:'#52514e', ink:'#0b0b0b', muted:'#8a8985',
+  data:'#2a78d6', model:'#eb6834', resid:'#1baf7a', guess:'#52514e', accent:'#b3001b'
+};
+var RAMP = ['#cde2fb','#b7d3f6','#9ec5f4','#86b6ef','#6da7ec','#5598e7','#3987e5','#2a78d6','#256abf','#1c5cab','#184f95','#104281','#0d366b'];
+function rampColor(t){
+  t = clamp(t, 0, 1)*(RAMP.length - 1);
+  var i = Math.floor(t), f = t - i;
+  if(i >= RAMP.length - 1) return RAMP[RAMP.length - 1];
+  var a = hex(RAMP[i]), b = hex(RAMP[i + 1]);
+  return 'rgb(' + Math.round(a[0] + (b[0]-a[0])*f) + ',' + Math.round(a[1] + (b[1]-a[1])*f) + ',' + Math.round(a[2] + (b[2]-a[2])*f) + ')';
+}
+function hex(s){ return [parseInt(s.slice(1,3),16), parseInt(s.slice(3,5),16), parseInt(s.slice(5,7),16)]; }
+
+/* ---------------- knob widget ---------------- */
+var A0 = -140, A1 = 140;
+function polar(cx,cy,r,deg){ var t = (deg-90)*Math.PI/180; return [cx + r*Math.cos(t), cy + r*Math.sin(t)]; }
+function arcPath(cx,cy,r,a,b){
+  if(Math.abs(b-a) < 0.35) return 'M ' + polar(cx,cy,r,a).join(' ');
+  var p0 = polar(cx,cy,r,a), p1 = polar(cx,cy,r,b);
+  return 'M ' + p0[0].toFixed(2) + ' ' + p0[1].toFixed(2) +
+         ' A ' + r + ' ' + r + ' 0 ' + (Math.abs(b-a) > 180 ? 1 : 0) + ' ' + (b > a ? 1 : 0) +
+         ' ' + p1[0].toFixed(2) + ' ' + p1[1].toFixed(2);
+}
+function makeKnob(spec, onInput, small){
+  var raw = spec.init, value = spec.init;
+  var zeroRef = clamp(0, spec.min, spec.max);
+  var ang = function(v){ return A0 + (v - spec.min)/(spec.max - spec.min)*(A1 - A0); };
+
+  var track = sv('path',{class:'k-track', d:arcPath(50,50,40,A0,A1)});
+  var vpath = sv('path',{class:'k-val', d:''});
+  var face  = sv('circle',{class:'k-face', cx:50, cy:50, r:29});
+  var ind   = sv('line',{class:'k-ind', x1:50, y1:35, x2:50, y2:20});
+  var hub   = sv('circle',{class:'k-hub', cx:50, cy:50, r:5});
+  var svg = sv('svg',{viewBox:'0 0 100 100'});
+  [track, vpath, face, ind, hub].forEach(function(n){ svg.appendChild(n); });
+  var dial = h('div',{class:'kdial'}); dial.appendChild(svg);
+
+  var valEl = h('div',{class:'kval', text:'0'});
+  var minus = h('button',{class:'kstep', type:'button', 'aria-label':'decrease', text:'−'});
+  var plus  = h('button',{class:'kstep', type:'button', 'aria-label':'increase', text:'+'});
+  var info = h('div',{class:'kinfo'},[
+    h('div',{class:'klabel'},[spec.name, h('span',{text:spec.sub})]),
+    h('div',{class:'kvalrow'},[minus, valEl, plus])
+  ]);
+  var el = h('div',{
+    class:'knob' + (small ? ' sm' : ''), tabindex:'0', role:'slider',
+    'aria-label': spec.name + ' ' + spec.sub, 'aria-valuemin': spec.min, 'aria-valuemax': spec.max
+  }, [dial, info]);
+
+  function paint(){
+    var a = ang(value);
+    vpath.setAttribute('d', arcPath(50,50,40, ang(zeroRef), a));
+    ind.setAttribute('transform', 'rotate(' + a.toFixed(2) + ' 50 50)');
+    valEl.textContent = fmtP(value, spec.step);
+    el.setAttribute('aria-valuenow', value.toFixed(3));
+  }
+  var api = {
+    spec:spec, el:el,
+    get value(){ return value; },
+    setRaw:function(v, fire){
+      raw = clamp(v, spec.min, spec.max);
+      var s = Math.round(raw/spec.step)*spec.step;
+      value = Math.round(clamp(s, spec.min, spec.max)*1e6)/1e6;
+      paint(); if(fire !== false) onInput();
+    },
+    setExact:function(v, fire){
+      raw = value = clamp(v, spec.min, spec.max);
+      paint(); if(fire !== false) onInput();
+    },
+    nudge:function(mult){ api.setRaw(value + spec.step*mult, true); }
+  };
+  var last = null;
+  dial.addEventListener('pointerdown', function(e){
+    e.preventDefault(); dial.setPointerCapture(e.pointerId);
+    last = {x:e.clientX, y:e.clientY}; el.classList.add('drag'); el.focus();
+  });
+  dial.addEventListener('pointermove', function(e){
+    if(!last) return;
+    var d = (last.y - e.clientY) + (e.clientX - last.x)*0.35;
+    last = {x:e.clientX, y:e.clientY};
+    api.setRaw(raw + d*(spec.max - spec.min)/280*(e.shiftKey ? 0.15 : 1), true);
+  });
+  function endDrag(e){
+    if(!last) return;
+    last = null; el.classList.remove('drag');
+    try{ dial.releasePointerCapture(e.pointerId); }catch(err){}
+  }
+  dial.addEventListener('pointerup', endDrag);
+  dial.addEventListener('pointercancel', endDrag);
+  dial.addEventListener('dblclick', function(){ api.setRaw(spec.init, true); });
+  el.addEventListener('wheel', function(e){
+    e.preventDefault();
+    api.nudge((e.deltaY < 0 ? 1 : -1)*(e.shiftKey ? spec.big/spec.step : 1));
+  }, {passive:false});
+  el.addEventListener('keydown', function(e){
+    var big = e.shiftKey ? spec.big/spec.step : 1, dir = 0;
+    if(e.key === 'ArrowUp' || e.key === 'ArrowRight') dir = 1;
+    else if(e.key === 'ArrowDown' || e.key === 'ArrowLeft') dir = -1;
+    else if(e.key === 'PageUp'){ dir = 1; big = spec.big/spec.step; }
+    else if(e.key === 'PageDown'){ dir = -1; big = spec.big/spec.step; }
+    else if(e.key === 'Home'){ api.setRaw(spec.init, true); e.preventDefault(); return; }
+    else return;
+    e.preventDefault(); api.nudge(dir*big);
+  });
+  minus.addEventListener('click', function(e){ api.nudge(e.shiftKey ? -spec.big/spec.step : -1); });
+  plus.addEventListener('click', function(e){ api.nudge(e.shiftKey ? spec.big/spec.step : 1); });
+  paint();
+  return api;
+}
+
+/* ---------------- canvas helpers ---------------- */
+function prep(cv, ratio, maxH, minH){
+  var w = cv.clientWidth;
+  if(!w) return null;
+  var hpx = Math.max(minH || 280, Math.min(Math.round(w*ratio), Math.round(window.innerHeight*(maxH || 0.66))));
+  cv.style.height = hpx + 'px';
+  var dpr = window.devicePixelRatio || 1;
+  var W = Math.round(w*dpr), H = Math.round(hpx*dpr);
+  if(cv.width !== W) cv.width = W;
+  if(cv.height !== H) cv.height = H;
+  var ctx = cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx:ctx, W:w, H:hpx};
+}
+function niceStep(span, want){
+  var raw = span/want, mag = Math.pow(10, Math.floor(Math.log10(raw))), n = raw/mag;
+  return (n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10)*mag;
+}
+function decimalsOf(step){ return step >= 1 ? 0 : step >= 0.1 ? 1 : 2; }
+
+/* yRange for a dataset: from the data, padded */
+function yRangeOf(ds, pts){
+  if(ds.yLo !== undefined) return [ds.yLo, ds.yHi];
+  var lo = Infinity, hi = -Infinity;
+  pts.forEach(function(p){ if(p[1] < lo) lo = p[1]; if(p[1] > hi) hi = p[1]; });
+  var pad = (hi - lo)*0.12 || 1;
+  lo -= pad; hi += pad;
+  if(lo > 0 && lo < (hi - lo)*0.35 && ds.key !== 'galton') lo = 0;
+  return [lo, hi];
+}
+
+/* Scatter plot with optional model curve, residuals, query line, guess and hover.
+   S = {ds, pts, model, params, showResid, guess, hover, yRange} */
+function drawPlot(cv, S){
+  var g = prep(cv, 0.6);
+  if(!g) return null;
+  var ctx = g.ctx, W = g.W, H = g.H, ds = S.ds, pts = S.pts;
+  var m = {l:72, r:22, t:18, b:58};
+  var xLo = ds.xLo, xHi = ds.xHi, yr = S.yRange || yRangeOf(ds, pts), yLo = yr[0], yHi = yr[1];
+  var pw = W - m.l - m.r, ph = H - m.t - m.b;
+  var PX = function(x){ return m.l + (x - xLo)/(xHi - xLo)*pw; };
+  var PY = function(y){ return m.t + ph - (y - yLo)/(yHi - yLo)*ph; };
+
+  ctx.fillStyle = C.surface; ctx.fillRect(0,0,W,H);
+  ctx.font = '13px Inter, system-ui, sans-serif';
+
+  /* grid and ticks */
+  var xs = niceStep(xHi - xLo, 8), ys = niceStep(yHi - yLo, 6), v;
+  ctx.strokeStyle = C.grid; ctx.lineWidth = 1;
+  ctx.fillStyle = C.tick; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for(v = Math.ceil(xLo/xs)*xs; v <= xHi + 1e-9; v += xs){
+    var px = Math.round(PX(v)) + 0.5;
+    ctx.beginPath(); ctx.moveTo(px, m.t); ctx.lineTo(px, m.t + ph); ctx.stroke();
+    ctx.fillText(fmt(v, decimalsOf(xs)), px, m.t + ph + 7);
+  }
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for(v = Math.ceil(yLo/ys)*ys; v <= yHi + 1e-9; v += ys){
+    var py = Math.round(PY(v)) + 0.5;
+    ctx.beginPath(); ctx.moveTo(m.l, py); ctx.lineTo(m.l + pw, py); ctx.stroke();
+    ctx.fillText(fmt(v, decimalsOf(ys)), m.l - 8, py);
+  }
+  /* zero lines a shade darker, when inside */
+  ctx.strokeStyle = C.axis;
+  if(xLo < 0 && xHi > 0){ var zx = Math.round(PX(0)) + 0.5; ctx.beginPath(); ctx.moveTo(zx, m.t); ctx.lineTo(zx, m.t + ph); ctx.stroke(); }
+  if(yLo < 0 && yHi > 0){ var zy = Math.round(PY(0)) + 0.5; ctx.beginPath(); ctx.moveTo(m.l, zy); ctx.lineTo(m.l + pw, zy); ctx.stroke(); }
+  /* axes */
+  ctx.beginPath(); ctx.moveTo(m.l + 0.5, m.t); ctx.lineTo(m.l + 0.5, m.t + ph + 0.5); ctx.lineTo(m.l + pw, m.t + ph + 0.5); ctx.stroke();
+  /* axis labels */
+  ctx.fillStyle = C.tick; ctx.font = '600 14px Inter, system-ui, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText(ds.xLabel, m.l + pw/2, H - 12);
+  ctx.save(); ctx.translate(16, m.t + ph/2); ctx.rotate(-Math.PI/2); ctx.fillText(ds.yLabel, 0, 0); ctx.restore();
+
+  ctx.save();
+  ctx.beginPath(); ctx.rect(m.l, m.t, pw, ph); ctx.clip();
+
+  var yhat = null;
+  if(S.model && S.params){
+    yhat = function(x){ return S.model.f(S.params, x); };
+  }
+  /* residuals */
+  if(yhat && S.showResid){
+    ctx.strokeStyle = C.resid; ctx.lineWidth = 1.6; ctx.globalAlpha = 0.9;
+    pts.forEach(function(p){
+      var x = PX(p[0]);
+      ctx.beginPath(); ctx.moveTo(x, PY(p[1])); ctx.lineTo(x, PY(yhat(p[0]))); ctx.stroke();
+    });
+    ctx.globalAlpha = 1;
+  }
+  /* data */
+  var big = pts.length > 300;
+  pts.forEach(function(p, i){
+    var x = PX(p[0]), y = PY(p[1]), r = big ? 3 : 4.5;
+    if(!big){ ctx.fillStyle = C.surface; ctx.beginPath(); ctx.arc(x, y, r + 2, 0, Math.PI*2); ctx.fill(); }
+    ctx.fillStyle = C.data; ctx.globalAlpha = big ? 0.55 : 1;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+  });
+  /* model curve */
+  if(yhat){
+    ctx.strokeStyle = C.model; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath();
+    var n = 240, started = false;
+    for(var i = 0; i <= n; i++){
+      var x = xLo + (xHi - xLo)*i/n, y = yhat(x);
+      if(!isFinite(y)){ started = false; continue; }
+      var py2 = PY(y);
+      if(py2 < -2000 || py2 > 4000){ started = false; continue; }
+      if(!started){ ctx.moveTo(PX(x), py2); started = true; } else ctx.lineTo(PX(x), py2);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  /* hover tooltip */
+  if(S.hover !== null && S.hover !== undefined && pts[S.hover]){
+    var hp = pts[S.hover], hx = PX(hp[0]), hy = PY(hp[1]);
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(hx, hy, 7, 0, Math.PI*2); ctx.stroke();
+    var txt = 'x = ' + fmt(hp[0], ds.xFmt) + ',  y = ' + fmt(hp[1], ds.yFmt);
+    if(yhat) txt += ',  ŷ = ' + fmt(yhat(hp[0]), ds.yFmt);
+    ctx.font = '600 13px Inter, system-ui, sans-serif';
+    var tw = ctx.measureText(txt).width + 16, th = 26;
+    var tx = clamp(hx + 14, m.l, W - tw - 4), ty = clamp(hy - th - 10, 2, H - th - 2);
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = C.axis; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.rect(tx, ty, tw, th); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.ink; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(txt, tx + 8, ty + th/2);
+  }
+  return {PX:PX, PY:PY, m:m, pw:pw, ph:ph, W:W, H:H};
+}
+/* nearest data point to a pointer position, or null */
+function nearestPoint(geom, pts, px, py){
+  if(!geom) return null;
+  var best = null, bd = 18*18;
+  for(var i = 0; i < pts.length; i++){
+    var dx = geom.PX(pts[i][0]) - px, dy = geom.PY(pts[i][1]) - py, d = dx*dx + dy*dy;
+    if(d < bd){ bd = d; best = i; }
+  }
+  return best;
+}
+function attachHover(cv, getPts, getGeom, onHover){
+  cv.addEventListener('pointermove', function(e){
+    var r = cv.getBoundingClientRect();
+    onHover(nearestPoint(getGeom(), getPts(), e.clientX - r.left, e.clientY - r.top));
+  });
+  cv.addEventListener('pointerleave', function(){ onHover(null); });
+}
+
+
+/* ---------------- the data description drawPlot needs ---------------- */
+var DS8 = {key:'mystery', xLo:-3, xHi:3, xFmt:2, yFmt:2, xLabel:'x', yLabel:'y', query:null};
+
+/* ---------------- shared state ---------------- */
+var state = {
+  p8:GD.START.m8.slice(),          /* tabs 1, 2 and 3 share the eight knobs */
+  p12:GD.START.m12.A.slice(),      /* tab 4 has its own twelve */
+  evals:{1:0, 2:0, 3:0, 4:0}       /* loss computations counted per tab */
+};
+
+/* Knobs for a whole model. setLoose shows a value outside the dial's range:
+   the dial pegs at the end, the number stays exact. */
+function makeKnobs(model, box, onInput){
+  return model.knobs.map(function(spec){
+    var kn = makeKnob(spec, function(){ kn.loose = undefined; onInput(); }, true);
+    kn.setLoose = function(v){
+      kn.setExact(clamp(v, spec.min, spec.max), false);
+      kn.el.querySelector('.kval').textContent = fmtP(v, spec.step);
+      kn.loose = v;
+    };
+    box.appendChild(kn.el);
+    return kn;
+  });
+}
+function syncKnobs(knobs, p){ knobs.forEach(function(k, j){ k.setLoose(p[j]); }); }
+function knobValues(knobs){ return knobs.map(function(k){ return k.loose !== undefined ? k.loose : k.value; }); }
+
+function makeCounter(tabNo){
+  var el = h('div',{class:'counter'});
+  function paint(){ el.innerHTML = 'Loss computed: <b>' + state.evals[tabNo].toLocaleString('en-US') + '</b> times'; }
+  paint();
+  return {el:el, bump:function(n){ state.evals[tabNo] += n; paint(); }, reset:function(){ state.evals[tabNo] = 0; paint(); }};
+}
+
+/* ---------------- loss curve of one knob ----------------
+   S = {curve:{xs, ys}, name, sub, xLo, xHi, x0, L0, x1, L1, slope, tangent, showSecant, small} */
+function drawCurve(cv, S){
+  var g = prep(cv, S.small ? 1 : 0.62, 0.62, S.small ? 70 : 280);
+  if(!g) return null;
+  var ctx = g.ctx, W = g.W, H = g.H;
+  var m = S.small ? {l:6, r:6, t:6, b:6} : {l:78, r:22, t:18, b:56};
+  var pw = W - m.l - m.r, ph = H - m.t - m.b;
+  var xs = S.curve.xs, ys = S.curve.ys, n = xs.length;
+  var xLo = S.xLo, xHi = S.xHi, yLo = Infinity, yHi = -Infinity, i;
+  for(i = 0; i < n; i++){ if(xs[i] < xLo || xs[i] > xHi) continue; if(ys[i] < yLo) yLo = ys[i]; if(ys[i] > yHi) yHi = ys[i]; }
+  if(S.L0 !== undefined){ yLo = Math.min(yLo, S.L0); yHi = Math.max(yHi, S.L0); }
+  var pad = (yHi - yLo)*0.12 || 0.01; yLo -= pad; yHi += pad;
+  var PX = function(x){ return m.l + (x - xLo)/(xHi - xLo)*pw; };
+  var PY = function(y){ return m.t + ph - (y - yLo)/(yHi - yLo)*ph; };
+  ctx.fillStyle = C.surface; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#fff'; ctx.fillRect(m.l, m.t, pw, ph);
+  if(!S.small){
+    ctx.font = '13px Inter, system-ui, sans-serif'; ctx.fillStyle = C.tick; ctx.strokeStyle = C.grid; ctx.lineWidth = 1;
+    var xstep = niceStep(xHi - xLo, 7), ystep = niceStep(yHi - yLo, 5), v;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for(v = Math.ceil(xLo/xstep)*xstep; v <= xHi + 1e-9; v += xstep){ var px = Math.round(PX(v)) + 0.5; ctx.beginPath(); ctx.moveTo(px, m.t); ctx.lineTo(px, m.t + ph); ctx.stroke(); ctx.fillText(fmt(v, xstep >= 1 ? 0 : xstep >= 0.1 ? 1 : xstep >= 0.01 ? 2 : 3), px, m.t + ph + 8); }
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for(v = Math.ceil(yLo/ystep)*ystep; v <= yHi + 1e-9; v += ystep){ var py = Math.round(PY(v)) + 0.5; ctx.beginPath(); ctx.moveTo(m.l, py); ctx.lineTo(m.l + pw, py); ctx.stroke(); ctx.fillText(fmtLoss(v), m.l - 8, py); }
+    ctx.strokeStyle = C.axis; ctx.strokeRect(m.l + 0.5, m.t + 0.5, pw, ph);
+    ctx.font = '600 14px Inter, system-ui, sans-serif'; ctx.fillStyle = C.tick; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(S.name + ' (' + S.sub + '), the other knobs frozen', m.l + pw/2, H - 10);
+    ctx.save(); ctx.translate(16, m.t + ph/2); ctx.rotate(-Math.PI/2); ctx.fillText('Loss', 0, 0); ctx.restore();
+  }
+  ctx.save(); ctx.beginPath(); ctx.rect(m.l, m.t, pw, ph); ctx.clip();
+  /* the curve */
+  ctx.strokeStyle = C.data; ctx.lineWidth = S.small ? 1.6 : 2.4; ctx.lineJoin = 'round'; ctx.beginPath();
+  for(i = 0; i < n; i++){ var x = PX(xs[i]), y = PY(ys[i]); if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+  ctx.stroke();
+  /* tangent (slope at delta -> 0), grey dashed, then the secant through the two points, black */
+  function lineThrough(x0, y0, slope, style, width, dash){
+    ctx.strokeStyle = style; ctx.lineWidth = width; ctx.setLineDash(dash || []);
+    ctx.beginPath(); ctx.moveTo(PX(xLo), PY(y0 + slope*(xLo - x0))); ctx.lineTo(PX(xHi), PY(y0 + slope*(xHi - x0))); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  if(S.tangent !== undefined) lineThrough(S.x0, S.L0, S.tangent, C.muted, 1.5, [6, 6]);
+  if(S.showSecant && S.slope !== undefined) lineThrough(S.x0, S.L0, S.slope, C.ink, S.small ? 1.5 : 2);
+  ctx.restore();
+  /* the two points */
+  if(S.L0 !== undefined){
+    ctx.fillStyle = C.model; ctx.beginPath(); ctx.arc(PX(S.x0), PY(S.L0), S.small ? 4 : 7, 0, Math.PI*2); ctx.fill();
+  }
+  if(S.showSecant && S.L1 !== undefined){
+    ctx.strokeStyle = C.model; ctx.lineWidth = 2.5; ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(PX(S.x1), PY(S.L1), 7, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  }
+  return {PX:PX, PY:PY};
+}
+
+/* ---------------- a row of small loss curves, one per knob ---------------- */
+function makeThumbs(model, getP, onPick, opts){
+  opts = opts || {};
+  var el = h('div',{class:'thumbs' + (model.k === 12 ? ' twelve' : '')}), cvs = [], sel = opts.selected === undefined ? -1 : opts.selected;
+  model.knobs.forEach(function(spec, j){
+    var cv = h('canvas');
+    var t = h('div',{class:'thumb' + (j === sel ? ' on' : ''), title:spec.name + ' ' + spec.sub},[cv, h('div',{text:spec.name})]);
+    if(onPick) t.addEventListener('click', function(){ onPick(j); });
+    cvs.push(cv); el.appendChild(t);
+  });
+  function draw(){
+    var p = getP(), L0 = GD.loss(model, p);
+    model.knobs.forEach(function(spec, j){
+      var curve = GD.lossCurve(model, p, j, spec.min, spec.max, 60);
+      drawCurve(cvs[j], {curve:curve, name:spec.name, sub:spec.sub, xLo:spec.min, xHi:spec.max,
+        x0:p[j], L0:L0, tangent:GD.slopeAt(model, p, j, 1e-6), small:true});
+    });
+  }
+  function select(j){ sel = j; el.querySelectorAll('.thumb').forEach(function(t, i){ t.classList.toggle('on', i === j); }); }
+  return {el:el, draw:draw, select:select};
+}
+
+/* ---------- Tab 1: One knob at a time ---------- */
+var DELTAS = [1, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001];
+function tab1(){
+  var root = h('section',{class:'stage', id:'stage1'}), m = MODELS.m8;
+  var sel = 0, deltaIdx = 0, zoom = 0;          /* zoom 0 = full range, 1 = ±0.05 around the point */
+  var secant = true;                            /* the capture script turns the two points off for the first slide */
+  var cv = h('canvas'), knobBox = h('div',{class:'knobs two'}), knobs;
+  var chips = h('div',{class:'chips'});
+  var deltaIn = h('input',{type:'range', min:0, max:DELTAS.length - 1, step:1, value:0});
+  var deltaVal = h('span',{class:'val'});
+  var zoomIn = h('input',{type:'range', min:0, max:100, step:1, value:0});
+  var zoomVal = h('span',{class:'val', text:'full'});
+  var readout = h('div',{class:'readout'});
+  var counter = makeCounter(1);
+  var thumbs = makeThumbs(m, function(){ return state.p8; }, pick, {selected:sel});
+  var resetBtn = h('button',{class:'btn ghost', type:'button', text:'Reset'});
+  root.appendChild(h('div',{class:'head'},[h('h2',{text:'The loss as a function of one knob'}), h('span',{class:'k', text:'Pick a knob. The other seven stay where they are.'})]));
+  root.appendChild(h('div',{class:'work wide'},[
+    h('div',{class:'plots'},[
+      h('div',{class:'card', id:'stage1-curve'},[chips, cv,
+        h('div',{class:'legend'},[h('span',{},[h('i',{style:'background:var(--data)'}),'loss curve']), h('span',{},[h('i',{class:'dot', style:'background:var(--model)'}),'w and w + Δ']), h('span',{},[h('i',{style:'background:var(--ink)'}),'line through the two points']), h('span',{},[h('i',{class:'dash'}),'slope at Δ → 0'])])]),
+      h('div',{class:'card', id:'stage1-thumbs'},[h('h3',{text:'All eight knobs, each with the other seven frozen'}), thumbs.el])
+    ]),
+    h('div',{class:'side'},[
+      h('div',{class:'card'},[h('h3',{text:'Δ, how far to nudge the knob'}), h('div',{class:'slider'},[deltaIn, deltaVal])]),
+      h('div',{class:'card'},[h('h3',{text:'Zoom in around the point'}), h('div',{class:'slider'},[zoomIn, zoomVal])]),
+      h('div',{class:'card'},[readout]),
+      knobBox, h('div',{class:'btns'},[resetBtn]), counter.el
+    ])
+  ]));
+  m.knobs.forEach(function(spec, j){
+    var b = h('button',{class:'ds' + (j === sel ? ' active' : ''), type:'button', text:spec.name, onclick:function(){ pick(j); }});
+    b.dataset.j = j; chips.appendChild(b);
+  });
+  knobs = makeKnobs(m, knobBox, function(){ state.p8 = knobValues(knobs); update(true); });
+  function pick(j){
+    sel = j; thumbs.select(j);
+    chips.querySelectorAll('.ds').forEach(function(b){ b.classList.toggle('active', +b.dataset.j === j); });
+    update(false);
+  }
+  function delta(){ return DELTAS[deltaIdx]; }
+  function range(){
+    var spec = m.knobs[sel], half = (spec.max - spec.min)/2*Math.pow(0.05/((spec.max - spec.min)/2), zoom);
+    if(zoom === 0) return [spec.min, spec.max];
+    return [state.p8[sel] - half, state.p8[sel] + half];
+  }
+  var last = {};
+  function update(knobsMoved){
+    var p = state.p8, spec = m.knobs[sel], r = range();
+    var curve = GD.lossCurve(m, p, sel, r[0], r[1], 241);
+    var L0 = GD.loss(m, p), q = p.slice(); q[sel] = p[sel] + delta();
+    var L1 = GD.loss(m, q), slope = (L1 - L0)/delta(), tangent = GD.slopeAt(m, p, sel, 1e-6);
+    counter.bump(2);                      /* the two loss computations the slope needs */
+    last = {slope:slope, tangent:tangent};
+    drawCurve(cv, {curve:curve, name:spec.name, sub:spec.sub, xLo:r[0], xHi:r[1], x0:p[sel], L0:L0, x1:q[sel], L1:L1, slope:slope, tangent:secant ? tangent : undefined, showSecant:secant});
+    deltaVal.textContent = 'Δ = ' + delta();
+    zoomVal.textContent = zoom === 0 ? 'full' : '±' + fmt((r[1] - r[0])/2, 3);
+    readout.innerHTML =
+      'Loss(' + spec.name + ' = ' + fmt(p[sel], 2) + ') = <b>' + fmtLoss(L0) + '</b><br>' +
+      'Loss(' + spec.name + ' + Δ = ' + fmt(q[sel], 3) + ') = <b>' + fmtLoss(L1) + '</b><br>' +
+      'slope = (' + fmtLoss(L1) + ' − ' + fmtLoss(L0) + ') / ' + delta() + ' = <b>' + fmt(slope, 3) + '</b><br>' +
+      '<span style="color:var(--muted)">slope at Δ → 0: ' + fmt(tangent, 3) + '</span>';
+    if(knobsMoved !== false) thumbs.draw();
+  }
+  deltaIn.addEventListener('input', function(){ deltaIdx = +deltaIn.value; update(false); });
+  zoomIn.addEventListener('input', function(){ zoom = zoomIn.value/100; update(false); });
+  resetBtn.addEventListener('click', function(){ state.p8 = GD.START.m8.slice(); syncKnobs(knobs, state.p8); counter.reset(); update(true); });
+  window.GDUI.hooks.tab1 = {
+    pickKnob:pick,
+    setDelta:function(d){ deltaIdx = Math.max(0, DELTAS.indexOf(d)); deltaIn.value = deltaIdx; update(false); return last.slope; },
+    setZoom:function(z){ zoom = z; zoomIn.value = Math.round(z*100); update(false); },
+    setSecant:function(on){ secant = !!on; update(false); },
+    setKnob:function(j, v){ state.p8[j] = v; syncKnobs(knobs, state.p8); update(true); },
+    tangentSlope:function(){ return last.tangent; },
+    selfCheck:function(){ return isFinite(last.slope) && root.querySelectorAll('.thumb').length === 8; }
+  };
+  return {el:root, show:function(){ syncKnobs(knobs, state.p8); update(true); }, resize:function(){ update(false); thumbs.draw(); }, hide:function(){}};
+}
+
+/* ---------------- gradient table ----------------
+   Columns: knob, value, loss at w + delta, slope, bar.
+   With showPair: knob, value, slope before the step, slope now, bar. */
+function makeGradTable(model, opts){
+  opts = opts || {};
+  var el = h('div',{}), head = h('div',{class:'readout', style:'margin-bottom:6px'}), tbl = h('table',{class:'grad'}), tbody = h('tbody');
+  var note = h('div',{class:'tip'}), stale = h('div',{class:'note warn hide'});
+  el.appendChild(head); el.appendChild(tbl); tbl.appendChild(tbody); el.appendChild(note); el.appendChild(stale);
+  function header(pair){
+    var tr = h('tr');
+    (pair ? ['Knob','Value','Slope before the step','Slope now'] : ['Knob','Value','Loss at w + Δ','Slope','']).forEach(function(t){ tr.appendChild(h('th',{text:t})); });
+    var th = h('thead'); th.appendChild(tr);
+    var old = tbl.querySelector('thead'); if(old) tbl.removeChild(old);
+    tbl.insertBefore(th, tbody);
+  }
+  function bar(slope, maxAbs){
+    var w = maxAbs > 0 ? Math.min(100, 100*Math.abs(slope)/maxAbs)/2 : 0;
+    var i = h('i',{style:'width:' + w + '%;' + (slope >= 0 ? 'left:50%' : 'right:50%')});
+    return h('td',{class:'bar'},[h('div',{},[h('i',{style:'left:50%;width:1px;background:var(--rule2)'}), i])]);
+  }
+  function fill(p, pair, prev, grad, animate){
+    tbody.innerHTML = '';
+    var maxAbs = 0, jmax = 0;
+    grad.slopes.forEach(function(s, j){ if(Math.abs(s) > maxAbs){ maxAbs = Math.abs(s); jmax = j; } });
+    model.knobs.forEach(function(spec, j){
+      var tr = h('tr',{class:j === jmax ? 'max' : ''});
+      tr.appendChild(h('td',{text:spec.name + ' '},[h('span',{style:'color:var(--muted);font-size:.85em', text:spec.sub})]));
+      tr.appendChild(h('td',{text:fmt(p[j], 2)}));
+      if(pair) tr.appendChild(h('td',{text:prev ? fmt(prev.slopes[j], 3) : '·'}));
+      else tr.appendChild(h('td',{text:fmtLoss(grad.lossNudged[j])}));
+      tr.appendChild(h('td',{text:(grad.slopes[j] >= 0 ? '+' : '') + fmt(grad.slopes[j], 3)}));
+      if(!pair) tr.appendChild(bar(grad.slopes[j], maxAbs));
+      if(animate){ tr.style.visibility = 'hidden'; setTimeout(function(){ tr.style.visibility = ''; if(opts.onRow) opts.onRow(j); }, 150*(j + 1)); }
+      tbody.appendChild(tr);
+    });
+    note.textContent = 'Largest |slope|: ' + model.knobs[jmax].name + '. This knob changes the loss the most right now.';
+    tbl.classList.remove('stale'); stale.classList.add('hide');
+  }
+  return {
+    el:el,
+    show:function(grad, p, animate){ header(false); head.innerHTML = 'Loss now: <b>' + fmtLoss(grad.lossNow) + '</b>   Δ = ' + grad.delta; fill(p, false, null, grad, animate); },
+    showPair:function(prev, grad, p){ header(true); head.innerHTML = 'Loss now: <b>' + fmtLoss(grad.lossNow) + '</b>   Δ = ' + grad.delta; fill(p, true, prev, grad, false); },
+    setStale:function(msg){ tbl.classList.add('stale'); stale.textContent = msg; stale.classList.remove('hide'); },
+    clear:function(){ tbody.innerHTML = ''; head.textContent = ''; note.textContent = ''; stale.classList.add('hide'); tbl.classList.remove('stale'); }
+  };
+}
+
+/* ---------- Tab 2: Measure the gradient ---------- */
+function tab2(){
+  var root = h('section',{class:'stage', id:'stage2'}), m = MODELS.m8;
+  var cv = h('canvas'), geom = null, hover = null, knobBox = h('div',{class:'knobs two'}), knobs;
+  var score = h('div',{class:'score'}), counter = makeCounter(2);
+  var table = makeGradTable(m, {onRow:function(j){ knobs[j].el.classList.add('drag'); setTimeout(function(){ knobs[j].el.classList.remove('drag'); }, 120); }});
+  var measureBtn = h('button',{class:'btn', type:'button', text:'Measure the gradient'});
+  var resetBtn = h('button',{class:'btn ghost', type:'button', text:'Reset'});
+  var lastGrad = null;
+  root.appendChild(h('div',{class:'head'},[h('h2',{text:'Nudge every knob by Δ and measure the loss again'}), h('span',{class:'eq', style:'font-size:.95rem', text:'slope = (Loss(w + Δ) − Loss(w)) / Δ,   Δ = 0.001'})]));
+  root.appendChild(h('div',{class:'work three'},[
+    h('div',{class:'plots'},[h('div',{class:'card'},[h('h3',{text:'Data (blue), your curve (orange), residuals (green)'}), cv])]),
+    h('div',{class:'side'},[knobBox, h('div',{class:'btns'},[measureBtn, resetBtn]), score, counter.el]),
+    h('div',{class:'side'},[h('div',{class:'card', id:'stage2-table'},[h('h3',{text:'The gradient: one slope per knob'}), table.el])])
+  ]));
+  knobs = makeKnobs(m, knobBox, function(){ state.p8 = knobValues(knobs); moved(); });
+  function draw(){ geom = drawPlot(cv, {ds:DS8, pts:GD.DATA, model:m, params:state.p8, showResid:true, hover:hover}); }
+  function paintScore(){ score.innerHTML = '<div class="lbl">Loss: mean squared error</div><div class="big">' + fmtLoss(GD.loss(m, state.p8)) + '</div>'; }
+  function moved(){ paintScore(); draw(); if(lastGrad) table.setStale('Position changed. Measure again.'); }
+  function measure(){
+    lastGrad = GD.numericalGradient(m, state.p8, GD.DELTA);
+    counter.bump(lastGrad.evals);
+    table.show(lastGrad, state.p8, true);
+    return lastGrad;
+  }
+  measureBtn.addEventListener('click', measure);
+  resetBtn.addEventListener('click', function(){ state.p8 = GD.START.m8.slice(); syncKnobs(knobs, state.p8); lastGrad = null; table.clear(); counter.reset(); paintScore(); draw(); });
+  attachHover(cv, function(){ return GD.DATA; }, function(){ return geom; }, function(i){ hover = i; draw(); });
+  window.GDUI.hooks.tab2 = {
+    measure:measure,
+    evals:function(){ return state.evals[2]; },
+    setKnob:function(j, v){ state.p8[j] = v; syncKnobs(knobs, state.p8); moved(); },
+    rows:function(){ return root.querySelectorAll('table.grad tbody tr').length; },
+    selfCheck:function(){ return knobs.length === 8; }
+  };
+  return {el:root, show:function(){ syncKnobs(knobs, state.p8); paintScore(); draw(); }, resize:draw, hide:function(){}};
+}
+
+/* ---------------- learning rate slider: log scale 1e-4 .. 1, with preset chips ---------------- */
+function makeLrSlider(presets, initial, onChange){
+  var LO = -4, HI = 0, inp = h('input',{type:'range', min:0, max:1000, step:1});
+  var val = h('span',{class:'val'}), chips = h('div',{class:'chips'}), value = initial;
+  function toV(t){ return Math.pow(10, LO + (HI - LO)*t/1000); }
+  function toT(v){ return Math.round((Math.log(v)/Math.LN10 - LO)/(HI - LO)*1000); }
+  function paint(){
+    inp.value = toT(value);
+    val.textContent = value.toPrecision(2).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+    chips.querySelectorAll('.ds').forEach(function(b){ b.classList.toggle('active', +b.dataset.v === value); });
+  }
+  [['small', presets.small], ['about right', presets.good], ['too large', presets.large]].forEach(function(c){
+    if(c[1] === undefined) return;
+    var b = h('button',{class:'ds', type:'button', text:c[0] + ' ' + c[1], onclick:function(){ set(c[1]); }});
+    b.dataset.v = c[1]; chips.appendChild(b);
+  });
+  function set(v){ value = v; paint(); onChange(value); }
+  inp.addEventListener('input', function(){ value = +toV(+inp.value).toPrecision(2); paint(); onChange(value); });
+  paint();
+  var el = h('div',{class:'card'},[h('h3',{text:'Learning rate, how big a step'}), h('div',{class:'slider'},[inp, val]), chips]);
+  return {el:el, value:function(){ return value; }, set:set};
+}
+
+/* ---------------- loss against step, log y axis. S = {series:[{history, color, width}]} ---------------- */
+function drawLossChart(cv, S){
+  var g = prep(cv, 0.55, 0.4);
+  if(!g) return null;
+  var ctx = g.ctx, W = g.W, H = g.H, m = {l:70, r:16, t:12, b:40}, pw = W - m.l - m.r, ph = H - m.t - m.b;
+  var xMax = 1, yLo = Infinity, yHi = -Infinity;
+  S.series.forEach(function(s){ xMax = Math.max(xMax, s.history.length - 1); s.history.forEach(function(v){ if(isFinite(v) && v > 0){ yLo = Math.min(yLo, v); yHi = Math.max(yHi, v); } }); });
+  if(!isFinite(yLo)){ yLo = 0.001; yHi = 1; }
+  yHi = Math.min(Math.max(yHi, yLo*10), GD.DIVERGE);
+  var lLo = Math.log(yLo)/Math.LN10 - 0.1, lHi = Math.log(yHi)/Math.LN10 + 0.1;
+  var PX = function(t){ return m.l + t/xMax*pw; }, PY = function(v){ return m.t + ph - (Math.log(Math.max(v, 1e-12))/Math.LN10 - lLo)/(lHi - lLo)*ph; };
+  ctx.fillStyle = C.surface; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#fff'; ctx.fillRect(m.l, m.t, pw, ph);
+  ctx.font = '13px Inter, system-ui, sans-serif'; ctx.fillStyle = C.tick; ctx.strokeStyle = C.grid; ctx.lineWidth = 1;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for(var e = Math.ceil(lLo); e <= Math.floor(lHi); e++){ var py = Math.round(PY(Math.pow(10, e))) + 0.5; ctx.beginPath(); ctx.moveTo(m.l, py); ctx.lineTo(m.l + pw, py); ctx.stroke(); ctx.fillText(fmtLoss(Math.pow(10, e)), m.l - 8, py); }
+  var xs = Math.max(1, Math.round(niceStep(xMax, 6))); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for(var t = 0; t <= xMax; t += xs){ var px = Math.round(PX(t)) + 0.5; ctx.beginPath(); ctx.moveTo(px, m.t + ph); ctx.lineTo(px, m.t + ph + 4); ctx.stroke(); ctx.fillText(String(Math.round(t)), px, m.t + ph + 7); }
+  ctx.strokeStyle = C.axis; ctx.strokeRect(m.l + 0.5, m.t + 0.5, pw, ph);
+  ctx.fillStyle = C.tick; ctx.font = '600 13px Inter, system-ui, sans-serif'; ctx.textBaseline = 'alphabetic'; ctx.fillText('step', m.l + pw/2, H - 6);
+  ctx.save(); ctx.translate(14, m.t + ph/2); ctx.rotate(-Math.PI/2); ctx.textAlign = 'center'; ctx.fillText('Loss', 0, 0); ctx.restore();
+  ctx.save(); ctx.beginPath(); ctx.rect(m.l, m.t, pw, ph); ctx.clip();
+  S.series.forEach(function(s){
+    ctx.strokeStyle = s.color; ctx.lineWidth = s.width || 2; ctx.beginPath();
+    s.history.forEach(function(v, i){ var x = PX(i), y = PY(isFinite(v) ? Math.min(v, GD.DIVERGE) : GD.DIVERGE); if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+
+/* ---------------- loss map of two knobs with the path drawn on it ---------------- */
+function makeMapPanel(model, getP, opts){
+  opts = opts || {};
+  var ja = opts.a, jb = opts.b, cv = h('canvas'), zoomPath = false, NG = 60, faded = [];
+  var selA = h('select'), selB = h('select');
+  model.knobs.forEach(function(spec, j){ selA.appendChild(h('option',{value:j, text:spec.name + ' ' + spec.sub})); selB.appendChild(h('option',{value:j, text:spec.name + ' ' + spec.sub})); });
+  selA.value = ja; selB.value = jb;
+  var zoomBtn = h('button',{class:'btn ghost', type:'button', text:'Zoom to path'});
+  var el = h('div',{class:'card', id:opts.id || null},[
+    h('h3',{text:'Loss for two knobs, the others frozen at their current values'}),
+    h('div',{class:'ctl'},['across', selA, 'up', selB, zoomBtn]), cv,
+    h('div',{class:'tip', text:'3,600 loss computations, for the picture only. Light is low loss. The map is redrawn whenever the other knobs move.'})
+  ]);
+  var lastPath = [], lastGrad = null;
+  function ranges(path){
+    var sa = model.knobs[ja], sb = model.knobs[jb], r = {aLo:sa.min, aHi:sa.max, bLo:sb.min, bHi:sb.max};
+    if(zoomPath && path.length > 1){
+      var aL = Infinity, aH = -Infinity, bL = Infinity, bH = -Infinity;
+      path.forEach(function(p){ aL = Math.min(aL, p[ja]); aH = Math.max(aH, p[ja]); bL = Math.min(bL, p[jb]); bH = Math.max(bH, p[jb]); });
+      var pa = Math.max((aH - aL)*0.2, 0.05), pb = Math.max((bH - bL)*0.2, 0.05);
+      r = {aLo:aL - pa, aHi:aH + pa, bLo:bL - pb, bHi:bH + pb};
+    }
+    return r;
+  }
+  function draw(){
+    var g = prep(cv, 0.86, 0.5);
+    if(!g) return;
+    var ctx = g.ctx, W = g.W, Hh = g.H, m = {l:64, r:14, t:12, b:46}, pw = W - m.l - m.r, ph = Hh - m.t - m.b;
+    var p = getP(), r = ranges(lastPath), G = GD.lossGrid(model, p, ja, jb, r.aLo, r.aHi, r.bLo, r.bHi, NG);
+    var PX = function(a){ return m.l + (a - r.aLo)/(r.aHi - r.aLo)*pw; }, PY = function(b){ return m.t + ph - (b - r.bLo)/(r.bHi - r.bLo)*ph; };
+    ctx.fillStyle = C.surface; ctx.fillRect(0, 0, W, Hh);
+    var llo = Math.log(Math.max(G.lo, 1e-9)), lhi = Math.log(Math.max(G.hi, G.lo*1.0001 + 1e-9)), cw = pw/NG, ch = ph/NG;
+    for(var ib = 0; ib < NG; ib++) for(var ia = 0; ia < NG; ia++){
+      ctx.fillStyle = rampColor((Math.log(Math.max(G.grid[ib*NG + ia], 1e-9)) - llo)/(lhi - llo));
+      ctx.fillRect(m.l + ia*cw, m.t + ph - (ib + 1)*ch, cw + 0.6, ch + 0.6);
+    }
+    ctx.font = '12px Inter, system-ui, sans-serif'; ctx.fillStyle = C.tick; ctx.strokeStyle = C.axis; ctx.lineWidth = 1;
+    var xs = niceStep(r.aHi - r.aLo, 6), ys = niceStep(r.bHi - r.bLo, 5), v;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for(v = Math.ceil(r.aLo/xs)*xs; v <= r.aHi + 1e-9; v += xs){ var px = Math.round(PX(v)) + 0.5; ctx.beginPath(); ctx.moveTo(px, m.t + ph); ctx.lineTo(px, m.t + ph + 4); ctx.stroke(); ctx.fillText(fmt(v, decimalsOf(xs)), px, m.t + ph + 6); }
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for(v = Math.ceil(r.bLo/ys)*ys; v <= r.bHi + 1e-9; v += ys){ var py = Math.round(PY(v)) + 0.5; ctx.beginPath(); ctx.moveTo(m.l - 4, py); ctx.lineTo(m.l, py); ctx.stroke(); ctx.fillText(fmt(v, decimalsOf(ys)), m.l - 6, py); }
+    ctx.strokeRect(m.l + 0.5, m.t + 0.5, pw, ph);
+    ctx.font = '600 13px Inter, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(model.knobs[ja].name + ' (' + model.knobs[ja].sub + ')', m.l + pw/2, Hh - 8);
+    ctx.save(); ctx.translate(14, m.t + ph/2); ctx.rotate(-Math.PI/2); ctx.fillText(model.knobs[jb].name + ' (' + model.knobs[jb].sub + ')', 0, 0); ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.rect(m.l, m.t, pw, ph); ctx.clip();
+    function drawPath(path, color, width){
+      if(path.length < 2) return;
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      [['#fff', width + 3], [color, width]].forEach(function(s){
+        ctx.strokeStyle = s[0]; ctx.lineWidth = s[1]; ctx.beginPath();
+        path.forEach(function(q, i){ var x = PX(q[ja]), y = PY(q[jb]); if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+        ctx.stroke();
+      });
+      ctx.fillStyle = '#fff'; ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(PX(path[0][ja]), PY(path[0][jb]), 5, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    }
+    faded.forEach(function(path){ drawPath(path, C.muted, 1.5); });
+    drawPath(lastPath, C.ink, 2);
+    var cx = PX(p[ja]), cy = PY(p[jb]);
+    if(lastGrad){
+      var ga = -lastGrad.slopes[ja], gb = -lastGrad.slopes[jb], len = Math.sqrt(ga*ga + gb*gb);
+      if(len > 0 && isFinite(len)){
+        var L = Math.min(pw, ph)*0.2, ux = ga/len, uy = -gb/len, ex = cx + ux*L, ey = cy + uy*L;
+        ctx.strokeStyle = C.accent; ctx.fillStyle = C.accent; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(ex, ey); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ex - ux*10 - uy*5, ey - uy*10 + ux*5); ctx.lineTo(ex - ux*10 + uy*5, ey - uy*10 - ux*5); ctx.closePath(); ctx.fill();
+      }
+    }
+    ctx.fillStyle = C.model; ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  selA.addEventListener('change', function(){ ja = +selA.value; if(ja === jb){ jb = (ja + 1) % model.k; selB.value = jb; } draw(); });
+  selB.addEventListener('change', function(){ jb = +selB.value; if(ja === jb){ ja = (jb + 1) % model.k; selA.value = ja; } draw(); });
+  zoomBtn.addEventListener('click', function(){ zoomPath = !zoomPath; zoomBtn.textContent = zoomPath ? 'Full range' : 'Zoom to path'; draw(); });
+  return {
+    el:el,
+    update:function(path, grad){ lastPath = path; lastGrad = grad; draw(); },
+    keep:function(path){ if(path && path.length > 1){ faded.push(path); if(faded.length > 3) faded.shift(); } },
+    reset:function(){ lastPath = []; lastGrad = null; faded = []; draw(); },
+    resize:draw
+  };
+}
+
+/* ---------------- stepper: the two buttons, Run/Stop, speed, status, divergence ----------------
+   opts = {p0, lr, onChange(S), onArchive(history, path), onReset(), maxSteps}. Owns a GD.runner. */
+function makeStepper(model, tabNo, opts){
+  var S = GD.runner(model, opts.p0, {lr:opts.lr}), raf = 0, running = false, speed = 10, maxSteps = opts.maxSteps || 5000;
+  var measureBtn = h('button',{class:'btn', type:'button', text:'Measure the gradient'});
+  var stepBtn = h('button',{class:'btn', type:'button', text:'Take a step', disabled:'disabled'});
+  var runBtn = h('button',{class:'btn auto', type:'button', text:'Run'});
+  var resetBtn = h('button',{class:'btn ghost', type:'button', text:'Reset'});
+  var seg = h('div',{class:'seg'}), status = h('div',{class:'status'}), warn = h('div',{class:'note warn hide'});
+  var counter = makeCounter(tabNo);
+  [1, 10, 100].forEach(function(n){
+    var b = h('button',{type:'button', class:n === speed ? 'on' : '', text:n + '/frame', onclick:function(){
+      speed = n; seg.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', +x.textContent.split('/')[0] === n); });
+    }});
+    seg.appendChild(b);
+  });
+  var el = h('div',{class:'card'},[
+    h('div',{class:'btns'},[measureBtn, stepBtn]),
+    h('div',{class:'readout', style:'margin:8px 0', text:'w ← w − lr × slope'}),
+    h('div',{class:'btns'},[runBtn, resetBtn, seg]), status, warn, counter.el
+  ]);
+  function paint(){
+    stepBtn.disabled = !S.grad || S.stale || S.diverged || running;
+    measureBtn.disabled = running || S.diverged;
+    status.textContent = 'step ' + S.steps + ', loss ' + fmtLoss(S.history[S.history.length - 1]) + ', learning rate ' + S.lr;
+    if(S.diverged){ warn.textContent = 'Diverged: the loss blew up. Lower the learning rate and reset.'; warn.classList.remove('hide'); }
+    else warn.classList.add('hide');
+    opts.onChange(S);
+  }
+  function archive(){ if(S.steps > 0 && opts.onArchive) opts.onArchive(S.history, S.path); }
+  function measure(){ if(S.diverged) return null; S.measure(); counter.bump(S.grad.evals); paint(); return S.grad; }
+  function takeStep(){ if(stepBtn.disabled) return; S.takeStep(); paint(); }
+  function stop(){ running = false; if(raf) cancelAnimationFrame(raf); raf = 0; runBtn.textContent = 'Run'; paint(); }
+  var target = 0;
+  function tick(){
+    if(!running) return;
+    var n = Math.min(speed, target - S.steps);
+    for(var t = 0; t < n && !S.diverged; t++){ S.measure(); counter.bump(S.grad.evals); S.takeStep(); }
+    paint();
+    if(S.diverged || S.steps >= target){ stop(); return; }
+    raf = requestAnimationFrame(tick);
+  }
+  function run(nSteps){
+    if(running){ stop(); return; }
+    if(S.diverged) return;
+    archive();                                    /* the finished curve turns grey */
+    S.history = S.history.slice(); S.path = S.path.slice();
+    target = S.steps + (nSteps || maxSteps); running = true; runBtn.textContent = 'Stop'; paint(); tick();
+  }
+  function reset(p0){
+    stop(); archive();
+    S = GD.runner(model, p0, {lr:S.lr});
+    counter.reset(); paint();
+  }
+  measureBtn.addEventListener('click', function(){ measure(); });
+  stepBtn.addEventListener('click', takeStep);
+  runBtn.addEventListener('click', function(){ run(); });
+  resetBtn.addEventListener('click', function(){ reset(opts.p0Of ? opts.p0Of() : opts.p0); if(opts.onReset) opts.onReset(); });
+  paint();
+  return {
+    el:el, S:function(){ return S; }, measure:measure, takeStep:takeStep, run:run, stop:stop, reset:reset,
+    setLr:function(v){ S.lr = v; paint(); }, setP:function(p){ S.setP(p); paint(); },
+    running:function(){ return running; }, stepDisabled:function(){ return stepBtn.disabled; }
+  };
+}
+
+/* ---------- Tab 3: Step by step ---------- */
+function tab3(){
+  var root = h('section',{class:'stage', id:'stage3'}), m = MODELS.m8;
+  var cv = h('canvas'), geom = null, hover = null, knobBox = h('div',{class:'knobs two'});
+  var chart = h('canvas'), score = h('div',{class:'score'});
+  var table = makeGradTable(m);
+  var runs = [];                                 /* finished loss histories, greyed on the chart (max 3) */
+  var map = makeMapPanel(m, function(){ return state.p8; }, {a:0, b:3, id:'stage3-map'});
+  var knobs = makeKnobs(m, knobBox, function(){
+    state.p8 = knobValues(knobs); stepper.setP(state.p8);
+    if(stepper.S().grad) table.setStale('Position changed. Measure again.');
+  });
+  var stepper = makeStepper(m, 3, {
+    p0:GD.START.m8, lr:GD.LR.m8.good, onChange:onChange,
+    onArchive:function(history, path){ runs.push(history); if(runs.length > 3) runs.shift(); map.keep(path); },
+    onReset:function(){ table.clear(); }
+  });
+  var lr = makeLrSlider(GD.LR.m8, GD.LR.m8.good, function(v){ stepper.setLr(v); });
+  root.appendChild(h('div',{class:'head'},[h('h2',{text:'Measure, step, measure, step'}), h('span',{class:'k', text:'After every step the gradient belongs to the old position. Measure it again.'})]));
+  root.appendChild(h('div',{class:'work three'},[
+    h('div',{class:'plots'},[
+      h('div',{class:'card'},[h('h3',{text:'Data (blue), your curve (orange), residuals (green)'}), cv]),
+      knobBox
+    ]),
+    h('div',{class:'side'},[stepper.el, lr.el, score, h('div',{class:'card', id:'stage3-table'},[h('h3',{text:'Gradient at this position'}), table.el])]),
+    h('div',{class:'side'},[
+      h('div',{class:'card', id:'stage3-chart'},[h('h3',{text:'Loss against step'}), chart,
+        h('div',{class:'tip', text:'Earlier runs stay in grey, up to three. Reset returns the knobs to the start and keeps them.'})]),
+      map.el
+    ])
+  ]));
+  function draw(){ geom = drawPlot(cv, {ds:DS8, pts:GD.DATA, model:m, params:state.p8, showResid:true, hover:hover}); }
+  var lastSteps = -1;
+  function onChange(S){
+    state.p8 = S.p.slice(); syncKnobs(knobs, state.p8);
+    score.innerHTML = '<div class="lbl">Loss: mean squared error</div><div class="big">' + fmtLoss(S.history[S.history.length - 1]) + '</div>';
+    if(S.grad && !S.stale) table.showPair(S.prevGrad, S.grad, S.p);
+    else if(S.grad && S.stale) table.setStale('Gradient is from the old position. Measure again.');
+    draw();
+    drawLossChart(chart, {series:runs.map(function(hh){ return {history:hh, color:C.muted, width:1.5}; }).concat([{history:S.history, color:C.model, width:2.5}])});
+    if(S.steps !== lastSteps || !(stepper && stepper.running())){ map.update(S.path, S.grad && !S.stale ? S.grad : null); lastSteps = S.steps; }
+  }
+  attachHover(cv, function(){ return GD.DATA; }, function(){ return geom; }, function(i){ hover = i; draw(); });
+  window.GDUI.hooks.tab3 = {
+    measure:function(){ stepper.measure(); }, step:stepper.takeStep, run:function(n){ stepper.run(n); }, stop:stepper.stop,
+    reset:function(){ runs = []; map.reset(); table.clear(); stepper.reset(GD.START.m8); runs = []; map.reset(); },
+    setLr:function(v){ lr.set(v); },
+    setKnob:function(j, v){ state.p8[j] = v; syncKnobs(knobs, state.p8); stepper.setP(state.p8); },
+    stepDisabled:stepper.stepDisabled,
+    state:function(){ var S = stepper.S(); return {steps:S.steps, evals:state.evals[3], loss:S.history[S.history.length - 1], diverged:S.diverged, running:stepper.running(), lr:S.lr}; },
+    selfCheck:function(){ return knobs.length === 8; }
+  };
+  return {el:root, show:function(){ stepper.setP(state.p8); }, resize:function(){ draw(); map.resize(); }, hide:function(){ stepper.stop(); }};
+}
+
+/* ---------- Tab 4: Where you start ---------- */
+function tab4(){
+  var root = h('section',{class:'stage', id:'stage4'}), m = MODELS.m12;
+  var cv = h('canvas'), geom = null, hover = null, knobs = [], groupsEl = h('div',{class:'side'});
+  var score = h('div',{class:'score'}), startRow = h('div',{class:'chips'}), startName = 'A', randomSeed = 0;
+  var records = [], recBody = h('tbody');
+  var recTable = h('table',{class:'rec'},[h('thead',{},[h('tr',{},['Run','Start','Steps','Final loss',''].map(function(t){ return h('th',{text:t}); }))]), recBody]);
+  var table = makeGradTable(m);
+  var map = makeMapPanel(m, function(){ return state.p12; }, {a:1, b:2, id:'stage4-map'});
+  var thumbs = makeThumbs(m, function(){ return state.p12; }, null, {});
+  var stepper = null;
+  function running(){ return stepper ? stepper.running() : false; }
+  /* knobs in three groups, in model order. They exist before the stepper: it paints once when it is built. */
+  m.groups.forEach(function(gr){
+    var box = h('div',{class:'knobs'}), card = h('div',{class:'group'},[h('h4',{text:gr.label}), box]);
+    gr.idx.forEach(function(j){
+      var spec = m.knobs[j];
+      var kn = makeKnob(spec, function(){
+        kn.loose = undefined; state.p12 = knobValues(knobs);
+        if(stepper) stepper.setP(state.p12);
+        table.setStale('Position changed. Measure again.');
+      }, true);
+      kn.setLoose = function(v){
+        kn.setExact(clamp(v, spec.min, spec.max), false);
+        kn.el.querySelector('.kval').textContent = fmtP(v, spec.step);
+        kn.loose = v;
+      };
+      knobs[j] = kn; box.appendChild(kn.el);
+    });
+    groupsEl.appendChild(card);
+  });
+  stepper = makeStepper(m, 4, {
+    p0:GD.START.m12.A, p0Of:function(){ return startName === 'random' ? state.p12 : GD.START.m12[startName]; },
+    lr:GD.LR.m12.good, onChange:onChange,
+    onArchive:function(history, path){ runs.push(history); if(runs.length > 3) runs.shift(); map.keep(path); },
+    onReset:function(){ table.clear(); }
+  });
+  var runs = [];
+  var lr = makeLrSlider({good:GD.LR.m12.good}, GD.LR.m12.good, function(v){ stepper.setLr(v); });
+  root.appendChild(h('div',{class:'head'},[h('h2',{text:'Same data, same rule, different starting points'}), h('span',{class:'eq', style:'font-size:.9rem', text:m.eq})]));
+  root.appendChild(h('div',{class:'work three'},[
+    h('div',{class:'plots'},[
+      h('div',{class:'card'},[h('h3',{text:'Data (blue), your curve (orange), residuals (green)'}), cv]),
+      h('div',{class:'card', id:'stage4-thumbs'},[h('h3',{text:'Loss against each knob, the other eleven frozen'}), thumbs.el]),
+      groupsEl
+    ]),
+    h('div',{class:'side'},[
+      h('div',{class:'card'},[h('h3',{text:'Start from'}), startRow]),
+      stepper.el, lr.el, score,
+      h('div',{class:'card', id:'stage4-records'},[h('h3',{text:'Runs so far'}), recTable])
+    ]),
+    h('div',{class:'side'},[map.el, h('div',{class:'card'},[h('h3',{text:'Gradient at this position'}), table.el])])
+  ]));
+  [['A', 'Start A'], ['B', 'Start B'], ['C', 'Start C'], ['random', 'Random start']].forEach(function(c){
+    var b = h('button',{class:'ds' + (c[0] === 'A' ? ' active' : ''), type:'button', text:c[1], onclick:function(){ start(c[0]); }});
+    b.dataset.n = c[0]; startRow.appendChild(b);
+  });
+  function start(name){
+    startName = name;
+    var p0 = name === 'random' ? GD.randomStart12(++randomSeed + 1000) : GD.START.m12[name].slice();
+    startRow.querySelectorAll('.ds').forEach(function(b){ b.classList.toggle('active', b.dataset.n === name); });
+    state.p12 = p0.slice();
+    stepper.reset(p0);          /* the finished path stays on the map in grey */
+    table.clear(); thumbs.draw();
+  }
+  function draw(){ geom = drawPlot(cv, {ds:DS8, pts:GD.DATA, model:m, params:state.p12, showResid:true, hover:hover}); }
+  function addRecord(S){
+    var rec = {run:records.length + 1, start:startName === 'random' ? 'random ' + randomSeed : startName,
+               steps:S.steps, loss:S.history[S.history.length - 1], p:S.p.slice()};
+    records.push(rec);
+    recBody.appendChild(h('tr',{},[
+      h('td',{text:String(rec.run)}), h('td',{text:rec.start}), h('td',{text:String(rec.steps)}), h('td',{text:fmtLoss(rec.loss)}),
+      h('td',{},[h('button',{type:'button', text:'Load', onclick:function(){
+        state.p12 = rec.p.slice(); stepper.setP(state.p12); thumbs.draw();
+      }})])
+    ]));
+  }
+  var wasRunning = false, lastSteps = -1;
+  function onChange(S){
+    state.p12 = S.p.slice(); knobs.forEach(function(k, j){ k.setLoose(state.p12[j]); });
+    score.innerHTML = '<div class="lbl">Loss: mean squared error</div><div class="big">' + fmtLoss(S.history[S.history.length - 1]) + '</div>';
+    if(S.grad && !S.stale) table.showPair(S.prevGrad, S.grad, S.p);
+    else if(S.grad && S.stale) table.setStale('Gradient is from the old position. Measure again.');
+    draw();
+    if(S.steps !== lastSteps || !running()){ map.update(S.path, S.grad && !S.stale ? S.grad : null); lastSteps = S.steps; }
+    if(wasRunning && !running() && S.steps > 0){ addRecord(S); thumbs.draw(); }
+    wasRunning = running();
+  }
+  attachHover(cv, function(){ return GD.DATA; }, function(){ return geom; }, function(i){ hover = i; draw(); });
+  if(QP.start && GD.START.m12[QP.start]) start(QP.start);
+  window.GDUI.hooks.tab4 = {
+    start:start, run:function(n){ stepper.run(n); }, stop:stepper.stop, running:running,
+    records:function(){ return records.map(function(r){ return {run:r.run, start:r.start, steps:r.steps, loss:r.loss}; }); },
+    setLr:function(v){ lr.set(v); },
+    selfCheck:function(){ return knobs.length === 12; }
+  };
+  return {el:root, show:function(){ stepper.setP(state.p12); thumbs.draw(); }, resize:function(){ draw(); map.resize(); thumbs.draw(); }, hide:function(){ stepper.stop(); }};
+}
+
+/* TAB-FUNCTIONS */
+
+/* =========================================================================
+   Tabs
+   ========================================================================= */
+var stages = {}, active = 1;
+var tabsEl = document.getElementById('tabs'), mainEl = document.getElementById('main');
+
+/* automation hooks for the smoke test and the capture script. Each tab registers its own. */
+window.GDUI = {
+  select:function(n){ select(n); },
+  hooks:{},
+  selfCheck:function(){
+    var out = {};
+    Object.keys(window.GDUI.hooks).forEach(function(k){
+      var fn = window.GDUI.hooks[k].selfCheck;
+      out[k] = fn ? !!fn() : true;
+    });
+    return out;
+  }
+};
+
+function emptyTab(n){
+  return function(){
+    var root = h('section',{class:'stage', id:'stage' + n});
+    return {el:root, show:function(){}, resize:function(){}, hide:function(){}};
+  };
+}
+var defs = [
+  {n:1, label:'One knob at a time', make:typeof tab1 === 'function' ? tab1 : emptyTab(1)},
+  {n:2, label:'Measure the gradient', make:typeof tab2 === 'function' ? tab2 : emptyTab(2)},
+  {n:3, label:'Step by step', make:typeof tab3 === 'function' ? tab3 : emptyTab(3)},
+  {n:4, label:'Where you start', make:typeof tab4 === 'function' ? tab4 : emptyTab(4)}
+];
+defs.forEach(function(t){
+  var st = t.make();
+  stages[t.n] = st;
+  mainEl.appendChild(st.el);
+  var b = h('button',{class:'tab', type:'button', html:'<b>' + t.n + '</b>' + t.label, onclick:function(){ select(t.n); }});
+  b.dataset.n = t.n;
+  tabsEl.appendChild(b);
+});
+function select(n){
+  if(stages[active] && stages[active].hide) stages[active].hide();
+  active = n;
+  tabsEl.querySelectorAll('.tab').forEach(function(b){ b.classList.toggle('active', +b.dataset.n === n); });
+  Object.keys(stages).forEach(function(k){ stages[k].el.classList.toggle('active', +k === n); });
+  stages[n].show();
+  try{ history.replaceState(null, '', location.pathname + location.search + '#tab=' + n); }catch(e){}
+}
+window.addEventListener('resize', function(){ if(stages[active].resize) stages[active].resize(); });
+if(QP.lr && isFinite(+QP.lr) && +QP.lr > 0){
+  if(window.GDUI.hooks.tab3) window.GDUI.hooks.tab3.setLr(+QP.lr);
+  if(window.GDUI.hooks.tab4) window.GDUI.hooks.tab4.setLr(+QP.lr);
+}
+select(clamp(parseInt(QP.tab || '1', 10) || 1, 1, 4));
+})();
+</script>
+</body>
+</html>

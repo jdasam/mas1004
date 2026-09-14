@@ -1,0 +1,1971 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Layer by Layer in 2D · MAS1004</title>
+<style>
+:root{
+  --surface:#fcfcfb; --ink:#0b0b0b; --sub:#52514e; --muted:#8a8985;
+  --rule:#dedcd6; --rule2:#c4c2bb; --soft:#f3f2ee;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--surface); color:var(--ink);
+  font:400 17px/1.45 Inter,Pretendard,"Noto Sans KR",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+
+#topbar{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;padding:12px 24px 4px}
+.brand{font-size:1.3rem;font-weight:700;letter-spacing:-.01em}
+.brand .sub{font-size:.92rem;font-weight:500;color:var(--sub);margin-left:14px;letter-spacing:0}
+#controls{display:flex;flex-wrap:wrap;gap:10px 30px;align-items:center;padding:8px 24px 12px;border-bottom:1px solid var(--rule)}
+.grp{display:flex;align-items:center;gap:8px}
+.gl{font-size:.88rem;color:var(--sub);font-weight:600}
+.seg{display:flex;border:1px solid var(--rule2);border-radius:9px;overflow:hidden;background:#fff}
+.seg button{border:0;border-left:1px solid var(--rule);background:transparent;padding:6px 13px;color:var(--sub);font-weight:600;font-size:.95rem;cursor:pointer}
+.seg button:first-child{border-left:0}
+.seg button:hover{color:var(--ink)}
+.seg button.on{background:var(--ink);color:#fff}
+.kbtn{width:32px;height:32px;border-radius:8px;border:1px solid var(--rule2);background:#fff;cursor:pointer;font-size:1.15rem;line-height:1}
+.kbtn:hover{border-color:var(--ink)}
+.kbtn:disabled{opacity:.35;cursor:default;border-color:var(--rule2)}
+.layn{min-width:1.6ch;text-align:center;font-weight:700;font-size:1.15rem;font-variant-numeric:tabular-nums}
+.tbtn{border:1px solid var(--rule2);border-radius:9px;background:#fff;padding:6px 12px;color:var(--sub);font-weight:600;font-size:.95rem;cursor:pointer}
+.tbtn:hover{color:var(--ink);border-color:var(--ink)}
+.tbtn.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.tbtn:disabled{opacity:.35;cursor:default;color:var(--sub);border-color:var(--rule2)}
+
+main{padding:14px 24px 40px;max-width:1800px;margin:0 auto}
+.work{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:28px;align-items:start}
+@media(max-width:1180px){.work{grid-template-columns:minmax(0,1fr)}}
+#view{display:block;width:100%;height:max(380px, min(calc(100vh - 201px - var(--head, 99px)), 62vw));border:1px solid var(--rule);border-radius:10px;background:#fff}
+.legend{display:flex;gap:6px 22px;flex-wrap:wrap;align-items:center;font-size:.9rem;color:var(--sub);margin:8px 2px 6px}
+.legend .sw{display:inline-block;width:54px;height:8px;border-radius:4px;vertical-align:middle;margin-left:8px}
+.legend .shape{color:var(--ink);font-size:.8rem;margin-right:3px}
+.legend .gridkey{color:var(--muted)}
+.strip{display:flex;gap:8px;overflow-x:auto;padding:2px 0 2px}
+.thumb{flex:1 0 92px;max-width:180px;border:1px solid var(--rule);border-radius:8px;background:#fff;cursor:pointer;padding:0;overflow:hidden;color:var(--sub);font-size:.8rem;font-weight:600}
+.thumb:hover{border-color:var(--rule2);color:var(--ink)}
+.thumb canvas{display:block;width:100%;height:76px;border-bottom:1px solid var(--rule)}
+.thumb span{display:block;padding:3px 2px;white-space:nowrap}
+.thumb.on{border-color:var(--ink);color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+.bar{display:flex;gap:6px;margin-top:10px;user-select:none;touch-action:none;cursor:pointer}
+.lg{display:flex;flex-direction:column;gap:3px;min-width:0}
+.lg .sgs{display:flex;gap:2px}
+.lg .lab{font-size:.75rem;color:var(--muted);text-align:center;font-weight:600}
+.sg{height:14px;background:#e9e7e2;border-radius:3px;position:relative;overflow:hidden;min-width:3px}
+.sg i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--ink)}
+.sg.on{box-shadow:0 0 0 1.5px var(--ink)}
+
+.side{display:flex;flex-direction:column}
+.sec{padding:2px 0 18px}
+.sec + .sec{border-top:1px solid var(--rule);padding-top:16px}
+.sec h3{margin:0 0 10px;font-size:1.05rem;font-weight:700}
+#where{font-size:1.05rem}
+.eqrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font:500 1rem/1.25 ui-monospace,SFMono-Regular,Menlo,monospace}
+.eqrow > span{margin-left:6px}
+.eqrow > span:first-child{margin-left:0}
+table.mat{border-collapse:separate;border-left:1.5px solid var(--ink);border-right:1.5px solid var(--ink);border-radius:5px;padding:1px 2px}
+table.mat td{padding:1px 6px;text-align:right;font-variant-numeric:tabular-nums;min-width:4.4ch}
+.det{font-size:.9rem;color:var(--sub);margin:8px 0 6px}
+ol.rows{list-style:none;margin:8px 0 12px;padding:0;border-top:1px solid var(--rule)}
+ol.rows li{display:flex;gap:10px;padding:7px 8px;border-bottom:1px solid var(--rule);cursor:pointer;color:var(--muted);font-size:.96rem}
+ol.rows li:hover{color:var(--ink)}
+ol.rows li b{font-weight:600;min-width:1.2ch;font-variant-numeric:tabular-nums}
+ol.rows li.done{color:var(--ink)}
+ol.rows li.next{color:var(--sub)}
+ol.rows li.playing{color:var(--ink);background:var(--soft);box-shadow:inset 3px 0 0 var(--ink)}
+.play{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ic{width:38px;height:38px;border-radius:9px;border:1px solid var(--rule2);background:#fff;cursor:pointer;display:grid;place-items:center;padding:0}
+.ic:hover{border-color:var(--ink)}
+.ic svg{width:16px;height:16px;fill:var(--ink)}
+.play select,.field select{padding:6px 8px;border:1px solid var(--rule2);border-radius:9px;background:#fff;font-size:.95rem}
+.btns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.btn{padding:8px 14px;border-radius:9px;border:1px solid var(--ink);background:var(--ink);color:#fff;font-weight:600;font-size:.97rem;cursor:pointer;min-width:0}
+.btn:hover{background:#333}
+.btn.ghost{background:#fff;color:var(--ink)}
+.btn.ghost:hover{background:var(--soft)}
+#bPlay{min-width:78px}
+#bTrain{min-width:76px}
+.field{display:flex;align-items:center;gap:10px;font-size:.92rem;color:var(--sub);margin:6px 0}
+.field input[type=range]{flex:1;accent-color:var(--ink)}
+.field b{font:600 .95rem ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink);min-width:5ch;text-align:right}
+.stats{display:flex;flex-wrap:wrap;gap:6px 22px;margin:10px 0 6px}
+.stats span{display:block;font-size:.82rem;color:var(--sub);font-weight:600}
+.stats b{font-size:1.5rem;font-weight:700;font-variant-numeric:tabular-nums}
+#lossCv{display:block;width:100%;height:64px}
+.note{min-height:1.2em;margin:6px 0 0;font-size:.9rem;color:var(--ink)}
+.fine{margin:6px 0 0;font-size:.84rem;color:var(--muted)}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--rule);margin:0 0 12px}
+.tabs button{border:0;border-bottom:2px solid transparent;margin-bottom:-1px;background:transparent;padding:6px 12px 8px;color:var(--sub);font-weight:700;font-size:1.02rem;cursor:pointer}
+.tabs button:first-child{padding-left:0}
+.tabs button:hover{color:var(--ink)}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--ink)}
+.kh{margin:12px 0 4px;font-size:.92rem;font-weight:700}
+.kh:first-child{margin-top:0}
+.krow{display:grid;grid-template-columns:3.4ch minmax(0,1fr) 7ch;gap:10px;align-items:center;margin:1px 0}
+.krow .kn{font-weight:700;font-size:1rem}
+.krow input[type=range]{width:100%;margin:0;accent-color:var(--ink)}
+.krow input[type=number]{width:100%;padding:3px 5px;border:1px solid var(--rule2);border-radius:6px;background:#fff;font:500 .9rem ui-monospace,SFMono-Regular,Menlo,monospace;text-align:right}
+#gCurve{display:block;width:100%;height:150px;margin:4px 0 2px}
+.drow{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:.95rem;color:var(--sub)}
+.drow .btn{margin-left:auto}
+.nudge{display:flex;flex-wrap:wrap;gap:4px 20px;min-height:1.2em;margin:4px 0 12px}
+.nudge span{display:block;font-size:.8rem;color:var(--sub);font-weight:600}
+.nudge b{font:700 1.02rem ui-monospace,SFMono-Regular,Menlo,monospace}
+#gMid{border-top:1px solid var(--rule);padding-top:12px}
+.rulebox{font:600 1rem ui-monospace,SFMono-Regular,Menlo,monospace;margin:2px 0 4px}
+.counters{display:flex;flex-wrap:wrap;gap:2px 18px;font-size:.86rem;color:var(--sub);margin:4px 0 8px}
+table.gt{width:100%;border-collapse:collapse;font-size:.88rem;font-variant-numeric:tabular-nums}
+table.gt th{padding:3px 4px;border-bottom:1px solid var(--rule2);color:var(--sub);font-weight:600;font-size:.78rem;text-align:right;vertical-align:bottom}
+table.gt td{padding:2px 4px;border-bottom:1px solid var(--rule);text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+table.gt th:first-child,table.gt td:first-child{text-align:left;font-family:inherit}
+</style>
+</head>
+<body>
+<script id="lb-core">
+var LB = (function(){
+  'use strict';
+
+  /* ---------- seeded random numbers ---------- */
+  function xmur3(str){
+    var h = 1779033703 ^ str.length;
+    for(var i = 0; i < str.length; i++){ h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = h << 13 | h >>> 19; }
+    return function(){
+      h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909);
+      return (h ^= h >>> 16) >>> 0;
+    };
+  }
+  function mulberry32(a){
+    return function(){
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function rngOf(str){ return mulberry32(xmur3(String(str))()); }
+  function gaussOf(rng){
+    var spare = null;
+    return function(){
+      if(spare !== null){ var s = spare; spare = null; return s; }
+      var u = 0; while(u === 0) u = rng();
+      var v = rng(), r = Math.sqrt(-2*Math.log(u));
+      spare = r*Math.sin(2*Math.PI*v);
+      return r*Math.cos(2*Math.PI*v);
+    };
+  }
+
+  /* ---------- data: classes interleaved (even index = class A) ----------
+     training points: 100 per class, seed 'lb|v1|data|<name>'
+     test points: 50 per class, seed 'lb|v1|test|<name>', never used for training */
+  var DATA_VERSION = 1, N_PER = 100, N_TEST_PER = 50;
+  var BLOBS = { cx: 0.7, cy: 0.25, sd: 0.22 };
+  var DATASETS = {
+    blobs:   { label: 'Two blobs' },
+    moons:   { label: 'Two moons' },
+    xor:     { label: 'XOR' },
+    spirals: { label: 'Two spirals' }
+  };
+
+  function generate(name, key, nPer){
+    var rng = rngOf(key), g = gaussOf(rng);
+    var n = 2*nPer, X = new Float64Array(2*n), y = new Uint8Array(n), u = new Float64Array(n);
+    for(var i = 0; i < n; i++){
+      var cls = i % 2, px, py, uu;
+      if(name === 'blobs'){
+        /* class A around (-cx, cy), class B around (cx, -cy); u is the angle inside the blob */
+        var sb = cls === 0 ? -1 : 1, ex = BLOBS.sd*g(), ey = BLOBS.sd*g();
+        px = sb*BLOBS.cx + ex; py = -sb*BLOBS.cy + ey;
+        uu = (Math.atan2(ey, ex) + Math.PI)/(2*Math.PI);
+      } else if(name === 'moons'){
+        uu = rng();
+        var a = Math.PI*uu;
+        if(cls === 0){ px = Math.cos(a); py = Math.sin(a); }
+        else { px = 1 - Math.cos(a); py = 0.5 - Math.sin(a); }
+        px = (px - 0.5 + 0.08*g())*0.8;
+        py = (py - 0.25 + 0.08*g())*0.8;
+      } else if(name === 'xor'){
+        var blob = (i >> 1) % 2;
+        var sx = blob === 0 ? 1 : -1, sy = (cls === 0 ? 1 : -1)*sx;
+        var dx = 0.15*g(), dy = 0.15*g();
+        px = 0.7*sx + dx; py = 0.7*sy + dy;
+        uu = (blob + (Math.atan2(dy, dx) + Math.PI)/(2*Math.PI))/2;
+      } else if(name === 'spirals'){
+        var t0 = Math.sqrt(0.02), t = Math.sqrt(0.02 + 0.98*rng()), ang = 2*Math.PI*t, sgn = cls === 0 ? 1 : -1;
+        px = 1.15*(sgn*t*Math.cos(ang) + 0.03*g());
+        py = 1.15*(sgn*t*Math.sin(ang) + 0.03*g());
+        uu = (t - t0)/(1 - t0);
+      } else throw new Error('unknown dataset ' + name);
+      X[2*i] = px; X[2*i + 1] = py; y[i] = cls; u[i] = Math.min(1, Math.max(0, uu));
+    }
+    return { name: name, n: n, X: X, y: y, u: u };
+  }
+  function makeData(name){ return generate(name, 'lb|v' + DATA_VERSION + '|data|' + name, N_PER); }
+  function makeTestData(name){ return generate(name, 'lb|v' + DATA_VERSION + '|test|' + name, N_TEST_PER); }
+
+  /* ---------- network: h <- act(W h + b), all widths 2, readout sigmoid(v.h + c) ---------- */
+  var ACTS = {
+    tanh:  { label: 'tanh', f: Math.tanh, df: function(z, h){ return 1 - h*h; } },
+    leaky: { label: 'leaky ReLU', f: function(z){ return z > 0 ? z : 0.1*z; }, df: function(z){ return z > 0 ? 1 : 0.1; } },
+    relu:  { label: 'ReLU', f: function(z){ return z > 0 ? z : 0; }, df: function(z){ return z > 0 ? 1 : 0; } }
+  };
+
+  function initNet(layers, act, seed){
+    var g = gaussOf(rngOf('lb|init|' + seed)), net = { act: act, layers: [], v: new Float64Array(2), c: 0 };
+    for(var l = 0; l < layers; l++){
+      net.layers.push({ W: Float64Array.from([g(), g(), g(), g()]), b: Float64Array.from([0.1*g(), 0.1*g()]) });
+    }
+    net.v[0] = g(); net.v[1] = g();
+    return net;
+  }
+  function addLayer(net, seed){
+    var g = gaussOf(rngOf('lb|add|' + seed));
+    net.layers.push({ W: Float64Array.from([1 + 0.05*g(), 0.05*g(), 0.05*g(), 1 + 0.05*g()]), b: new Float64Array(2) });
+  }
+  function removeLayer(net){ if(net.layers.length > 0) net.layers.pop(); }
+  function cloneNet(net){
+    return { act: net.act, c: net.c, v: Float64Array.from(net.v),
+             layers: net.layers.map(function(L){ return { W: Float64Array.from(L.W), b: Float64Array.from(L.b) }; }) };
+  }
+
+  function forward(net, x, y){
+    var f = ACTS[net.act].f;
+    for(var l = 0; l < net.layers.length; l++){
+      var W = net.layers[l].W, b = net.layers[l].b;
+      var zx = W[0]*x + W[1]*y + b[0], zy = W[2]*x + W[3]*y + b[1];
+      x = f(zx); y = f(zy);
+    }
+    return [x, y];
+  }
+  function logit(net, x, y){
+    var h = forward(net, x, y);
+    return net.v[0]*h[0] + net.v[1]*h[1] + net.c;
+  }
+
+  function zeroLike(net){
+    return { c: 0, v: new Float64Array(2),
+             layers: net.layers.map(function(){ return { W: new Float64Array(4), b: new Float64Array(2) }; }) };
+  }
+
+  /* loss of one point with logit z and label t: -log p(correct) = softplus(z) - t z, stable for large |z| */
+  function pointLoss(z, t){ return (z > 0 ? z + Math.log1p(Math.exp(-z)) : Math.log1p(Math.exp(z))) - t*z; }
+
+  /* mean binary cross-entropy and its gradient by backpropagation */
+  function lossGrad(net, data){
+    var A = ACTS[net.act], L = net.layers.length, n = data.n, X = data.X;
+    var H = new Float64Array(2*(L + 1)), Z = new Float64Array(2*L);
+    var g = zeroLike(net), loss = 0, correct = 0;
+    for(var i = 0; i < n; i++){
+      H[0] = X[2*i]; H[1] = X[2*i + 1];
+      for(var l = 0; l < L; l++){
+        var W = net.layers[l].W, b = net.layers[l].b, hx = H[2*l], hy = H[2*l + 1];
+        var zx = W[0]*hx + W[1]*hy + b[0], zy = W[2]*hx + W[3]*hy + b[1];
+        Z[2*l] = zx; Z[2*l + 1] = zy; H[2*l + 2] = A.f(zx); H[2*l + 3] = A.f(zy);
+      }
+      var hLx = H[2*L], hLy = H[2*L + 1], z = net.v[0]*hLx + net.v[1]*hLy + net.c, t = data.y[i];
+      loss += pointLoss(z, t);
+      if((z > 0) === (t === 1)) correct++;
+      var dz = (1/(1 + Math.exp(-z)) - t)/n;
+      g.v[0] += dz*hLx; g.v[1] += dz*hLy; g.c += dz;
+      var ghx = dz*net.v[0], ghy = dz*net.v[1];
+      for(l = L - 1; l >= 0; l--){
+        var Wl = net.layers[l].W, gl = g.layers[l];
+        var gzx = ghx*A.df(Z[2*l], H[2*l + 2]), gzy = ghy*A.df(Z[2*l + 1], H[2*l + 3]);
+        var inx = H[2*l], iny = H[2*l + 1];
+        gl.W[0] += gzx*inx; gl.W[1] += gzx*iny; gl.W[2] += gzy*inx; gl.W[3] += gzy*iny;
+        gl.b[0] += gzx; gl.b[1] += gzy;
+        ghx = Wl[0]*gzx + Wl[2]*gzy; ghy = Wl[1]*gzx + Wl[3]*gzy;
+      }
+    }
+    return { loss: loss/n, acc: correct/n, g: g };
+  }
+
+  /* Adam. Each layer counts its own steps so a newly added layer starts with correct bias correction. */
+  var B1 = 0.9, B2 = 0.999, EPS = 1e-8;
+  function adamGroup(){ return { t: 0, m: new Float64Array(6), s: new Float64Array(6) }; }
+  function makeOptimizer(net){
+    return { head: { t: 0, m: new Float64Array(3), s: new Float64Array(3) }, layers: net.layers.map(adamGroup) };
+  }
+  function syncOptimizer(net, opt){
+    while(opt.layers.length < net.layers.length) opt.layers.push(adamGroup());
+    while(opt.layers.length > net.layers.length) opt.layers.pop();
+  }
+  function adamUpdate(group, params, grads, lr){
+    group.t++;
+    var c1 = 1 - Math.pow(B1, group.t), c2 = 1 - Math.pow(B2, group.t);
+    for(var k = 0; k < params.length; k++){
+      var gk = grads[k];
+      group.m[k] = B1*group.m[k] + (1 - B1)*gk;
+      group.s[k] = B2*group.s[k] + (1 - B2)*gk*gk;
+      params[k] -= lr*(group.m[k]/c1)/(Math.sqrt(group.s[k]/c2) + EPS);
+    }
+  }
+  function adamStep(net, opt, data, lr){
+    syncOptimizer(net, opt);
+    var r = lossGrad(net, data), g = r.g;
+    for(var l = 0; l < net.layers.length; l++){
+      var P = net.layers[l], G = g.layers[l];
+      var p = [P.W[0], P.W[1], P.W[2], P.W[3], P.b[0], P.b[1]];
+      adamUpdate(opt.layers[l], p, [G.W[0], G.W[1], G.W[2], G.W[3], G.b[0], G.b[1]], lr);
+      P.W[0] = p[0]; P.W[1] = p[1]; P.W[2] = p[2]; P.W[3] = p[3]; P.b[0] = p[4]; P.b[1] = p[5];
+    }
+    var ph = [net.v[0], net.v[1], net.c];
+    adamUpdate(opt.head, ph, [g.v[0], g.v[1], g.c], lr);
+    net.v[0] = ph[0]; net.v[1] = ph[1]; net.c = ph[2];
+    return { loss: r.loss, acc: r.acc };
+  }
+  function resetOptimizerFor(opt, layer){
+    if(layer < 0) opt.head = { t: 0, m: new Float64Array(3), s: new Float64Array(3) };
+    else if(opt.layers[layer]) opt.layers[layer] = adamGroup();
+  }
+
+  /* ---------- evaluation, knobs, plain gradient descent ----------
+     A knob is one number of the network, id = { layer, k }. Layer knobs k = 0..5 are w11 w12 w21 w22 b1 b2;
+     layer -1 is the readout with k = 0..2 for v1 v2 c. knobList gives layers 0..L-1 first, the readout last. */
+  var LAYER_KNOBS = ['w11', 'w12', 'w21', 'w22', 'b1', 'b2'], HEAD_KNOBS = ['v1', 'v2', 'c'];
+  var KNOB_LABEL = { w11: 'w₁₁', w12: 'w₁₂', w21: 'w₂₁', w22: 'w₂₂', b1: 'b₁', b2: 'b₂', v1: 'v₁', v2: 'v₂', c: 'c' };
+  function evaluate(net, data){
+    var n = data.n, z = new Float64Array(n), loss = 0, correct = 0;
+    for(var i = 0; i < n; i++){
+      z[i] = logit(net, data.X[2*i], data.X[2*i + 1]);
+      loss += pointLoss(z[i], data.y[i]);
+      if((z[i] > 0) === (data.y[i] === 1)) correct++;
+    }
+    return { z: z, loss: loss/n, acc: correct/n };
+  }
+  function lossOnly(net, data){ return evaluate(net, data).loss; }
+  function knobList(net){
+    var out = [], l, k;
+    for(l = 0; l < net.layers.length; l++) for(k = 0; k < 6; k++) out.push({ layer: l, k: k, name: LAYER_KNOBS[k] });
+    for(k = 0; k < 3; k++) out.push({ layer: -1, k: k, name: HEAD_KNOBS[k] });
+    return out;
+  }
+  function knobCount(net){ return 6*net.layers.length + 3; }
+  function knobLabel(id){ return KNOB_LABEL[id.layer < 0 ? HEAD_KNOBS[id.k] : LAYER_KNOBS[id.k]]; }
+  function getKnob(net, id){
+    if(id.layer < 0) return id.k < 2 ? net.v[id.k] : net.c;
+    var L = net.layers[id.layer];
+    return id.k < 4 ? L.W[id.k] : L.b[id.k - 4];
+  }
+  function setKnob(net, id, value){
+    if(id.layer < 0){ if(id.k < 2) net.v[id.k] = value; else net.c = value; return; }
+    var L = net.layers[id.layer];
+    if(id.k < 4) L.W[id.k] = value; else L.b[id.k - 4] = value;
+  }
+  /* the loss before and after moving one knob by delta; the knob goes back to its value */
+  function nudge(net, data, id, delta){
+    var old = getKnob(net, id), before = lossOnly(net, data);
+    setKnob(net, id, old + delta);
+    var after = lossOnly(net, data);
+    setKnob(net, id, old);
+    return { before: before, after: after, slope: (after - before)/delta };
+  }
+  /* forward differences for every knob: knobCount + 1 loss computations */
+  function numericGradient(net, data, delta){
+    var ids = knobList(net), base = lossOnly(net, data), slopes = new Float64Array(ids.length);
+    for(var j = 0; j < ids.length; j++){
+      var old = getKnob(net, ids[j]);
+      setKnob(net, ids[j], old + delta);
+      slopes[j] = (lossOnly(net, data) - base)/delta;
+      setKnob(net, ids[j], old);
+    }
+    return { base: base, slopes: slopes, evals: ids.length + 1 };
+  }
+  /* the gradient from lossGrad as one array in knobList order */
+  function flatGradient(net, g){
+    var out = new Float64Array(knobCount(net)), o = 0;
+    for(var l = 0; l < net.layers.length; l++){
+      var G = g.layers[l];
+      out[o++] = G.W[0]; out[o++] = G.W[1]; out[o++] = G.W[2]; out[o++] = G.W[3]; out[o++] = G.b[0]; out[o++] = G.b[1];
+    }
+    out[o++] = g.v[0]; out[o++] = g.v[1]; out[o] = g.c;
+    return out;
+  }
+  /* w <- w - lr * slope for every knob */
+  function stepAlong(net, slopes, lr){
+    var ids = knobList(net);
+    for(var j = 0; j < ids.length; j++) setKnob(net, ids[j], getKnob(net, ids[j]) - lr*slopes[j]);
+  }
+  function gdStep(net, data, lr){
+    var r = lossGrad(net, data);
+    stepAlong(net, flatGradient(net, r.g), lr);
+    return { loss: r.loss, acc: r.acc };
+  }
+  var RULES = ['gd', 'adam'];
+  function trainStep(net, opt, data, lr, rule){ return rule === 'gd' ? gdStep(net, data, lr) : adamStep(net, opt, data, lr); }
+  /* the loss when only one knob moves over [value - half, value + half]; the middle sample is the value itself */
+  function lossCurve(net, data, id, half, count){
+    var old = getKnob(net, id), xs = [], ys = [];
+    for(var i = 0; i < count; i++){
+      var x = 2*i === count - 1 ? old : old - half + 2*half*i/(count - 1);
+      setKnob(net, id, x); xs.push(x); ys.push(lossOnly(net, data));
+    }
+    setKnob(net, id, old);
+    return { xs: xs, ys: ys };
+  }
+
+  /* ---------- W = R(theta2) · diag(s1, s2) · F? · R(theta1), F = diag(1, -1) when det W < 0 ---------- */
+  var HALF_PI = Math.PI/2;
+  function wrapAngle(a){
+    a = a % (2*Math.PI);
+    if(a <= -Math.PI) a += 2*Math.PI;
+    if(a > Math.PI) a -= 2*Math.PI;
+    return a;
+  }
+  /* Every split of W that differs by quarter turns of theta1 (and the matching theta2 and swapped stretches). */
+  function variants(W){
+    var a = W[0], b = W[1], c = W[2], d = W[3];
+    var E = (a + d)/2, F = (a - d)/2, G = (c + b)/2, H = (c - b)/2;
+    var Q = Math.hypot(E, H), R = Math.hypot(F, G);
+    var d1 = Q + R, d2 = Q - R;
+    var a1 = Math.atan2(G, F), a2 = Math.atan2(H, E);
+    var th1 = (a2 - a1)/2, th2 = (a2 + a1)/2;
+    var out = [];
+    for(var k = 0; k < 4; k++){
+      var t1 = th1 + k*HALF_PI, t2 = th2 - k*HALF_PI;
+      var e1 = k % 2 ? d2 : d1, e2 = k % 2 ? d1 : d2, flip = false;
+      if(e1 < 0 && e2 < 0){ e1 = -e1; e2 = -e2; t2 += Math.PI; }
+      else if(e2 < 0){ e2 = -e2; flip = true; }
+      else if(e1 < 0){ e1 = -e1; t2 += Math.PI; flip = true; }
+      out.push({ theta1: wrapAngle(t1), flip: flip, s1: e1, s2: e2, theta2: wrapAngle(t2) });
+    }
+    return out;
+  }
+  function decompose(W){
+    var best = null;
+    variants(W).forEach(function(v){
+      var cost = Math.abs(v.theta1) + Math.abs(v.theta2);
+      if(!best || cost < best.cost - 1e-12 || (Math.abs(cost - best.cost) <= 1e-12 && Math.abs(v.theta1) < Math.abs(best.v.theta1))){
+        best = { cost: cost, v: v };
+      }
+    });
+    var r = best.v;
+    /* equal stretches: the two rotations merge into one, so put all of it in theta2 */
+    if(Math.abs(r.s1 - r.s2) < 1e-9*Math.max(1, r.s1)){
+      r.theta2 = wrapAngle(r.flip ? r.theta2 - r.theta1 : r.theta2 + r.theta1);
+      r.theta1 = 0;
+    }
+    return r;
+  }
+  function compose(dc){
+    var c1 = Math.cos(dc.theta1), n1 = Math.sin(dc.theta1), c2 = Math.cos(dc.theta2), n2 = Math.sin(dc.theta2);
+    var f = dc.flip ? -1 : 1;
+    /* M = diag(s1, f*s2) · R(theta1) */
+    var m0 = dc.s1*c1, m1 = -dc.s1*n1, m2 = f*dc.s2*n1, m3 = f*dc.s2*c1;
+    return Float64Array.from([c2*m0 - n2*m2, c2*m1 - n2*m3, n2*m0 + c2*m2, n2*m1 + c2*m3]);
+  }
+
+  /* ---------- animation steps ---------- */
+  var STILL_DEG = 0.05, STILL_SCALE = 0.005;
+  function buildSteps(net){
+    var steps = [], L = net.layers.length;
+    for(var l = 0; l < L; l++){
+      var W = net.layers[l].W, b = net.layers[l].b, dc = decompose(W);
+      steps.push({ kind: 'rotate', which: 1, layer: l, angle: dc.theta1, still: Math.abs(dc.theta1)*180/Math.PI < STILL_DEG });
+      if(dc.flip) steps.push({ kind: 'flip', layer: l, still: false });
+      steps.push({ kind: 'stretch', layer: l, s1: dc.s1, s2: dc.s2,
+                   still: Math.abs(dc.s1 - 1) < STILL_SCALE && Math.abs(dc.s2 - 1) < STILL_SCALE });
+      steps.push({ kind: 'rotate', which: 2, layer: l, angle: dc.theta2, still: Math.abs(dc.theta2)*180/Math.PI < STILL_DEG });
+      steps.push({ kind: 'shift', layer: l, bx: b[0], by: b[1], still: Math.hypot(b[0], b[1]) < STILL_SCALE });
+      steps.push({ kind: 'act', layer: l, act: net.act, still: false });
+    }
+    steps.push({ kind: 'readout', layer: L, vx: net.v[0], vy: net.v[1], c: net.c, still: false });
+    return steps;
+  }
+  function applyStep(s, t, x, y){
+    switch(s.kind){
+      case 'rotate': { var a = s.angle*t, ca = Math.cos(a), sa = Math.sin(a); return [ca*x - sa*y, sa*x + ca*y]; }
+      case 'flip': return [x, y*(1 - 2*t)];
+      case 'stretch': return [x*(1 + t*(s.s1 - 1)), y*(1 + t*(s.s2 - 1))];
+      case 'shift': return [x + t*s.bx, y + t*s.by];
+      case 'act': { var f = ACTS[s.act].f; return [x + t*(f(x) - x), y + t*(f(y) - y)]; }
+      default: return [x, y];
+    }
+  }
+  /* positions after 0, 1, ..., S steps; reuses the arrays in `out` when their sizes fit */
+  function trace(steps, pts, out){
+    out = out || [];
+    var n = pts.length;
+    if(!out[0] || out[0].length !== n) out[0] = new Float64Array(n);
+    out[0].set(pts);
+    for(var k = 0; k < steps.length; k++){
+      var src = out[k];
+      if(!out[k + 1] || out[k + 1].length !== n) out[k + 1] = new Float64Array(n);
+      var dst = out[k + 1], s = steps[k];
+      for(var i = 0; i < n; i += 2){
+        var p = applyStep(s, 1, src[i], src[i + 1]);
+        dst[i] = p[0]; dst[i + 1] = p[1];
+      }
+    }
+    out.length = steps.length + 1;
+    return out;
+  }
+
+  function num(x, digits){
+    var s = x.toFixed(digits);
+    if(Number(s) === 0) return (0).toFixed(digits);
+    return s.charAt(0) === '-' ? '−' + s.slice(1) : s;
+  }
+  /* ---------- text shown on screen: English (default) and Korean (?lang=ko), same keys ---------- */
+  var STRINGS = {
+    en: {
+      'brand': 'Layer by Layer in 2D',
+      'brandSub': 'Every layer has 2 units, so every hidden state is a point in a plane',
+      'ctl.data': 'Data',
+      'ctl.act': 'Activation',
+      'ctl.layers': 'Layers',
+      'ctl.color': 'Color by',
+      'ctl.points': 'Points',
+      'ctl.showTest': 'Show test points',
+      'ctl.clearNew': 'Clear new points',
+      'title.removeLayer': 'Remove the last layer',
+      'title.addLayer': 'Add a layer before the readout',
+      'data.blobs': 'Two blobs',
+      'data.moons': 'Two moons',
+      'data.xor': 'XOR',
+      'data.spirals': 'Two spirals',
+      'color.angle': 'angle',
+      'color.x': 'x',
+      'color.curve': 'along the curve',
+      'legend.angle': 'color: initial angle around (0, 0)',
+      'legend.x': 'color: initial x',
+      'legend.curve': 'color: position along the curve',
+      'legend.classA': 'class A',
+      'legend.classB': 'class B',
+      'legend.grid': 'grey lines: the input grid, moved by the same steps as the points',
+      'legend.test': 'hollow: test points',
+      'legend.new': 'diamond: a point you added',
+      'cap.input': 'Input',
+      'cap.inputDetail': 'the 200 points before any layer',
+      'cap.readout': 'Readout',
+      'cap.readoutDetail': 'the line v·h + c = 0 separates the two classes in the last space',
+      'cap.noLayers': 'Input and readout',
+      'cap.noLayersDetail': 'no layers: the line v·x + c = 0 separates the two classes in the input space',
+      'cap.layer': 'Layer {n} of {L}',
+      'cap.lossAcc': 'loss {loss}   accuracy {acc}',
+      'cap.testAcc': 'test accuracy {acc}',
+      'thumb.after': 'after layer {n}',
+      'bar.layer': 'L{n}',
+      'bar.out': 'out',
+      'side.layer': 'Layer {n} of {L}:  h ← {act}(W h + b)',
+      'side.readoutNote': 'Points where v·h + c > 0 are predicted as class B (triangles), the rest as class A (circles).',
+      'side.detFlip': '(negative, so W includes a flip)',
+      'play.play': 'Play',
+      'play.pause': 'Pause',
+      'play.first': 'Back to the input (Home)',
+      'play.prev': 'Back one step (←)',
+      'play.next': 'Play the next step (→)',
+      'play.last': 'Jump to the readout (End)',
+      'play.speed': 'Playback speed',
+      'tab.knobs': 'Knobs',
+      'tab.gradient': 'Gradient',
+      'tab.train': 'Train',
+      'train.train': 'Train',
+      'train.pause': 'Pause',
+      'train.one': '+1 step',
+      'train.ten': '+10 steps',
+      'train.reset': 'Reset',
+      'train.lr': 'learning rate',
+      'train.speed': 'speed',
+      'train.speed1': '1 step per frame',
+      'train.speed5': '5 steps per frame',
+      'train.speed20': '20 steps per frame',
+      'train.rule': 'update rule',
+      'rule.gd': 'gradient descent',
+      'rule.adam': 'Adam',
+      'stat.loss': 'loss',
+      'stat.acc': 'accuracy',
+      'stat.testAcc': 'test accuracy',
+      'stat.steps': 'steps',
+      'train.curve': 'loss over steps (top = {top})',
+      'fine.gd': 'Each training step computes the loss on all 200 points, gets the gradient by backpropagation, and moves every knob by −learning rate × slope.',
+      'fine.adam': 'Each training step computes the loss on all 200 points, gets the gradient by backpropagation, and updates every knob with Adam, which sets a step size for each knob.',
+      'note.nan': 'Stopped: the loss is not a finite number. Lower the learning rate and press Reset.',
+      'note.low': 'Paused: the loss is below 0.01.',
+      'note.max': 'Paused after 20,000 steps.',
+      'knobs.layer': 'Layer {n} knobs',
+      'knobs.readout': 'Readout knobs',
+      'knobs.resetAll': 'Reset all knobs',
+      'knobs.note': 'Each slider is one knob (a weight or a bias). The layer shown follows the playback position.',
+      'grad.knob': 'knob',
+      'grad.layerOpt': 'layer {n} · {name}',
+      'grad.headOpt': 'readout · {name}',
+      'grad.nudge': 'Nudge by Δ',
+      'grad.before': 'loss before',
+      'grad.after': 'loss after',
+      'grad.slope': 'slope',
+      'grad.curve': 'loss when only {knob} changes',
+      'grad.measure': 'Nudge every knob',
+      'grad.backprop': 'Measure by backpropagation',
+      'grad.step': 'Take a step',
+      'grad.evals': 'loss computations: {n}',
+      'grad.bp': 'backpropagation passes: {n}',
+      'grad.colValue': 'value',
+      'grad.colNudge': 'slope by nudging (Δ = {d})',
+      'grad.colBackprop': 'slope by backpropagation',
+      'grad.rule': 'w ← w − learning rate × slope',
+      'grad.hint': 'Measure the slopes, then take a step. After a step the table clears.',
+      'overlay.flip': 'flip: y becomes −y',
+      'overlay.alongX': '×{s} along x',
+      'overlay.alongY': '×{s} along y',
+      'step.rotate0': 'rotate 0.0°',
+      'step.rotateCcw': 'rotate {deg}° counterclockwise',
+      'step.rotateCw': 'rotate {deg}° clockwise',
+      'step.flip': 'flip across the horizontal axis',
+      'step.stretch': 'stretch ×{s1} along x, ×{s2} along y',
+      'step.shift': 'shift by ({bx}, {by})',
+      'step.readout': 'draw the line v·h + c = 0 that separates the classes',
+      'act.tanh': 'tanh: squash each coordinate into (−1, 1)',
+      'act.leaky': 'leaky ReLU: keep positive coordinates, multiply negative ones by 0.1',
+      'act.relu': 'ReLU: keep positive coordinates, set negative ones to 0'
+    },
+    ko: {
+      'brand': '층별 2차원 변환',
+      'brandSub': '층마다 뉴런이 2개라서 모든 층의 결과가 평면 위의 점이다',
+      'ctl.data': '데이터',
+      'ctl.act': '활성화 함수',
+      'ctl.layers': '층',
+      'ctl.color': '색 기준',
+      'ctl.points': '점',
+      'ctl.showTest': '테스트 점 보기',
+      'ctl.clearNew': '새 점 지우기',
+      'title.removeLayer': '마지막 층 빼기',
+      'title.addLayer': '출력 앞에 층 더하기',
+      'data.blobs': '덩어리 둘',
+      'data.moons': '초승달 둘',
+      'data.xor': 'XOR',
+      'data.spirals': '나선 둘',
+      'color.angle': '각도',
+      'color.x': 'x',
+      'color.curve': '곡선 위 위치',
+      'legend.angle': '색: 처음 위치의 각도 (0, 0 기준)',
+      'legend.x': '색: 처음 위치의 x',
+      'legend.curve': '색: 곡선 위 위치',
+      'legend.classA': '종류 A',
+      'legend.classB': '종류 B',
+      'legend.grid': '회색 선: 입력 공간의 격자를 점과 같은 단계로 옮긴 것',
+      'legend.test': '속 빈 점: 테스트 점',
+      'legend.new': '마름모: 새로 찍은 점',
+      'cap.input': '입력',
+      'cap.inputDetail': '층을 지나기 전의 점 200개',
+      'cap.readout': '출력',
+      'cap.readoutDetail': '마지막 공간에서 직선 v·h + c = 0이 두 종류를 나눈다',
+      'cap.noLayers': '입력과 출력',
+      'cap.noLayersDetail': '층이 없다: 입력 공간에서 직선 v·x + c = 0이 두 종류를 나눈다',
+      'cap.layer': '층 {n} / {L}',
+      'cap.lossAcc': '손실 {loss}   정확도 {acc}',
+      'cap.testAcc': '테스트 정확도 {acc}',
+      'thumb.after': '층 {n} 뒤',
+      'bar.layer': '층{n}',
+      'bar.out': '출력',
+      'side.layer': '층 {n} / {L}:  h ← {act}(W h + b)',
+      'side.readoutNote': 'v·h + c > 0인 점은 종류 B(삼각형), 나머지는 종류 A(원)로 예측한다.',
+      'side.detFlip': '(음수라서 W에 뒤집기가 들어 있다)',
+      'play.play': '재생',
+      'play.pause': '멈춤',
+      'play.first': '입력으로 (Home)',
+      'play.prev': '한 단계 뒤로 (←)',
+      'play.next': '다음 단계 재생 (→)',
+      'play.last': '출력으로 (End)',
+      'play.speed': '재생 속도',
+      'tab.knobs': '노브',
+      'tab.gradient': '기울기',
+      'tab.train': '학습',
+      'train.train': '학습',
+      'train.pause': '멈춤',
+      'train.one': '+1 걸음',
+      'train.ten': '+10 걸음',
+      'train.reset': '초기화',
+      'train.lr': '학습률',
+      'train.speed': '속도',
+      'train.speed1': '프레임마다 1걸음',
+      'train.speed5': '프레임마다 5걸음',
+      'train.speed20': '프레임마다 20걸음',
+      'train.rule': '갱신 규칙',
+      'rule.gd': '경사하강법',
+      'rule.adam': 'Adam',
+      'stat.loss': '손실',
+      'stat.acc': '정확도',
+      'stat.testAcc': '테스트 정확도',
+      'stat.steps': '걸음',
+      'train.curve': '걸음마다 손실 (위 끝 {top})',
+      'fine.gd': '한 걸음마다 점 200개 전체의 손실을 계산하고, 역전파로 기울기를 구해, 모든 노브를 −학습률 × 기울기만큼 옮긴다.',
+      'fine.adam': '한 걸음마다 점 200개 전체의 손실을 계산하고, 역전파로 기울기를 구해, 노브마다 걸음 크기를 따로 정하는 Adam으로 모든 노브를 옮긴다.',
+      'note.nan': '멈춤: 손실이 숫자로 계산되지 않는다. 학습률을 낮추고 초기화를 누른다.',
+      'note.low': '멈춤: 손실이 0.01보다 작다.',
+      'note.max': '20,000걸음에서 멈췄다.',
+      'knobs.layer': '층 {n} 노브',
+      'knobs.readout': '출력 노브',
+      'knobs.resetAll': '모든 노브 초기화',
+      'knobs.note': '슬라이더 하나가 노브 하나다(가중치 또는 편향). 보이는 층은 재생 위치를 따른다.',
+      'grad.knob': '노브',
+      'grad.layerOpt': '층 {n} · {name}',
+      'grad.headOpt': '출력 · {name}',
+      'grad.nudge': 'Δ만큼 밀기',
+      'grad.before': '밀기 전 손실',
+      'grad.after': '민 뒤 손실',
+      'grad.slope': '기울기',
+      'grad.curve': '{knob}만 바꿀 때의 손실',
+      'grad.measure': '모든 노브를 밀어서 재기',
+      'grad.backprop': '역전파로 재기',
+      'grad.step': '한 걸음',
+      'grad.evals': '손실 계산 횟수: {n}',
+      'grad.bp': '역전파 횟수: {n}',
+      'grad.colValue': '값',
+      'grad.colNudge': '밀어서 잰 기울기 (Δ = {d})',
+      'grad.colBackprop': '역전파로 잰 기울기',
+      'grad.rule': '노브 ← 노브 − 학습률 × 기울기',
+      'grad.hint': '기울기를 잰 뒤 한 걸음 간다. 한 걸음 가면 표를 비운다.',
+      'overlay.flip': '뒤집기: y가 −y가 된다',
+      'overlay.alongX': 'x 방향 ×{s}',
+      'overlay.alongY': 'y 방향 ×{s}',
+      'step.rotate0': '0.0° 회전',
+      'step.rotateCcw': '반시계 방향으로 {deg}° 회전',
+      'step.rotateCw': '시계 방향으로 {deg}° 회전',
+      'step.flip': '가로축을 기준으로 뒤집기',
+      'step.stretch': 'x 방향 ×{s1}, y 방향 ×{s2} 늘이기',
+      'step.shift': '({bx}, {by})만큼 이동',
+      'step.readout': '두 종류를 나누는 직선 v·h + c = 0 긋기',
+      'act.tanh': 'tanh: 좌표마다 (−1, 1)로 누르기',
+      'act.leaky': 'leaky ReLU: 양수 좌표는 그대로, 음수 좌표는 0.1배',
+      'act.relu': 'ReLU: 양수 좌표는 그대로, 음수 좌표는 0으로'
+    }
+  };
+  function own(table, key){ return table && Object.prototype.hasOwnProperty.call(table, key) ? table[key] : undefined; }
+  /* the string for key in lang (English when lang or key is missing there), with {name} filled from params */
+  function t(lang, key, params){
+    var s = own(STRINGS[lang], key);
+    if(s === undefined) s = own(STRINGS.en, key);
+    if(s === undefined) return key;
+    return s.replace(/\{(\w+)\}/g, function(m, name){ return params && params[name] !== undefined ? String(params[name]) : m; });
+  }
+  function describe(s, lang){
+    switch(s.kind){
+      case 'rotate': {
+        var deg = s.angle*180/Math.PI;
+        if(Math.abs(deg) < STILL_DEG) return t(lang, 'step.rotate0');
+        return t(lang, deg > 0 ? 'step.rotateCcw' : 'step.rotateCw', { deg: Math.abs(deg).toFixed(1) });
+      }
+      case 'flip': return t(lang, 'step.flip');
+      case 'stretch': return t(lang, 'step.stretch', { s1: s.s1.toFixed(2), s2: s.s2.toFixed(2) });
+      case 'shift': return t(lang, 'step.shift', { bx: num(s.bx, 2), by: num(s.by, 2) });
+      case 'act': return t(lang, 'act.' + s.act);
+      case 'readout': return t(lang, 'step.readout');
+    }
+    return '';
+  }
+
+  /* ---------- presets: measured by test/calibrate.js over seeds 1..30, up to 3,000 steps (see README) ----------
+     opt is the default update rule: gradient descent when its best learning rate reaches the target from at
+     least 24 of 30 seeds, Adam otherwise. lr holds the best learning rate of each rule (used when the rule changes).
+     target is the accuracy the preset reaches from `seed` within `steps`; spirals stop at 0.99 because
+     a few noisy points sit where the two arms meet near the center. */
+  var PRESETS = {
+    blobs:   { act: 'tanh',  layers: 0, seed: 1, target: 1,    steps: 1000, opt: 'gd',   lr: { gd: 3,   adam: 0.1 } },
+    moons:   { act: 'tanh',  layers: 3, seed: 1, target: 1,    steps: 2500, opt: 'gd',   lr: { gd: 0.5, adam: 0.02 } },
+    xor:     { act: 'tanh',  layers: 3, seed: 1, target: 1,    steps: 1000, opt: 'gd',   lr: { gd: 0.5, adam: 0.02 } },
+    spirals: { act: 'leaky', layers: 4, seed: 1, target: 0.99, steps: 1000, opt: 'adam', lr: { gd: 1,   adam: 0.05 } }
+  };
+
+  return {
+    PRESETS: PRESETS,
+    DATA_VERSION: DATA_VERSION, DATASETS: DATASETS, BLOBS: BLOBS, ACTS: ACTS,
+    rngOf: rngOf, gaussOf: gaussOf, makeData: makeData, makeTestData: makeTestData,
+    initNet: initNet, addLayer: addLayer, removeLayer: removeLayer, cloneNet: cloneNet,
+    forward: forward, logit: logit, lossGrad: lossGrad,
+    makeOptimizer: makeOptimizer, syncOptimizer: syncOptimizer, adamStep: adamStep, resetOptimizerFor: resetOptimizerFor,
+    pointLoss: pointLoss, evaluate: evaluate, lossOnly: lossOnly,
+    LAYER_KNOBS: LAYER_KNOBS, HEAD_KNOBS: HEAD_KNOBS, knobList: knobList, knobCount: knobCount, knobLabel: knobLabel,
+    getKnob: getKnob, setKnob: setKnob, nudge: nudge, numericGradient: numericGradient, flatGradient: flatGradient,
+    stepAlong: stepAlong, gdStep: gdStep, RULES: RULES, trainStep: trainStep, lossCurve: lossCurve,
+    decompose: decompose, compose: compose, _variants: variants, wrapAngle: wrapAngle,
+    buildSteps: buildSteps, applyStep: applyStep, trace: trace, describe: describe, num: num,
+    STRINGS: STRINGS, t: t
+  };
+})();
+</script>
+
+<header id="topbar">
+  <div class="brand"><span data-t="brand">Layer by Layer in 2D</span><span class="sub" data-t="brandSub">Every layer has 2 units, so every hidden state is a point in a plane</span></div>
+</header>
+<div id="controls">
+  <div class="grp"><span class="gl" data-t="ctl.data">Data</span><div class="seg" id="segData"></div></div>
+  <div class="grp"><span class="gl" data-t="ctl.act">Activation</span><div class="seg" id="segAct"></div></div>
+  <div class="grp"><span class="gl" data-t="ctl.layers">Layers</span>
+    <button class="kbtn" id="layMinus" data-t-title="title.removeLayer" title="Remove the last layer">−</button>
+    <span id="layN" class="layn">2</span>
+    <button class="kbtn" id="layPlus" data-t-title="title.addLayer" title="Add a layer before the readout">+</button>
+  </div>
+  <div class="grp"><span class="gl" data-t="ctl.color">Color by</span><div class="seg" id="segColor"></div></div>
+  <div class="grp"><span class="gl" data-t="ctl.points">Points</span>
+    <button class="tbtn" id="bShowTest" data-t="ctl.showTest">Show test points</button>
+    <button class="tbtn" id="bClearNew" data-t="ctl.clearNew">Clear new points</button>
+  </div>
+</div>
+<main>
+  <div class="work">
+    <section class="left">
+      <canvas id="view"></canvas>
+      <div class="legend" id="legend"></div>
+      <div class="strip" id="strip"></div>
+      <div class="bar" id="bar"></div>
+    </section>
+    <aside class="side">
+      <section class="sec" id="secStep">
+        <h3 id="where">Layer 1 of 2</h3>
+        <div id="mats"></div>
+        <ol class="rows" id="rows"></ol>
+        <div class="play">
+          <button class="ic" id="bFirst" data-t-title="play.first" title="Back to the input (Home)"><svg viewBox="0 0 20 20"><path d="M4 4h2v12H4zM16 4v12L7 10z"/></svg></button>
+          <button class="ic" id="bPrev" data-t-title="play.prev" title="Back one step (←)"><svg viewBox="0 0 20 20"><path d="M14 4v12L5 10z"/></svg></button>
+          <button class="btn" id="bPlay">Play</button>
+          <button class="ic" id="bNext" data-t-title="play.next" title="Play the next step (→)"><svg viewBox="0 0 20 20"><path d="M6 4v12l9-6z"/></svg></button>
+          <button class="ic" id="bLast" data-t-title="play.last" title="Jump to the readout (End)"><svg viewBox="0 0 20 20"><path d="M4 4v12l9-6zM14 4h2v12h-2z"/></svg></button>
+          <select id="speed" data-t-title="play.speed" title="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
+        </div>
+      </section>
+      <section class="sec" id="secTabs">
+        <div class="tabs" id="tabs">
+          <button data-tab="knobs" data-t="tab.knobs">Knobs</button>
+          <button data-tab="gradient" data-t="tab.gradient">Gradient</button>
+          <button data-tab="train" data-t="tab.train" class="on">Train</button>
+        </div>
+        <div class="pane" id="paneKnobs" hidden>
+          <div id="knobRows"></div>
+          <div class="btns"><button class="btn ghost" id="bKnobReset" data-t="knobs.resetAll">Reset all knobs</button></div>
+          <p class="fine" data-t="knobs.note"></p>
+        </div>
+        <div class="pane" id="paneGradient" hidden>
+          <div id="gTop">
+            <label class="field"><span data-t="grad.knob">knob</span> <select id="gKnob"></select></label>
+            <canvas id="gCurve"></canvas>
+            <div class="drow"><span>Δ</span><div class="seg" id="segDelta"></div><button class="btn ghost" id="bNudge" data-t="grad.nudge">Nudge by Δ</button></div>
+            <div class="nudge" id="gNudge"></div>
+          </div>
+          <div id="gMid">
+            <div class="btns">
+              <button class="btn" id="bMeasure" data-t="grad.measure"></button>
+              <button class="btn" id="bBackprop" data-t="grad.backprop"></button>
+              <button class="btn" id="bStep" data-t="grad.step" disabled></button>
+            </div>
+            <div class="rulebox" data-t="grad.rule"></div>
+            <label class="field"><span data-t="train.lr"></span> <input type="range" id="lrG" min="0" max="100" step="1"> <b id="lrGVal"></b></label>
+            <div class="counters"><span id="gEvals"></span><span id="gBp"></span></div>
+            <table class="gt" id="gTable"><thead></thead><tbody></tbody></table>
+            <p class="fine" data-t="grad.hint"></p>
+          </div>
+        </div>
+        <div class="pane" id="paneTrain">
+          <div class="btns">
+            <button class="btn" id="bTrain">Train</button>
+            <button class="btn ghost" id="bOne" data-t="train.one">+1 step</button>
+            <button class="btn ghost" id="bTen" data-t="train.ten">+10 steps</button>
+            <button class="btn ghost" id="bReset" data-t="train.reset">Reset</button>
+          </div>
+          <label class="field"><span data-t="train.lr">learning rate</span> <input type="range" id="lr" min="0" max="100" step="1"> <b id="lrVal"></b></label>
+          <label class="field"><span data-t="train.speed">speed</span> <select id="tspeed"><option value="1" data-t="train.speed1">1 step per frame</option><option value="5" selected data-t="train.speed5">5 steps per frame</option><option value="20" data-t="train.speed20">20 steps per frame</option></select></label>
+          <div class="field"><span data-t="train.rule">update rule</span><div class="seg" id="segRule"></div></div>
+          <div id="tStats">
+            <div class="stats">
+              <div><span data-t="stat.loss">loss</span><b id="sLoss">–</b></div>
+              <div><span data-t="stat.acc">accuracy</span><b id="sAcc">–</b></div>
+              <div id="sTestWrap" hidden><span data-t="stat.testAcc">test accuracy</span><b id="sTest">–</b></div>
+              <div><span data-t="stat.steps">steps</span><b id="sSteps">0</b></div>
+            </div>
+            <canvas id="lossCv"></canvas>
+          </div>
+          <p class="note" id="note"></p>
+          <p class="fine" id="trainFine"></p>
+        </div>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<script id="lb-ui">
+var LBUI = (function(){
+  'use strict';
+  function $(id){ return document.getElementById(id); }
+
+  var BASE_SEC = 1.6, CAM = 0.15, MOVE_END = 0.9, STILL_W = 0.35;
+  var GRID_R = 1.6, GRID_LINES = 17, GRID_SAMPLES = 65, MIN_LAYERS = 0, MAX_LAYERS = 8;
+  var HUE = [[140, 225], [0, 48]];
+  var COLORS = ['angle', 'x', 'curve'];
+  var HALO_CAP = 4, NEW_COLOR = ['hsl(182,72%,40%)', 'hsl(24,72%,46%)'];
+  var TABS = ['knobs', 'gradient', 'train'], DELTAS = [1, 0.1, 0.01];
+  var INK = '#0b0b0b';
+  /* canvas text needs a font with Hangul, or Korean falls back to a serif font */
+  var FONT = "Inter, Pretendard, 'Noto Sans KR', system-ui, sans-serif";
+
+  var S = {
+    lang: 'en', dataName: 'moons', data: null, act: 'tanh', layers: 2, net: null, opt: null,
+    steps: [], states: [], views: [], weights: [], layerStart: [], layerEnd: [],
+    test: null, showTest: false, extra: [], extraZ: [], evalTrain: null, evalTest: null, cam: null,
+    pts: null, cur: null, off: { test: 0, grid: 0, extra: 0 }, colors: [], testColors: [], colorBy: 'angle',
+    pos: 0, playing: false, target: 0, speed: 1,
+    training: false, trainSpeed: 5, lr: 0.03, rule: 'adam', stepCount: 0, loss: NaN, acc: NaN, hist: [], note: '',
+    resets: 0, version: 0, dirty: true, thumbKey: '', sideKey: '', sideAt: 0, barKey: '',
+    tab: 'train', knobVersion: 0, knobKey: '', knobAt: 0, optKey: '', gradKey: '', gradAt: 0, curve: null, curveKey: '', curveAt: 0,
+    grad: { index: 0, delta: 0.1, nudge: null, slopesNudge: null, nudgeDelta: 0.1, slopesBp: null, last: null, version: -1, evals: 0, bp: 0 }
+  };
+
+  /* ---------- small helpers ---------- */
+  function clamp01(x){ return x < 0 ? 0 : x > 1 ? 1 : x; }
+  function ease(t){ return t*t*(3 - 2*t); }
+  function lerp(a, b, t){ return a + (b - a)*t; }
+  var num = LB.num;
+  function T(key, params){ return LB.t(S.lang, key, params); }
+  function esc(s){ return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  /* learning rate slider 0..100 on a log scale from 10^-3 to 10^1 */
+  function lrToSlider(lr){ return Math.round((Math.log10(lr) + 3)/4*100); }
+  function sliderToLr(v){ return Math.pow(10, -3 + 4*v/100); }
+  function fmtLoss(v){ return !isFinite(v) ? '–' : v < 0.0005 ? '< 0.001' : v.toFixed(3); }
+  function fmtAcc(v){ return isFinite(v) ? (100*v).toFixed(v === 1 ? 0 : 1) + '%' : '–'; }
+  function fmtLr(lr){ return lr >= 1 ? lr.toFixed(1) : lr >= 0.1 ? lr.toFixed(2) : lr >= 0.01 ? lr.toFixed(3) : lr.toFixed(4); }
+
+  /* ---------- data, colors, grid ---------- */
+  /* a point's color comes from its input position: angle, x (range of the training points), or position along the curve */
+  function colorOf(d, i, xmin, xmax){
+    var x = d.X[2*i], y = d.X[2*i + 1], c;
+    if(S.colorBy === 'x') c = clamp01((x - xmin)/(xmax - xmin));
+    else if(S.colorBy === 'curve') c = d.u[i];
+    else c = (Math.atan2(y, x) + Math.PI)/(2*Math.PI);
+    var h = HUE[d.y[i]];
+    return 'hsl(' + lerp(h[0], h[1], c).toFixed(1) + ',72%,' + (d.y[i] ? 46 : 40) + '%)';
+  }
+  function computeColors(){
+    var d = S.data, xmin = Infinity, xmax = -Infinity, i;
+    for(i = 0; i < d.n; i++){ xmin = Math.min(xmin, d.X[2*i]); xmax = Math.max(xmax, d.X[2*i]); }
+    S.colors = []; S.testColors = [];
+    for(i = 0; i < d.n; i++) S.colors.push(colorOf(d, i, xmin, xmax));
+    for(i = 0; i < S.test.n; i++) S.testColors.push(colorOf(S.test, i, xmin, xmax));
+    renderLegend();
+  }
+  /* everything that moves through the steps, in one array: training points | test points | grid | new points */
+  function makePoints(){
+    var d = S.data, t = S.test, G = GRID_LINES*2*GRID_SAMPLES, e = S.extra.length;
+    var pts = new Float64Array(2*(d.n + t.n + G + e)), o;
+    S.off = { test: 2*d.n, grid: 2*(d.n + t.n), extra: 2*(d.n + t.n + G) };
+    pts.set(d.X); pts.set(t.X, S.off.test);
+    o = S.off.grid;
+    for(var i = 0; i < GRID_LINES; i++){
+      var v = -GRID_R + 2*GRID_R*i/(GRID_LINES - 1), j, w;
+      for(j = 0; j < GRID_SAMPLES; j++){ w = -GRID_R + 2*GRID_R*j/(GRID_SAMPLES - 1); pts[o++] = v; pts[o++] = w; }
+      for(j = 0; j < GRID_SAMPLES; j++){ w = -GRID_R + 2*GRID_R*j/(GRID_SAMPLES - 1); pts[o++] = w; pts[o++] = v; }
+    }
+    for(var q = 0; q < e; q++){ pts[o++] = S.extra[q][0]; pts[o++] = S.extra[q][1]; }
+    S.pts = pts; S.cur = new Float64Array(pts.length); S.states = [];
+  }
+
+  /* ---------- network state ---------- */
+  function seedFor(){
+    var p = LB.PRESETS[S.dataName];
+    if(p && p.act === S.act && p.layers === S.layers) return p.seed + S.resets;
+    return S.dataName + '|' + S.act + '|' + S.layers + '|' + S.resets;
+  }
+  function newNet(){
+    S.net = LB.initNet(S.layers, S.act, seedFor());
+    S.opt = LB.makeOptimizer(S.net);
+    S.stepCount = 0; S.hist = []; S.note = '';
+    resetGrad(); knobsChanged();
+    rebuild();
+  }
+  /* any change of a weight or a bias: slopes and nudge results measured before no longer apply */
+  function knobsChanged(){ S.knobVersion++; }
+  function resetGrad(){
+    var g = S.grad;
+    g.nudge = null; g.slopesNudge = null; g.slopesBp = null; g.last = null; g.evals = 0; g.bp = 0;
+  }
+  /* loss and accuracy on training and test points, and the logits of new points; rebuild() calls this */
+  function measure(){
+    S.evalTrain = LB.evaluate(S.net, S.data);
+    S.evalTest = LB.evaluate(S.net, S.test);
+    S.loss = S.evalTrain.loss; S.acc = S.evalTrain.acc;
+    S.extraZ = S.extra.map(function(p){ return LB.logit(S.net, p[0], p[1]); });
+  }
+  function fitBox(a, b, nd){
+    var x0 = 0, x1 = 0, y0 = 0, y1 = 0;
+    for(var q = 0; q < 2; q++){
+      var A = q ? b : a;
+      for(var i = 0; i < nd; i += 2){
+        var x = A[i], y = A[i + 1];
+        if(!isFinite(x) || !isFinite(y)) continue;
+        if(x < x0) x0 = x; if(x > x1) x1 = x; if(y < y0) y0 = y; if(y > y1) y1 = y;
+      }
+    }
+    var pad = 0.1*Math.max(x1 - x0, y1 - y0) + 0.08;
+    return { cx: (x0 + x1)/2, cy: (y0 + y1)/2, hx: Math.max((x1 - x0)/2 + pad, 0.35), hy: Math.max((y1 - y0)/2 + pad, 0.35) };
+  }
+  function lerpBox(a, b, t){ return { cx: lerp(a.cx, b.cx, t), cy: lerp(a.cy, b.cy, t), hx: lerp(a.hx, b.hx, t), hy: lerp(a.hy, b.hy, t) }; }
+
+  function rebuild(){
+    S.steps = LB.buildSteps(S.net);
+    S.states = LB.trace(S.steps, S.pts, S.states);
+    var K = S.steps.length, nd = 2*S.data.n;
+    S.views = []; S.weights = []; S.layerStart = []; S.layerEnd = [];
+    for(var k = 0; k < K; k++){
+      var s = S.steps[k];
+      S.views.push(fitBox(S.states[k], S.states[k + 1], nd));
+      S.weights.push(s.still ? STILL_W : 1);
+      if(k === 0 || S.steps[k - 1].layer !== s.layer) S.layerStart.push(k);
+      if(s.kind === 'act') S.layerEnd.push(k + 1);
+    }
+    if(S.pos > K) S.pos = K;
+    if(S.target > K) S.target = K;
+    measure();
+    S.version++; S.dirty = true;
+  }
+
+  /* ---------- where are we on the timeline ---------- */
+  function phase(pos){
+    var K = S.steps.length;
+    if(pos >= K) return { k: K - 1, u: 1, cam: 1, move: 1 };
+    var k = Math.floor(pos), u = pos - k;
+    return { k: k, u: u, cam: ease(clamp01(u/CAM)), move: ease(clamp01((u - CAM)/(MOVE_END - CAM))) };
+  }
+  /* the step whose motion is playing, or the one that finished last (-1 at the input) */
+  function activeStep(ph){ return ph.move > 0 ? ph.k : ph.k - 1; }
+  /* the space on the big canvas: the input, a hidden space, or the readout space (with no layers the input is the readout space) */
+  function spaceOf(ph){
+    if(S.net.layers.length === 0 || S.steps[ph.k].kind === 'readout') return 'readout';
+    if(ph.k === 0 && ph.move === 0) return 'input';
+    return 'hidden';
+  }
+  function canAddPoint(){ return S.net.layers.length === 0 || spaceOf(phase(S.pos)) === 'input'; }
+
+  function currentPoints(ph){
+    if(ph.move <= 0) return S.states[ph.k];
+    if(ph.move >= 1) return S.states[ph.k + 1];
+    var src = S.states[ph.k], dst = S.cur, s = S.steps[ph.k];
+    for(var i = 0; i < src.length; i += 2){
+      var p = LB.applyStep(s, ph.move, src[i], src[i + 1]);
+      dst[i] = p[0]; dst[i + 1] = p[1];
+    }
+    return dst;
+  }
+
+  /* ---------- canvas helpers ---------- */
+  function fitCanvas(cv){
+    var r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    var w = Math.max(1, Math.round(r.width*dpr)), h = Math.max(1, Math.round(r.height*dpr));
+    if(cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h; }
+    var ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx: ctx, w: r.width, h: r.height };
+  }
+  function makeCam(box, w, h){
+    var sc = Math.min(w/(2*box.hx), h/(2*box.hy));
+    function cl(v){ return v > 1e5 ? 1e5 : v < -1e5 ? -1e5 : v; }
+    return {
+      sc: sc, w: w, h: h,
+      X: function(x){ return cl(w/2 + (x - box.cx)*sc); },
+      Y: function(y){ return cl(h/2 - (y - box.cy)*sc); },
+      ix: function(px){ return box.cx + (px - w/2)/sc; },
+      iy: function(py){ return box.cy - (py - h/2)/sc; }
+    };
+  }
+
+  var shadeCv = document.createElement('canvas');
+  function drawShade(ctx, cam, fn, alpha, cols){
+    if(alpha <= 0.01) return;
+    cols = cols || 120;
+    var rows = Math.max(2, Math.round(cols*cam.h/cam.w));
+    shadeCv.width = cols; shadeCv.height = rows;
+    var sctx = shadeCv.getContext('2d'), img = sctx.createImageData(cols, rows), D = img.data;
+    for(var r = 0; r < rows; r++){
+      var y = cam.iy((r + 0.5)*cam.h/rows);
+      for(var c = 0; c < cols; c++){
+        var x = cam.ix((c + 0.5)*cam.w/cols), k = 4*(r*cols + c);
+        if(fn(x, y) > 0){ D[k] = 236; D[k + 1] = 120; D[k + 2] = 50; }
+        else { D[k] = 40; D[k + 1] = 130; D[k + 2] = 200; }
+        D[k + 3] = Math.round(34*alpha);
+      }
+    }
+    sctx.putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(shadeCv, 0, 0, cam.w, cam.h);
+  }
+  function inputLogit(x, y){ return LB.logit(S.net, x, y); }
+  function readoutLogit(x, y){ return S.net.v[0]*x + S.net.v[1]*y + S.net.c; }
+
+  function drawGrid(ctx, cam, P, big){
+    var n2 = S.off.grid, GS = GRID_SAMPLES, mid = (GRID_LINES - 1)/2;
+    for(var i = 0; i < GRID_LINES; i++){
+      for(var dir = 0; dir < 2; dir++){
+        var o = n2 + 2*(i*2*GS + dir*GS);
+        ctx.beginPath();
+        for(var j = 0; j < GS; j++){
+          var x = cam.X(P[o + 2*j]), y = cam.Y(P[o + 2*j + 1]);
+          if(j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = i === mid ? '#bdbab2' : '#e4e2dc';
+        ctx.lineWidth = i === mid && big ? 1.5 : 1;
+        ctx.stroke();
+      }
+    }
+  }
+  function niceStep(raw){
+    var p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw/p;
+    return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10)*p;
+  }
+  function drawAxes(ctx, cam, ticks){
+    var w = cam.w, h = cam.h, ox = cam.X(0), oy = cam.Y(0);
+    ctx.strokeStyle = '#8a8985'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(w, oy); ctx.moveTo(ox, 0); ctx.lineTo(ox, h); ctx.stroke();
+    if(!ticks) return;
+    var st = niceStep(80/cam.sc), dec = Math.max(0, -Math.floor(Math.log10(st) + 1e-9));
+    ctx.fillStyle = '#6b6a66'; ctx.font = '12px ' + FONT;
+    var ly = Math.min(Math.max(oy + 5, 4), h - 16), i, v;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for(i = Math.ceil(cam.ix(0)/st); i <= Math.floor(cam.ix(w)/st); i++){
+      if(i === 0) continue;
+      v = cam.X(i*st); ctx.fillRect(v - 0.5, oy - 3, 1, 6); ctx.fillText(num(i*st, dec), v, ly);
+    }
+    var lx = Math.min(Math.max(ox - 6, 34), w - 4);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for(i = Math.ceil(cam.iy(h)/st); i <= Math.floor(cam.iy(0)/st); i++){
+      if(i === 0) continue;
+      v = cam.Y(i*st); ctx.fillRect(ox - 3, v - 0.5, 6, 1); ctx.fillText(num(i*st, dec), lx, v);
+    }
+  }
+  /* class A is a circle, class B a triangle */
+  function markerPath(ctx, x, y, r, cls){
+    ctx.beginPath();
+    if(cls === 0) ctx.arc(x, y, r, 0, 2*Math.PI);
+    else { var t = r*1.35; ctx.moveTo(x, y - t); ctx.lineTo(x + t*0.866, y + t*0.5); ctx.lineTo(x - t*0.866, y + t*0.5); ctx.closePath(); }
+  }
+  function drawPoints(ctx, cam, P, r){
+    var d = S.data;
+    ctx.lineWidth = r > 3 ? 0.9 : 0.6; ctx.strokeStyle = 'rgba(20,20,20,.5)';
+    for(var i = 0; i < d.n; i++){
+      ctx.fillStyle = S.colors[i];
+      markerPath(ctx, cam.X(P[2*i]), cam.Y(P[2*i + 1]), r, d.y[i]);
+      ctx.fill(); ctx.stroke();
+    }
+  }
+  /* test points: the same markers and colors, hollow */
+  function drawTestPoints(ctx, cam, P, r, width){
+    var t = S.test, o = S.off.test;
+    ctx.lineWidth = width;
+    for(var i = 0; i < t.n; i++){
+      ctx.strokeStyle = S.testColors[i];
+      markerPath(ctx, cam.X(P[o + 2*i]), cam.Y(P[o + 2*i + 1]), r, t.y[i]);
+      ctx.stroke();
+    }
+  }
+  /* behind each training point, a grey disc whose radius grows with its loss -log p(correct), up to loss HALO_CAP */
+  function drawHalos(ctx, cam, P, r){
+    var d = S.data, z = S.evalTrain.z;
+    ctx.fillStyle = 'rgba(60,60,60,0.16)';
+    for(var i = 0; i < d.n; i++){
+      var l = Math.min(LB.pointLoss(z[i], d.y[i]), HALO_CAP);
+      ctx.beginPath(); ctx.arc(cam.X(P[2*i]), cam.Y(P[2*i + 1]), r + 22*l/HALO_CAP, 0, 2*Math.PI); ctx.fill();
+    }
+  }
+  /* a dark outline around the points whose predicted class differs from their label */
+  function drawWrongMarks(ctx, cam, P, r, data, z, off){
+    ctx.strokeStyle = '#3a3a3a'; ctx.lineWidth = 2;
+    for(var i = 0; i < data.n; i++){
+      if((z[i] > 0) === (data.y[i] === 1)) continue;
+      markerPath(ctx, cam.X(P[off + 2*i]), cam.Y(P[off + 2*i + 1]), r + 3, data.y[i]);
+      ctx.stroke();
+    }
+  }
+  /* new points: hollow diamonds in the color of the predicted class; the big canvas adds the class and its probability */
+  function drawNewPoints(ctx, cam, P, r, big){
+    var o = S.off.extra;
+    for(var q = 0; q < S.extra.length; q++){
+      var x = cam.X(P[o + 2*q]), y = cam.Y(P[o + 2*q + 1]), z = S.extraZ[q], cls = z > 0 ? 1 : 0, a = 1.9*r;
+      ctx.beginPath(); ctx.moveTo(x, y - a); ctx.lineTo(x + a, y); ctx.lineTo(x, y + a); ctx.lineTo(x - a, y); ctx.closePath();
+      ctx.lineWidth = big ? 2.6 : 1.6; ctx.strokeStyle = NEW_COLOR[cls]; ctx.stroke();
+      if(big){
+        var pB = 1/(1 + Math.exp(-z));
+        haloText(ctx, (cls ? 'B ' : 'A ') + (cls ? pB : 1 - pB).toFixed(2), x + a + 7, y, 'left', '700 15px ' + FONT);
+      }
+    }
+  }
+  function drawReadoutLine(ctx, cam, alpha, label){
+    var vx = S.net.v[0], vy = S.net.v[1], c = S.net.c, a, b;
+    if(alpha <= 0.01 || (vx === 0 && vy === 0)) return;
+    if(Math.abs(vy) > Math.abs(vx)){
+      var xa = cam.ix(0), xb = cam.ix(cam.w);
+      a = [cam.X(xa), cam.Y(-(vx*xa + c)/vy)]; b = [cam.X(xb), cam.Y(-(vx*xb + c)/vy)];
+    } else {
+      var ya = cam.iy(0), yb = cam.iy(cam.h);
+      a = [cam.X(-(vy*ya + c)/vx), cam.Y(ya)]; b = [cam.X(-(vy*yb + c)/vx), cam.Y(yb)];
+    }
+    ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = INK; ctx.lineWidth = label ? 2.2 : 1.4;
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    if(label){
+      var mx = (a[0] + b[0])/2, my = (a[1] + b[1])/2;
+      mx = Math.min(Math.max(mx, 80), cam.w - 80); my = Math.min(Math.max(my, 20), cam.h - 20);
+      haloText(ctx, label, mx + 8, my - 10, 'left', '600 14px ' + FONT);
+    }
+    ctx.restore();
+  }
+  function haloText(ctx, text, x, y, align, font, color){
+    ctx.font = font || '14px ' + FONT;
+    ctx.textAlign = align || 'left'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,.92)'; ctx.lineJoin = 'round';
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = color || INK; ctx.fillText(text, x, y);
+  }
+  function arrow(ctx, x0, y0, x1, y1, color, width, dashed){
+    var dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy);
+    if(len < 2) return;
+    var ux = dx/len, uy = dy/len, hl = Math.min(11, len*0.4);
+    ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width;
+    if(dashed) ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1 - ux*hl*0.8, y1 - uy*hl*0.8); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - ux*hl - uy*hl*0.45, y1 - uy*hl + ux*hl*0.45);
+    ctx.lineTo(x1 - ux*hl + uy*hl*0.45, y1 - uy*hl - ux*hl*0.45);
+    ctx.closePath(); ctx.fill(); ctx.restore();
+  }
+
+  /* images of (0,0), (1,0), (0,1) under this layer's steps up to step k at progress m */
+  function layerFrame(k, m){
+    var l = S.steps[k].layer, j0 = S.layerStart[l], o = [0, 0], e1 = [1, 0], e2 = [0, 1];
+    for(var j = j0; j <= k; j++){
+      var t = j === k ? m : 1, s = S.steps[j];
+      o = LB.applyStep(s, t, o[0], o[1]); e1 = LB.applyStep(s, t, e1[0], e1[1]); e2 = LB.applyStep(s, t, e2[0], e2[1]);
+    }
+    return { o: o, e1: e1, e2: e2 };
+  }
+
+  function drawOverlays(ctx, cam, ph, front){
+    var K = S.steps.length, ak = activeStep(ph);
+    if(ak < 0 || ak >= K) return;
+    var s = S.steps[ak], m = ak === ph.k ? ph.move : 1, ox = cam.X(0), oy = cam.Y(0);
+    if(!front){
+      if(s.kind === 'act'){
+        ctx.save(); ctx.globalAlpha = 0.25 + 0.5*Math.sin(Math.PI*Math.min(1, m));
+        if(s.act === 'tanh'){
+          ctx.setLineDash([6, 5]); ctx.strokeStyle = INK; ctx.lineWidth = 1.3;
+          ctx.strokeRect(cam.X(-1), cam.Y(1), cam.X(1) - cam.X(-1), cam.Y(-1) - cam.Y(1));
+        } else {
+          ctx.strokeStyle = INK; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(cam.w, oy); ctx.moveTo(ox, 0); ctx.lineTo(ox, cam.h); ctx.stroke();
+        }
+        ctx.restore();
+      }
+      if(s.kind === 'flip'){
+        ctx.save(); ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.globalAlpha = 0.7;
+        ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(cam.w, oy); ctx.stroke(); ctx.restore();
+      }
+      return;
+    }
+    if(s.kind === 'readout'){ drawReadoutLine(ctx, cam, m, 'v·h + c = 0'); return; }
+    if(s.kind === 'act') return;
+
+    var fr = layerFrame(ak, m), bx = cam.X(fr.o[0]), by = cam.Y(fr.o[1]);
+    var t1 = [cam.X(fr.e1[0]), cam.Y(fr.e1[1])], t2 = [cam.X(fr.e2[0]), cam.Y(fr.e2[1])];
+    arrow(ctx, bx, by, t1[0], t1[1], INK, 2.4);
+    arrow(ctx, bx, by, t2[0], t2[1], '#6b6a66', 2.4);
+    haloText(ctx, '(1, 0)', t1[0] + 8, t1[1] - 10, 'left', '600 13px ' + FONT);
+    haloText(ctx, '(0, 1)', t2[0] + 8, t2[1] - 10, 'left', '600 13px ' + FONT, '#52514e');
+
+    if(s.kind === 'rotate'){
+      var before = ak === S.layerStart[s.layer] ? { o: [0, 0], e1: [1, 0] } : layerFrame(ak - 1, 1);
+      var a0 = Math.atan2(before.e1[1] - before.o[1], before.e1[0] - before.o[0]), a1 = a0 + s.angle*m;
+      var R = Math.min(64, 0.45*Math.hypot(t1[0] - bx, t1[1] - by) + 24);
+      ctx.save(); ctx.strokeStyle = INK; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(bx, by, R, -a0, -a1, s.angle > 0); ctx.stroke();
+      ctx.setLineDash([4, 4]); ctx.strokeStyle = '#8a8985'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + Math.cos(a0)*(R + 30), by - Math.sin(a0)*(R + 30)); ctx.stroke();
+      ctx.restore();
+      var am = (a0 + a1)/2, deg = Math.abs(s.angle*m)*180/Math.PI;
+      haloText(ctx, deg.toFixed(1) + '°', bx + Math.cos(am)*(R + 16), by - Math.sin(am)*(R + 16), 'center', '700 15px ' + FONT);
+    } else if(s.kind === 'stretch'){
+      var f1 = 1 + m*(s.s1 - 1), f2 = 1 + m*(s.s2 - 1);
+      ctx.save(); ctx.fillStyle = INK;
+      [-1, 1].forEach(function(sg){
+        ctx.fillRect(cam.X(sg*f1) - 1.5, oy - 9, 3, 18);
+        ctx.fillRect(ox - 9, cam.Y(sg*f2) - 1.5, 18, 3);
+      });
+      ctx.restore();
+      haloText(ctx, T('overlay.alongX', { s: f1.toFixed(2) }), cam.X(f1) + 8, oy + 18, 'left', '700 14px ' + FONT);
+      haloText(ctx, T('overlay.alongY', { s: f2.toFixed(2) }), ox + 14, cam.Y(f2) - 4, 'left', '700 14px ' + FONT);
+    } else if(s.kind === 'flip'){
+      haloText(ctx, T('overlay.flip'), ox + 14, cam.Y(0.6), 'left', '700 14px ' + FONT);
+    } else if(s.kind === 'shift'){
+      arrow(ctx, ox, oy, bx, by, INK, 1.8, true);
+      haloText(ctx, 'b', (ox + bx)/2 + 8, (oy + by)/2 - 10, 'left', '700 15px ' + FONT);
+    }
+  }
+
+  function captionFor(ph){
+    var ak = activeStep(ph);
+    if(S.net.layers.length === 0) return [T('cap.noLayers'), T('cap.noLayersDetail')];
+    if(ak < 0) return [T('cap.input'), T('cap.inputDetail')];
+    var s = S.steps[ak];
+    if(s.kind === 'readout') return [T('cap.readout'), T('cap.readoutDetail')];
+    return [T('cap.layer', { n: s.layer + 1, L: S.net.layers.length }), LB.describe(s, S.lang)];
+  }
+
+  function drawView(){
+    var cv = $('view'), f = fitCanvas(cv), ctx = f.ctx, ph = phase(S.pos), flat = S.net.layers.length === 0;
+    var cam = makeCam(lerpBox(S.views[Math.max(ph.k - 1, 0)], S.views[ph.k], ph.cam), f.w, f.h);
+    var P = currentPoints(ph);
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, f.w, f.h);
+    /* no layers: the input space is the readout space, so shade it once and keep the line at every position */
+    if(flat) drawShade(ctx, cam, readoutLogit, 1);
+    else {
+      if(ph.k === 0) drawShade(ctx, cam, inputLogit, 1 - clamp01(ph.move/0.25));
+      if(S.steps[ph.k].kind === 'readout') drawShade(ctx, cam, readoutLogit, ph.move);
+    }
+    drawGrid(ctx, cam, P, true);
+    drawAxes(ctx, cam, true);
+    drawOverlays(ctx, cam, ph, false);
+    /* loss marks only where the classes are read off: the input space and the readout space */
+    var marks = spaceOf(ph) !== 'hidden';
+    if(marks) drawHalos(ctx, cam, P, 4.4);
+    drawPoints(ctx, cam, P, 4.4);
+    if(S.showTest) drawTestPoints(ctx, cam, P, 4.4, 1.8);
+    if(marks){
+      drawWrongMarks(ctx, cam, P, 4.4, S.data, S.evalTrain.z, 0);
+      if(S.showTest) drawWrongMarks(ctx, cam, P, 4.4, S.test, S.evalTest.z, S.off.test);
+    }
+    if(S.extra.length) drawNewPoints(ctx, cam, P, 4.4, true);
+    if(flat) drawReadoutLine(ctx, cam, 1, 'v·x + c = 0');
+    else drawOverlays(ctx, cam, ph, true);
+    var cap = captionFor(ph), head = T('cap.lossAcc', { loss: fmtLoss(S.loss), acc: fmtAcc(S.acc) });
+    if(S.showTest) head += '   ' + T('cap.testAcc', { acc: fmtAcc(S.evalTest.acc) });
+    haloText(ctx, head, 16, 26, 'left', '700 22px ' + FONT);
+    haloText(ctx, cap[0], 16, 56, 'left', '700 17px ' + FONT);
+    haloText(ctx, cap[1], 16, 80, 'left', '500 16px ' + FONT);
+    S.cam = cam;
+    cv.style.cursor = canAddPoint() ? 'crosshair' : '';
+  }
+
+  /* ---------- thumbnails ---------- */
+  function thumbItems(){
+    var K = S.steps.length, items = [{ label: T('cap.input'), idx: 0, kind: 'input' }];
+    S.layerEnd.forEach(function(e, l){ items.push({ label: T('thumb.after', { n: l + 1 }), idx: e, kind: 'layer' }); });
+    items.push({ label: T('cap.readout'), idx: K, kind: 'readout' });
+    return items;
+  }
+  function activeThumb(items){
+    for(var i = 0; i < items.length; i++) if(items[i].idx >= S.pos - 1e-9) return i;
+    return items.length - 1;
+  }
+  function renderStrip(){
+    var items = thumbItems(), strip = $('strip');
+    if(strip.children.length !== items.length){
+      strip.innerHTML = items.map(function(it, i){
+        return '<button class="thumb" data-i="' + i + '"><canvas></canvas><span>' + esc(it.label) + '</span></button>';
+      }).join('');
+    }
+    var on = activeThumb(items);
+    for(var i = 0; i < items.length; i++) strip.children[i].classList.toggle('on', i === on);
+    var key = S.version + '|' + strip.clientWidth + '|' + S.colorBy + '|' + S.showTest;
+    if(key === S.thumbKey) return;
+    S.thumbKey = key;
+    var nd = 2*S.data.n;
+    items.forEach(function(it, i){
+      var f = fitCanvas(strip.children[i].querySelector('canvas')), P = S.states[it.idx];
+      var cam = makeCam(fitBox(P, P, nd), f.w, f.h), ctx = f.ctx;
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, f.w, f.h);
+      if(it.kind === 'input') drawShade(ctx, cam, inputLogit, 1, 48);
+      if(it.kind === 'readout') drawShade(ctx, cam, readoutLogit, 1, 48);
+      drawGrid(ctx, cam, P, false);
+      drawAxes(ctx, cam, false);
+      drawPoints(ctx, cam, P, 2.1);
+      if(S.showTest) drawTestPoints(ctx, cam, P, 2.1, 1.1);
+      if(S.extra.length) drawNewPoints(ctx, cam, P, 2.1, false);
+      if(it.kind === 'readout') drawReadoutLine(ctx, cam, 1, false);
+    });
+  }
+
+  /* ---------- step bar ---------- */
+  function renderBar(){
+    var bar = $('bar'), K = S.steps.length, key = S.version + '|' + K;
+    if(bar.dataset.k !== String(K) || !bar.children.length){
+      var html = '', groups = {};
+      S.steps.forEach(function(s, k){ (groups[s.layer] = groups[s.layer] || []).push(k); });
+      Object.keys(groups).forEach(function(l){
+        var ks = groups[l], wsum = 0;
+        ks.forEach(function(k){ wsum += S.weights[k]; });
+        html += '<div class="lg" style="flex:' + wsum + ' 1 0"><div class="sgs">' + ks.map(function(k){
+          return '<div class="sg" data-k="' + k + '" style="flex:' + S.weights[k] + ' 1 0" title="' + esc(LB.describe(S.steps[k], S.lang)) + '"><i></i></div>';
+        }).join('') + '</div><div class="lab">' + esc(+l === S.net.layers.length ? T('bar.out') : T('bar.layer', { n: +l + 1 })) + '</div></div>';
+      });
+      bar.innerHTML = html; bar.dataset.k = String(K);
+    }
+    if(S.barKey !== key){
+      S.barKey = key;
+      var segs = bar.querySelectorAll('.sg');
+      for(var j = 0; j < segs.length; j++){
+        segs[j].style.flexGrow = S.weights[j];
+        segs[j].title = LB.describe(S.steps[j], S.lang);
+      }
+    }
+    var ph = phase(S.pos), segs2 = bar.querySelectorAll('.sg');
+    for(var k = 0; k < segs2.length; k++){
+      var fill = k < Math.floor(S.pos) ? 1 : k === Math.floor(S.pos) ? S.pos - k : 0;
+      segs2[k].firstChild.style.width = (100*clamp01(fill)).toFixed(1) + '%';
+      segs2[k].classList.toggle('on', k === activeStep(ph));
+    }
+  }
+  function posFromBar(clientX){
+    var segs = $('bar').querySelectorAll('.sg'), K = S.steps.length;
+    for(var k = 0; k < segs.length; k++){
+      var r = segs[k].getBoundingClientRect();
+      if(clientX < r.left) return k;
+      if(clientX <= r.right + 2) return k + clamp01((clientX - r.left)/r.width);
+    }
+    return K;
+  }
+
+  /* ---------- side panel ---------- */
+  function mat(rows){
+    return '<table class="mat">' + rows.map(function(r){ return '<tr>' + r.map(function(v){ return '<td>' + num(v, 2) + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>';
+  }
+  function renderSide(force){
+    var now = performance.now();
+    if(!force && S.training && now - S.sideAt < 150) return;
+    var ph = phase(S.pos), K = S.steps.length, ak = activeStep(ph);
+    var panelK = Math.max(0, ak), s = S.steps[panelK], L = S.net.layers.length;
+    var done = ph.move >= 1 ? ph.k + 1 : ph.k;
+    var key = S.version + '|' + panelK + '|' + done + '|' + (ph.move > 0 && ph.move < 1);
+    if(key === S.sideKey) return;
+    S.sideKey = key; S.sideAt = now;
+    var ks = [], k;
+    for(k = 0; k < K; k++) if(S.steps[k].layer === s.layer) ks.push(k);
+    if(s.kind === 'readout'){
+      $('where').textContent = T('cap.readout');
+      $('mats').innerHTML = '<div class="eqrow"><span>v =</span>' + mat([[S.net.v[0], S.net.v[1]]]) + '<span>c = ' + num(S.net.c, 2) + '</span></div>' +
+        '<div class="det">' + esc(T('side.readoutNote')) + '</div>';
+    } else {
+      var W = S.net.layers[s.layer].W, b = S.net.layers[s.layer].b, det = W[0]*W[3] - W[1]*W[2];
+      $('where').textContent = T('side.layer', { n: s.layer + 1, L: L, act: LB.ACTS[S.act].label });
+      $('mats').innerHTML = '<div class="eqrow"><span>W =</span>' + mat([[W[0], W[1]], [W[2], W[3]]]) +
+        '<span>b =</span>' + mat([[b[0]], [b[1]]]) + '</div>' +
+        '<div class="det">det W = ' + num(det, 2) + (det < 0 ? ' ' + esc(T('side.detFlip')) : '') + '</div>';
+    }
+    $('rows').innerHTML = ks.map(function(k, i){
+      var cls = k < done ? 'done' : (k === ph.k && ph.move > 0 && ph.move < 1) ? 'playing' : k === done ? 'next' : '';
+      return '<li class="' + cls + '" data-k="' + k + '"><b>' + (i + 1) + '</b><span>' + esc(LB.describe(S.steps[k], S.lang)) + '</span></li>';
+    }).join('');
+  }
+  function renderTrain(){
+    $('sLoss').textContent = fmtLoss(S.loss);
+    $('sAcc').textContent = fmtAcc(S.acc);
+    $('sTestWrap').hidden = !S.showTest;
+    $('sTest').textContent = S.evalTest ? fmtAcc(S.evalTest.acc) : '–';
+    $('sSteps').textContent = S.stepCount.toLocaleString('en-US');
+    $('bTrain').textContent = T(S.training ? 'train.pause' : 'train.train');
+    $('note').textContent = S.note;
+    $('trainFine').textContent = T('fine.' + S.rule);
+    var f = fitCanvas($('lossCv')), ctx = f.ctx, H = S.hist;
+    ctx.clearRect(0, 0, f.w, f.h);
+    ctx.strokeStyle = '#dedcd6'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, f.h - 0.5); ctx.lineTo(f.w, f.h - 0.5); ctx.stroke();
+    if(H.length < 2) return;
+    var top = 0;
+    for(var i = 0; i < H.length; i++) if(isFinite(H[i]) && H[i] > top) top = H[i];
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.beginPath();
+    for(i = 0; i < H.length; i++){
+      var x = i/(H.length - 1)*f.w, y = f.h - 3 - (f.h - 8)*Math.min(1, H[i]/top);
+      if(i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    haloText(ctx, T('train.curve', { top: top.toFixed(2) }), f.w - 2, 8, 'right', '11px ' + FONT, '#8a8985');
+  }
+  function renderLegend(){
+    function sw(h, cls){ return '<span class="sw" style="background:linear-gradient(90deg,hsl(' + h[0] + ',72%,' + (cls ? 46 : 40) + '%),hsl(' + h[1] + ',72%,' + (cls ? 46 : 40) + '%))"></span>'; }
+    $('legend').innerHTML = '<span><span class="shape">●</span> ' + esc(T('legend.classA')) + sw(HUE[0], 0) + '</span>' +
+      '<span><span class="shape">▲</span> ' + esc(T('legend.classB')) + sw(HUE[1], 1) + '</span>' +
+      '<span>' + esc(T('legend.' + S.colorBy)) + '</span>' +
+      '<span class="gridkey">' + esc(T('legend.grid')) + '</span>' +
+      (S.showTest ? '<span>' + esc(T('legend.test')) + '</span>' : '') +
+      (S.extra.length ? '<span>' + esc(T('legend.new')) + '</span>' : '');
+  }
+  function renderControls(){
+    function seg(id, items, cur){
+      $(id).innerHTML = items.map(function(it){ return '<button data-v="' + it[0] + '" class="' + (it[0] === cur ? 'on' : '') + '">' + esc(it[1]) + '</button>'; }).join('');
+    }
+    seg('segData', Object.keys(LB.DATASETS).map(function(k){ return [k, T('data.' + k)]; }), S.dataName);
+    seg('segAct', Object.keys(LB.ACTS).map(function(k){ return [k, LB.ACTS[k].label]; }), S.act);
+    seg('segColor', COLORS.map(function(k){ return [k, T('color.' + k)]; }), S.colorBy);
+    $('layN').textContent = S.net ? S.net.layers.length : S.layers;
+    $('layMinus').disabled = S.layers <= MIN_LAYERS;
+    $('layPlus').disabled = S.layers >= MAX_LAYERS;
+    $('bShowTest').classList.toggle('on', S.showTest);
+    $('bClearNew').disabled = !S.extra.length;
+    seg('segRule', LB.RULES.map(function(r){ return [r, T('rule.' + r)]; }), S.rule);
+    seg('segDelta', DELTAS.map(function(d){ return [String(d), String(d)]; }), String(S.grad.delta));
+    showLr();
+  }
+  /* the Gradient and Train tabs share one learning rate */
+  function showLr(){
+    $('lr').value = $('lrG').value = lrToSlider(S.lr);
+    $('lrVal').textContent = $('lrGVal').textContent = fmtLr(S.lr);
+  }
+
+  /* ---------- tabs: Knobs, Gradient, Train (only the visible tab is redrawn) ---------- */
+  function renderTabs(){
+    if(S.tab === 'knobs') renderKnobs();
+    else if(S.tab === 'gradient') renderGradient();
+    else renderTrain();
+  }
+  function knobName(id){
+    return id.layer < 0 ? T('grad.headOpt', { name: LB.knobLabel(id) }) : T('grad.layerOpt', { n: id.layer + 1, name: LB.knobLabel(id) });
+  }
+  function knobShort(id){ return (id.layer < 0 ? T('bar.out') : T('bar.layer', { n: id.layer + 1 })) + ' ' + LB.knobLabel(id); }
+  /* the layer whose knobs the Knobs tab shows: the layer of the step at the playback position
+     (layer 1 at the input, the last layer at the readout), -1 when there are no layers */
+  function knobLayer(){
+    var L = S.net.layers.length;
+    if(L === 0) return -1;
+    var ak = activeStep(phase(S.pos));
+    if(ak < 0) return 0;
+    return S.steps[ak].kind === 'readout' ? L - 1 : S.steps[ak].layer;
+  }
+  function knobRow(layer, k){
+    return '<div class="krow" data-layer="' + layer + '" data-k="' + k + '"><span class="kn">' + LB.knobLabel({ layer: layer, k: k }) + '</span>' +
+      '<input type="range" min="-3" max="3" step="0.01"><input type="number" step="0.01"></div>';
+  }
+  function renderKnobs(){
+    var kl = knobLayer(), key = S.net.layers.length + '|' + kl, box = $('knobRows'), now = performance.now(), k;
+    if(key !== S.knobKey){
+      var html = '';
+      if(kl >= 0){
+        html += '<div class="kh">' + esc(T('knobs.layer', { n: kl + 1 })) + '</div>';
+        for(k = 0; k < 6; k++) html += knobRow(kl, k);
+      }
+      html += '<div class="kh">' + esc(T('knobs.readout')) + '</div>';
+      for(k = 0; k < 3; k++) html += knobRow(-1, k);
+      box.innerHTML = html;
+      S.knobKey = key; S.knobAt = 0;
+    }
+    if(S.training && now - S.knobAt < 150) return;
+    S.knobAt = now;
+    var rows = box.querySelectorAll('.krow');
+    for(var i = 0; i < rows.length; i++){
+      var v = LB.getKnob(S.net, { layer: +rows[i].dataset.layer, k: +rows[i].dataset.k }), ins = rows[i].querySelectorAll('input');
+      if(document.activeElement !== ins[0]) ins[0].value = v;
+      if(document.activeElement !== ins[1]) ins[1].value = v.toFixed(2);
+    }
+  }
+  /* a nudge result counts only for the knob it was measured on and until any knob changes */
+  function validNudge(){
+    var n = S.grad.nudge;
+    return n && n.version === S.knobVersion && n.index === S.grad.index ? n : null;
+  }
+  function stepEnabled(){
+    var g = S.grad;
+    return !S.training && g.version === S.knobVersion && ((g.last === 'nudge' && !!g.slopesNudge) || (g.last === 'bp' && !!g.slopesBp));
+  }
+  /* the loss when only the chosen knob moves over its value ± 2, with the nudge drawn as two red points */
+  function renderCurve(ids){
+    var g = S.grad, now = performance.now(), key = S.knobVersion + '|' + g.index + '|' + ids.length, i;
+    if(key !== S.curveKey && (!S.training || !S.curve || S.curve.index >= ids.length || now - S.curveAt >= 150)){
+      var id = ids[g.index];
+      S.curve = LB.lossCurve(S.net, S.data, id, 2, 61);
+      S.curve.index = g.index; S.curve.version = S.knobVersion; S.curve.value = LB.getKnob(S.net, id);
+      S.curveKey = key; S.curveAt = now;
+    }
+    var f = fitCanvas($('gCurve')), ctx = f.ctx, c = S.curve, w = f.w, h = f.h, lo = Infinity, hi = -Infinity;
+    ctx.clearRect(0, 0, w, h);
+    if(!c || w < 20) return;
+    var nd = validNudge();
+    if(nd && (nd.index !== c.index || nd.version !== c.version)) nd = null;
+    for(i = 0; i < c.ys.length; i++) if(isFinite(c.ys[i])){ lo = Math.min(lo, c.ys[i]); hi = Math.max(hi, c.ys[i]); }
+    if(nd){ lo = Math.min(lo, nd.before, nd.after); hi = Math.max(hi, nd.before, nd.after); }
+    if(!isFinite(lo) || !isFinite(hi)) return;
+    if(hi - lo < 1e-9) hi = lo + 1e-9;
+    var padX = 12, top = 28, bottom = h - 22, x0 = c.xs[0], x1 = c.xs[c.xs.length - 1];
+    var X = function(x){ return padX + (x - x0)/(x1 - x0)*(w - 2*padX); };
+    var Y = function(y){ return bottom - (y - lo)/(hi - lo)*(bottom - top); };
+    ctx.strokeStyle = '#dedcd6'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, bottom + 0.5); ctx.lineTo(w, bottom + 0.5); ctx.stroke();
+    ctx.fillStyle = '#6b6a66'; ctx.font = '12px ' + FONT; ctx.textBaseline = 'top';
+    [[x0, 'left', -4], [c.value, 'center', 0], [x1, 'right', 4]].forEach(function(tk){
+      var px = X(tk[0]);
+      ctx.fillRect(px - 0.5, bottom - 3, 1, 6);
+      ctx.textAlign = tk[1]; ctx.fillText(num(tk[0], 2), px + tk[2], bottom + 5);
+    });
+    ctx.strokeStyle = INK; ctx.lineWidth = 1.8; ctx.beginPath();
+    for(i = 0; i < c.xs.length; i++){ if(i === 0) ctx.moveTo(X(c.xs[i]), Y(c.ys[i])); else ctx.lineTo(X(c.xs[i]), Y(c.ys[i])); }
+    ctx.stroke();
+    ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(X(c.value), Y(c.ys[(c.ys.length - 1)/2]), 4.5, 0, 2*Math.PI); ctx.fill();
+    if(nd){
+      var ax = X(nd.value), ay = Y(nd.before), bx = X(nd.value + nd.delta), by = Y(nd.after);
+      ctx.strokeStyle = '#b3001b'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+      ctx.fillStyle = '#b3001b';
+      ctx.beginPath(); ctx.arc(ax, ay, 4, 0, 2*Math.PI); ctx.fill();
+      ctx.beginPath(); ctx.arc(bx, by, 4, 0, 2*Math.PI); ctx.fill();
+    }
+    haloText(ctx, T('grad.curve', { knob: LB.knobLabel(ids[c.index]) }), 0, 11, 'left', '600 13px ' + FONT, '#52514e');
+  }
+  function renderGradient(){
+    var ids = LB.knobList(S.net), g = S.grad, now = performance.now(), j;
+    if(g.index >= ids.length) g.index = 0;
+    if(S.optKey !== String(ids.length)){
+      $('gKnob').innerHTML = ids.map(function(id, i){ return '<option value="' + i + '">' + esc(knobName(id)) + '</option>'; }).join('');
+      S.optKey = String(ids.length);
+    }
+    if(document.activeElement !== $('gKnob')) $('gKnob').value = String(g.index);
+    renderCurve(ids);
+    var nd = validNudge(), fresh = g.version === S.knobVersion;
+    var key = [S.knobVersion, g.version, g.index, g.delta, g.nudgeDelta, g.last, g.evals, g.bp, nd ? 1 : 0, S.training, ids.length].join('|');
+    if(key === S.gradKey || (S.training && now - S.gradAt < 150)) return;
+    S.gradKey = key; S.gradAt = now;
+    $('gNudge').innerHTML = nd ?
+      '<div><span>' + esc(T('grad.before')) + '</span><b>' + num(nd.before, 4) + '</b></div>' +
+      '<div><span>' + esc(T('grad.after')) + '</span><b>' + num(nd.after, 4) + '</b></div>' +
+      '<div><span>' + esc(T('grad.slope')) + '</span><b>' + num(nd.slope, 3) + '</b></div>' : '';
+    $('bStep').disabled = !stepEnabled();
+    $('gEvals').textContent = T('grad.evals', { n: g.evals });
+    $('gBp').textContent = T('grad.bp', { n: g.bp });
+    var sn = fresh ? g.slopesNudge : null, sb = fresh ? g.slopesBp : null, rows = '';
+    $('gTable').tHead.innerHTML = '<tr><th>' + esc(T('grad.knob')) + '</th><th>' + esc(T('grad.colValue')) + '</th><th>' +
+      esc(T('grad.colNudge', { d: String(sn ? g.nudgeDelta : g.delta) })) + '</th><th>' + esc(T('grad.colBackprop')) + '</th></tr>';
+    for(j = 0; j < ids.length; j++){
+      rows += '<tr><td>' + esc(knobShort(ids[j])) + '</td><td>' + num(LB.getKnob(S.net, ids[j]), 3) + '</td><td>' +
+        (sn ? num(sn[j], 3) : '') + '</td><td>' + (sb ? num(sb[j], 3) : '') + '</td></tr>';
+    }
+    $('gTable').tBodies[0].innerHTML = rows;
+  }
+
+  /* ---------- actions ---------- */
+  function setData(name){
+    if(!LB.DATASETS[name]) return;
+    var p = LB.PRESETS[name];
+    S.dataName = name; S.data = LB.makeData(name); S.test = LB.makeTestData(name); S.extra = [];
+    S.act = p.act; S.layers = p.layers; S.rule = p.opt; S.lr = p.lr[p.opt]; S.resets = 0;
+    S.training = false; S.playing = false; S.pos = 0;
+    makePoints(); computeColors(); newNet(); renderControls(); refresh();
+  }
+  function setAct(act){
+    if(!LB.ACTS[act]) return;
+    S.act = act; S.resets = 0; S.training = false;
+    newNet(); renderControls(); refresh();
+  }
+  function addLayer(){
+    if(S.layers >= MAX_LAYERS) return;
+    LB.addLayer(S.net, S.dataName + '|' + S.layers + '|' + S.stepCount);
+    LB.syncOptimizer(S.net, S.opt); S.layers = S.net.layers.length;
+    knobsChanged(); if(S.grad.index >= LB.knobCount(S.net)) S.grad.index = 0;
+    rebuild(); renderControls(); refresh();
+  }
+  function removeLayer(){
+    if(S.layers <= MIN_LAYERS) return;
+    LB.removeLayer(S.net); LB.syncOptimizer(S.net, S.opt); S.layers = S.net.layers.length;
+    knobsChanged(); if(S.grad.index >= LB.knobCount(S.net)) S.grad.index = 0;
+    rebuild(); renderControls(); refresh();
+  }
+  function setColorBy(c){ if(COLORS.indexOf(c) < 0) return; S.colorBy = c; computeColors(); S.thumbKey = ''; renderControls(); refresh(); }
+  function setShowTest(on){ S.showTest = !!on; S.thumbKey = ''; renderControls(); renderLegend(); refresh(); }
+  function addPoint(x, y){
+    if(!isFinite(x) || !isFinite(y)) return;
+    S.extra.push([x, y]); makePoints(); rebuild(); renderControls(); renderLegend(); refresh();
+  }
+  function clearPoints(){ S.extra = []; makePoints(); rebuild(); renderControls(); renderLegend(); refresh(); }
+  function reset(){ S.resets++; S.training = false; newNet(); refresh(); }
+  function setTab(name){
+    if(TABS.indexOf(name) < 0) return;
+    S.tab = name;
+    $('paneKnobs').hidden = name !== 'knobs';
+    $('paneGradient').hidden = name !== 'gradient';
+    $('paneTrain').hidden = name !== 'train';
+    var bs = $('tabs').querySelectorAll('button');
+    for(var i = 0; i < bs.length; i++) bs[i].classList.toggle('on', bs[i].dataset.tab === name);
+    S.knobKey = ''; S.gradKey = ''; S.curveKey = '';
+    refresh();
+  }
+  /* switching the update rule takes the preset's learning rate for that rule and starts a fresh Adam state */
+  function setRule(rule){
+    if(LB.RULES.indexOf(rule) < 0) return;
+    S.rule = rule; S.lr = LB.PRESETS[S.dataName].lr[rule]; S.opt = LB.makeOptimizer(S.net);
+    renderControls(); refresh();
+  }
+  function setLayers(n){
+    n = Math.max(MIN_LAYERS, Math.min(MAX_LAYERS, Math.round(n)));
+    while(S.net.layers.length < n) addLayer();
+    while(S.net.layers.length > n) removeLayer();
+  }
+  /* one knob from a slider or a number box; the number box is not limited to the slider range */
+  function setKnobValue(layer, k, value){
+    if(!isFinite(value) || layer < -1 || layer >= S.net.layers.length) return;
+    S.training = false;
+    LB.setKnob(S.net, { layer: layer, k: k }, value);
+    LB.resetOptimizerFor(S.opt, layer);
+    knobsChanged(); rebuild(); refresh();
+  }
+  function selectGradKnob(i){
+    S.grad.index = i >= 0 && i < LB.knobCount(S.net) ? Math.floor(i) : 0;
+    refresh();
+  }
+  function setDelta(d){
+    if(DELTAS.indexOf(d) < 0) return;
+    S.grad.delta = d; renderControls(); refresh();
+  }
+  /* slopes from an earlier version of the knobs are dropped before a new measurement */
+  function freshGrad(){
+    var g = S.grad;
+    if(g.version !== S.knobVersion){ g.slopesNudge = null; g.slopesBp = null; g.last = null; g.version = S.knobVersion; }
+  }
+  function nudgeKnob(){
+    S.training = false;
+    var id = LB.knobList(S.net)[S.grad.index], r = LB.nudge(S.net, S.data, id, S.grad.delta);
+    S.grad.nudge = { before: r.before, after: r.after, slope: r.slope, delta: S.grad.delta, index: S.grad.index,
+                     value: LB.getKnob(S.net, id), version: S.knobVersion };
+    refresh();
+    return S.grad.nudge;
+  }
+  function measureAll(){
+    S.training = false; freshGrad();
+    var r = LB.numericGradient(S.net, S.data, S.grad.delta);
+    S.grad.slopesNudge = r.slopes; S.grad.nudgeDelta = S.grad.delta; S.grad.last = 'nudge'; S.grad.evals += r.evals;
+    refresh();
+  }
+  function measureBackprop(){
+    S.training = false; freshGrad();
+    S.grad.slopesBp = LB.flatGradient(S.net, LB.lossGrad(S.net, S.data).g); S.grad.last = 'bp'; S.grad.bp += 1;
+    refresh();
+  }
+  /* w <- w - learning rate * slope with the slopes measured last; the table clears because the knobs changed */
+  function takeStep(){
+    if(!stepEnabled()) return null;
+    var g = S.grad, slopes = g.last === 'nudge' ? g.slopesNudge : g.slopesBp, before = S.loss;
+    LB.stepAlong(S.net, slopes, S.lr);
+    S.stepCount++; S.hist.push(before);
+    S.opt = LB.makeOptimizer(S.net);
+    knobsChanged(); rebuild(); refresh();
+    return { before: before, after: S.loss };
+  }
+  function gradState(){
+    var g = S.grad, fresh = g.version === S.knobVersion, nd = validNudge(), sl = Array.prototype.slice;
+    return {
+      index: g.index, delta: g.delta, evals: g.evals, bp: g.bp, last: g.last, stepEnabled: stepEnabled(),
+      nudge: nd ? { before: nd.before, after: nd.after, slope: nd.slope, delta: nd.delta } : null,
+      slopesNudge: fresh && g.slopesNudge ? sl.call(g.slopesNudge) : null,
+      slopesBp: fresh && g.slopesBp ? sl.call(g.slopesBp) : null
+    };
+  }
+  function setPos(p){ S.playing = false; S.pos = Math.max(0, Math.min(S.steps.length, p)); refresh(); }
+  function play(){
+    var K = S.steps.length;
+    if(S.pos >= K) S.pos = 0;
+    S.target = K; S.playing = true; refresh();
+  }
+  function pause(){ S.playing = false; refresh(); }
+  function playStep(k){
+    var K = S.steps.length;
+    if(k === undefined) k = S.pos >= K ? 0 : Math.floor(S.pos + 1e-9);
+    if(k >= K) k = 0;
+    S.pos = Math.max(S.pos, 0);
+    if(Math.floor(S.pos + 1e-9) !== k) S.pos = k;
+    S.target = k + 1; S.playing = true; refresh();
+  }
+  function stepBack(){
+    var p = Math.ceil(S.pos - 1e-9) - 1;
+    setPos(Math.max(0, p));
+  }
+  function trainSteps(n){
+    if(n > 0) knobsChanged();
+    for(var i = 0; i < n; i++){
+      var r = LB.trainStep(S.net, S.opt, S.data, S.lr, S.rule);
+      S.stepCount++; S.hist.push(r.loss);
+      if(!isFinite(r.loss)){ S.training = false; S.note = T('note.nan'); break; }
+      if(S.hist.length > 3000){ var h = []; for(var j = 0; j < S.hist.length; j += 2) h.push(S.hist[j]); S.hist = h; }
+    }
+    rebuild();
+    if(S.training && S.loss < 0.01){ S.training = false; S.note = T('note.low'); }
+    if(S.training && S.stepCount >= 20000){ S.training = false; S.note = T('note.max'); }
+  }
+  function startTraining(){ S.note = ''; S.training = true; refresh(); }
+  function stopTraining(){ S.training = false; refresh(); }
+  function refresh(){ S.dirty = true; }
+
+  /* ---------- frame loop ---------- */
+  var last = performance.now();
+  function advance(dt){
+    dt *= S.speed;
+    while(dt > 0 && S.pos < S.target){
+      var k = Math.floor(S.pos), dur = BASE_SEC*S.weights[k], left = (k + 1 - S.pos)*dur;
+      if(dt >= left){ S.pos = k + 1; dt -= left; } else { S.pos += dt/dur; dt = 0; }
+    }
+    if(S.pos >= S.target){ S.pos = S.target; S.playing = false; }
+  }
+  function draw(){
+    drawView(); renderStrip(); renderBar(); renderSide(false); renderTabs();
+    $('bPlay').textContent = T(S.playing ? 'play.pause' : 'play.play');
+  }
+  function frame(now){
+    var dt = Math.min(0.1, (now - last)/1000); last = now;
+    var busy = S.playing || S.training;
+    if(S.playing) advance(dt);
+    if(S.training) trainSteps(S.trainSpeed);
+    if(busy || S.dirty){ S.dirty = false; draw(); }
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------- wiring ---------- */
+  function parseOptions(){
+    var o = {}, s = (location.search.slice(1) + '&' + location.hash.slice(1)).split('&');
+    s.forEach(function(kv){ if(!kv) return; var p = kv.split('='); o[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || ''); });
+    S.lang = o.lang === 'ko' ? 'ko' : 'en';
+    document.documentElement.lang = S.lang;
+    return o;
+  }
+  function wire(){
+    $('segData').addEventListener('click', function(e){ var b = e.target.closest('button'); if(b) setData(b.dataset.v); });
+    $('segAct').addEventListener('click', function(e){ var b = e.target.closest('button'); if(b) setAct(b.dataset.v); });
+    $('segColor').addEventListener('click', function(e){ var b = e.target.closest('button'); if(b) setColorBy(b.dataset.v); });
+    $('layPlus').addEventListener('click', addLayer);
+    $('layMinus').addEventListener('click', removeLayer);
+    $('bShowTest').addEventListener('click', function(){ setShowTest(!S.showTest); });
+    $('bClearNew').addEventListener('click', clearPoints);
+    $('view').addEventListener('pointerdown', function(e){
+      if(S.cam && canAddPoint()) addPoint(S.cam.ix(e.offsetX), S.cam.iy(e.offsetY));
+    });
+    $('bFirst').addEventListener('click', function(){ setPos(0); });
+    $('bPrev').addEventListener('click', stepBack);
+    $('bPlay').addEventListener('click', function(){ if(S.playing) pause(); else play(); });
+    $('bNext').addEventListener('click', function(){ playStep(); });
+    $('bLast').addEventListener('click', function(){ setPos(S.steps.length); });
+    $('speed').addEventListener('change', function(){ S.speed = +this.value; });
+    $('bTrain').addEventListener('click', function(){ if(S.training) stopTraining(); else startTraining(); });
+    $('bOne').addEventListener('click', function(){ S.training = false; S.note = ''; trainSteps(1); refresh(); });
+    $('bTen').addEventListener('click', function(){ S.training = false; S.note = ''; trainSteps(10); refresh(); });
+    $('bReset').addEventListener('click', reset);
+    $('lr').addEventListener('input', function(){ S.lr = sliderToLr(+this.value); showLr(); });
+    $('lrG').addEventListener('input', function(){ S.lr = sliderToLr(+this.value); showLr(); });
+    $('segRule').addEventListener('click', function(e){ var b = e.target.closest('button'); if(b) setRule(b.dataset.v); });
+    $('tabs').addEventListener('click', function(e){ var b = e.target.closest('button'); if(b) setTab(b.dataset.tab); });
+    $('knobRows').addEventListener('input', function(e){
+      var row = e.target.closest('.krow');
+      if(row) setKnobValue(+row.dataset.layer, +row.dataset.k, parseFloat(e.target.value));
+    });
+    $('bKnobReset').addEventListener('click', reset);
+    $('gKnob').addEventListener('change', function(){ selectGradKnob(+this.value); });
+    $('segDelta').addEventListener('click', function(e){ var b = e.target.closest('button'); if(b) setDelta(+b.dataset.v); });
+    $('bNudge').addEventListener('click', nudgeKnob);
+    $('bMeasure').addEventListener('click', measureAll);
+    $('bBackprop').addEventListener('click', measureBackprop);
+    $('bStep').addEventListener('click', takeStep);
+    $('tspeed').addEventListener('change', function(){ S.trainSpeed = +this.value; });
+    $('rows').addEventListener('click', function(e){ var li = e.target.closest('li'); if(li) playStep(+li.dataset.k); });
+    $('strip').addEventListener('click', function(e){
+      var b = e.target.closest('.thumb'); if(!b) return;
+      setPos(thumbItems()[+b.dataset.i].idx);
+    });
+    var dragging = false, bar = $('bar');
+    bar.addEventListener('pointerdown', function(e){ dragging = true; bar.setPointerCapture(e.pointerId); setPos(posFromBar(e.clientX)); });
+    bar.addEventListener('pointermove', function(e){ if(dragging) setPos(posFromBar(e.clientX)); });
+    bar.addEventListener('pointerup', function(){ dragging = false; });
+    bar.addEventListener('pointercancel', function(){ dragging = false; });
+    window.addEventListener('resize', function(){ fitHead(); refresh(); });
+    document.addEventListener('keydown', function(e){
+      var tag = (e.target.tagName || '').toLowerCase();
+      if(tag === 'input' || tag === 'select' || tag === 'textarea') return;
+      if(e.key === ' '){ e.preventDefault(); if(S.playing) pause(); else play(); }
+      else if(e.key === 'ArrowRight'){ e.preventDefault(); playStep(); }
+      else if(e.key === 'ArrowLeft'){ e.preventDefault(); stepBack(); }
+      else if(e.key === 'Home'){ e.preventDefault(); setPos(0); }
+      else if(e.key === 'End'){ e.preventDefault(); setPos(S.steps.length); }
+    });
+  }
+
+  /* fixed labels in the HTML: data-t fills the text, data-t-title the tooltip */
+  function applyStaticText(){
+    var els = document.querySelectorAll('[data-t]'), i;
+    for(i = 0; i < els.length; i++) els[i].textContent = T(els[i].getAttribute('data-t'));
+    els = document.querySelectorAll('[data-t-title]');
+    for(i = 0; i < els.length; i++) els[i].title = T(els[i].getAttribute('data-t-title'));
+  }
+
+  /* the big canvas leaves room for the header, which is taller when the controls wrap to a second row */
+  function fitHead(){
+    document.documentElement.style.setProperty('--head', ($('topbar').offsetHeight + $('controls').offsetHeight) + 'px');
+  }
+
+  function init(){
+    var o = parseOptions();
+    applyStaticText();
+    wire();
+    if(COLORS.indexOf(o.color) >= 0) S.colorBy = o.color;
+    if(o.test === '1') S.showTest = true;
+    setData(LB.DATASETS[o.data] ? o.data : 'moons');
+    var changed = false;
+    if(LB.ACTS[o.act] && o.act !== S.act){ S.act = o.act; changed = true; }
+    var nl = parseInt(o.layers, 10);
+    if(nl >= MIN_LAYERS && nl <= MAX_LAYERS && nl !== S.layers){ S.layers = nl; changed = true; }
+    if(changed){ newNet(); renderControls(); }
+    if(LB.RULES.indexOf(o.opt) >= 0) setRule(o.opt);
+    if(TABS.indexOf(o.tab) >= 0) setTab(o.tab);
+    if(o.train === '1') startTraining();
+    fitHead();
+    refresh();
+    requestAnimationFrame(frame);
+  }
+
+  function selfCheck(){
+    var cv = $('view'), ctx = cv.getContext('2d'), img = ctx.getImageData(0, 0, cv.width, cv.height).data, ink = 0;
+    for(var i = 0; i < img.length; i += 4*7) if(img[i] < 200 || img[i + 1] < 200 || img[i + 2] < 200) ink++;
+    return {
+      viewHasInk: ink > 200,
+      thumbs: $('strip').children.length === S.net.layers.length + 2,
+      segments: $('bar').querySelectorAll('.sg').length === S.steps.length,
+      rows: $('rows').children.length >= 1
+    };
+  }
+
+  /* a number that changes whenever the big canvas changes (used by the smoke test) */
+  function viewSignature(){
+    var cv = $('view'), img = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data, sum = 0;
+    for(var i = 0; i < img.length; i += 4*7) sum += img[i] + img[i + 1] + img[i + 2];
+    return sum;
+  }
+
+  init();
+  return {
+    S: S,
+    selfCheck: selfCheck,
+    hooks: {
+      setData: setData, setAct: setAct, addLayer: addLayer, removeLayer: removeLayer, setColorBy: setColorBy,
+      setPos: function(p){ setPos(p); draw(); }, play: play, pause: pause, playStep: playStep, reset: reset,
+      train: function(n){ S.training = false; trainSteps(n); draw(); return { loss: S.loss, acc: S.acc }; },
+      startTraining: startTraining, stopTraining: stopTraining,
+      setShowTest: function(on){ setShowTest(on); draw(); },
+      addPoint: function(x, y){ addPoint(x, y); draw(); },
+      clearPoints: function(){ clearPoints(); draw(); },
+      setTab: function(name){ setTab(name); draw(); },
+      setRule: function(rule){ setRule(rule); draw(); },
+      setLayers: function(n){ setLayers(n); draw(); },
+      knobs: function(){
+        return LB.knobList(S.net).map(function(id){ return { layer: id.layer, k: id.k, name: id.name, label: LB.knobLabel(id), value: LB.getKnob(S.net, id) }; });
+      },
+      setKnob: function(layer, k, value){ setKnobValue(layer, k, value); draw(); return { loss: S.loss, acc: S.acc }; },
+      selectGradKnob: function(i){ selectGradKnob(i); draw(); },
+      setDelta: function(d){ setDelta(d); draw(); },
+      nudge: function(){ var r = nudgeKnob(); draw(); return r; },
+      measureAll: function(){ measureAll(); draw(); return gradState(); },
+      measureBackprop: function(){ measureBackprop(); draw(); return gradState(); },
+      takeStep: function(){ var r = takeStep(); draw(); return r; },
+      gradState: gradState,
+      viewSignature: function(){ draw(); return viewSignature(); },
+      setLr: function(lr){ S.lr = lr; renderControls(); },
+      draw: draw,
+      caption: function(){ return captionFor(phase(S.pos)); },
+      state: function(){
+        return { data: S.dataName, act: S.act, layers: S.net.layers.length, K: S.steps.length, pos: S.pos,
+                 playing: S.playing, training: S.training, steps: S.stepCount, loss: S.loss, acc: S.acc, colorBy: S.colorBy, rule: S.rule, lr: S.lr, lang: S.lang,
+                 showTest: S.showTest, testAcc: S.evalTest ? S.evalTest.acc : null, newPoints: S.extra.length,
+                 tab: S.tab, knobCount: LB.knobCount(S.net) };
+      }
+    }
+  };
+})();
+</script>
+</body>
+</html>

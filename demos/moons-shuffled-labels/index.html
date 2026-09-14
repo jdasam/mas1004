@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Same Moons, Shuffled Labels · MAS1004</title>
+<style>
+:root{
+  --surface:#fcfcfb; --ink:#0b0b0b; --sub:#52514e; --muted:#8a8985;
+  --rule:#dedcd6; --rule2:#c4c2bb; --soft:#f3f2ee;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--surface); color:var(--ink);
+  font:400 17px/1.45 Inter,Pretendard,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+
+#topbar{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;padding:12px 24px 4px}
+.brand{font-size:1.3rem;font-weight:700;letter-spacing:-.01em}
+.brand .sub{font-size:.92rem;font-weight:500;color:var(--sub);margin-left:14px;letter-spacing:0}
+#controls{display:flex;flex-wrap:wrap;gap:10px 30px;align-items:center;padding:8px 24px 12px;border-bottom:1px solid var(--rule)}
+.grp{display:flex;align-items:center;gap:8px}
+.gl{font-size:.88rem;color:var(--sub);font-weight:600}
+.seg{display:flex;border:1px solid var(--rule2);border-radius:9px;overflow:hidden;background:#fff}
+.seg button{border:0;border-left:1px solid var(--rule);background:transparent;padding:6px 13px;color:var(--sub);font-weight:600;font-size:.95rem;cursor:pointer;font-variant-numeric:tabular-nums}
+.seg button:first-child{border-left:0}
+.seg button:hover{color:var(--ink)}
+.seg button.on{background:var(--ink);color:#fff}
+.btn{padding:8px 14px;border-radius:9px;border:1px solid var(--ink);background:var(--ink);color:#fff;font-weight:600;font-size:.97rem;cursor:pointer}
+.btn:hover{background:#333}
+.btn.ghost{background:#fff;color:var(--ink)}
+.btn.ghost:hover{background:var(--soft)}
+.btn.ghost.on{background:var(--ink);color:#fff}
+#bTrain{min-width:80px}
+select{padding:6px 8px;border:1px solid var(--rule2);border-radius:9px;background:#fff;font-size:.95rem}
+
+main{padding:14px 24px 40px;max-width:1800px;margin:0 auto}
+#panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 28px;align-items:start}
+@media(max-width:1180px){#panels{grid-template-columns:minmax(0,1fr)}}
+.panel h3{margin:0 0 8px;font-size:1.15rem;font-weight:700}
+canvas.pc{display:block;width:min(100%, max(360px, calc((100vh - 400px)*4/3)));aspect-ratio:4/3;border:1px solid var(--rule);border-radius:10px;background:#fff}
+.stats{display:flex;flex-wrap:wrap;gap:6px 34px;margin:10px 2px 8px}
+.stats span{display:block;font-size:.85rem;color:var(--sub);font-weight:600}
+.stats b{display:block;font-size:1.6rem;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums}
+.legend{grid-column:1/-1;min-height:1.4em;font-size:.9rem;color:var(--sub)}
+#lossWrap{display:grid;grid-template-columns:150px minmax(0,1fr);gap:8px 24px;align-items:start;border-top:1px solid var(--rule);margin-top:6px;padding-top:12px}
+#lossWrap .stats{margin:0}
+.losshead{display:flex;flex-wrap:wrap;gap:4px 22px;align-items:center;font-size:.86rem;color:var(--sub)}
+.losshead .ln{display:inline-block;width:30px;height:0;border-top:2px solid var(--ink);vertical-align:middle;margin-right:7px}
+.losshead .ln.dash{border-top:2px dashed #b3001b}
+#lossCv{display:block;width:100%;height:110px;margin-top:6px}
+.note{min-height:1.3em;margin:10px 0 0;font-size:.92rem;color:var(--ink)}
+.fine{margin:6px 0 0;font-size:.84rem;color:var(--muted);max-width:1100px}
+</style>
+</head>
+<body>
+<script id="ms-core">
+var MS = (function(){
+  'use strict';
+
+  /* ---------- seeded random numbers (the same generators as the layer-by-layer demo) ---------- */
+  function xmur3(str){
+    var h = 1779033703 ^ str.length;
+    for(var i = 0; i < str.length; i++){ h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = h << 13 | h >>> 19; }
+    return function(){
+      h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909);
+      return (h ^= h >>> 16) >>> 0;
+    };
+  }
+  function mulberry32(a){
+    return function(){
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function rngOf(str){ return mulberry32(xmur3(String(str))()); }
+  function gaussOf(rng){
+    var spare = null;
+    return function(){
+      if(spare !== null){ var s = spare; spare = null; return s; }
+      var u = 0; while(u === 0) u = rng();
+      var v = rng(), r = Math.sqrt(-2*Math.log(u));
+      spare = r*Math.sin(2*Math.PI*v);
+      return r*Math.cos(2*Math.PI*v);
+    };
+  }
+
+  /* ---------- data: the two moons of the layer-by-layer demo ----------
+     Same seeds and the same code as the moons branch of the point generator in
+     layer-by-layer-2d/index.html, so the points are identical (test/core.test.js compares them).
+     Classes are interleaved: even index = class A (circle), odd index = class B (triangle). */
+  var DATA_VERSION = 1, N_TRAIN_PER = 100, N_TEST_PER = 50;
+  function makeMoons(kind){
+    var nPer, key;
+    if(kind === 'train'){ nPer = N_TRAIN_PER; key = 'lb|v' + DATA_VERSION + '|data|moons'; }
+    else if(kind === 'test'){ nPer = N_TEST_PER; key = 'lb|v' + DATA_VERSION + '|test|moons'; }
+    else throw new Error('unknown kind ' + kind);
+    var rng = rngOf(key), g = gaussOf(rng);
+    var n = 2*nPer, X = new Float64Array(2*n), y = new Uint8Array(n);
+    for(var i = 0; i < n; i++){
+      var cls = i % 2, px, py, uu;
+      uu = rng();
+      var a = Math.PI*uu;
+      if(cls === 0){ px = Math.cos(a); py = Math.sin(a); }
+      else { px = 1 - Math.cos(a); py = 0.5 - Math.sin(a); }
+      px = (px - 0.5 + 0.08*g())*0.8;
+      py = (py - 0.25 + 0.08*g())*0.8;
+      X[2*i] = px; X[2*i + 1] = py; y[i] = cls;
+    }
+    return { n: n, X: X, y: y };
+  }
+
+  /* Fisher-Yates shuffle with its own seed. Returns a new array and leaves y as it is. */
+  var SHUFFLE_SEED = 1;
+  function shuffleLabels(y, seed){
+    var rng = rngOf('ms|v1|shuffle|' + seed), s = Uint8Array.from(y);
+    for(var i = s.length - 1; i > 0; i--){
+      var j = Math.floor(rng()*(i + 1)), t = s[i];
+      s[i] = s[j]; s[j] = t;
+    }
+    return s;
+  }
+
+  /* ---------- network: 2 inputs -> H tanh units -> H tanh units -> 1 logit ---------- */
+  var WIDTHS = [4, 16, 64, 256], DEFAULT_WIDTH = 64;
+  function initNet(H, seed){
+    var g = gaussOf(rngOf('ms|init|' + seed)), k;
+    var net = { H: H, W1: new Float64Array(2*H), b1: new Float64Array(H), W2: new Float64Array(H*H),
+                b2: new Float64Array(H), w3: new Float64Array(H), c: new Float64Array(1) };
+    var sd1 = Math.sqrt(1/2), sd2 = Math.sqrt(1/H);
+    for(k = 0; k < 2*H; k++) net.W1[k] = sd1*g();
+    for(k = 0; k < H*H; k++) net.W2[k] = sd2*g();
+    for(k = 0; k < H; k++) net.w3[k] = sd2*g();
+    return net;
+  }
+  function params(net){ return [net.W1, net.b1, net.W2, net.b2, net.w3, net.c]; }
+
+  /* scratch arrays reused on every call (at H = 256 this avoids allocating per step) */
+  function work(net){
+    var H = net.H, w = net.tmp;
+    if(!w || w.H !== H){
+      w = net.tmp = { H: H, h1: new Float64Array(H), h2: new Float64Array(H), d1: new Float64Array(H), d2: new Float64Array(H),
+        g: params(net).map(function(p){ return new Float64Array(p.length); }) };
+    }
+    return w;
+  }
+  /* forward pass for one point: fills h1, h2 and returns the logit z */
+  function run(net, x, y, h1, h2){
+    var H = net.H, W1 = net.W1, b1 = net.b1, W2 = net.W2, b2 = net.b2, w3 = net.w3, z = net.c[0], j, k;
+    for(j = 0; j < H; j++) h1[j] = Math.tanh(W1[2*j]*x + W1[2*j + 1]*y + b1[j]);
+    for(j = 0; j < H; j++){
+      var s = b2[j], o = j*H;
+      for(k = 0; k < H; k++) s += W2[o + k]*h1[k];
+      h2[j] = Math.tanh(s);
+      z += w3[j]*h2[j];
+    }
+    return z;
+  }
+  function logit(net, x, y){ var w = work(net); return run(net, x, y, w.h1, w.h2); }
+  /* -log p(label) = softplus(z) - t z, computed without overflow */
+  function pointLoss(z, t){ return (z > 0 ? z + Math.log1p(Math.exp(-z)) : Math.log1p(Math.exp(z))) - t*z; }
+
+  function evaluate(net, data){
+    var w = work(net), X = data.X, loss = 0, correct = 0;
+    for(var i = 0; i < data.n; i++){
+      var z = run(net, X[2*i], X[2*i + 1], w.h1, w.h2), t = data.y[i];
+      loss += pointLoss(z, t);
+      if((z > 0) === (t === 1)) correct++;
+    }
+    return { loss: loss/data.n, acc: correct/data.n };
+  }
+
+  /* mean binary cross-entropy and its gradient by backpropagation.
+     g is in params() order and is overwritten by the next call on the same net. */
+  function lossGrad(net, data){
+    var H = net.H, n = data.n, X = data.X, W2 = net.W2, w3 = net.w3, w = work(net);
+    var h1 = w.h1, h2 = w.h2, d1 = w.d1, d2 = w.d2, g = w.g;
+    var gW1 = g[0], gb1 = g[1], gW2 = g[2], gb2 = g[3], gw3 = g[4], gc = g[5];
+    var loss = 0, correct = 0, i, j, k, q;
+    for(q = 0; q < g.length; q++) g[q].fill(0);
+    for(i = 0; i < n; i++){
+      var x = X[2*i], y = X[2*i + 1], t = data.y[i], z = run(net, x, y, h1, h2);
+      loss += pointLoss(z, t);
+      if((z > 0) === (t === 1)) correct++;
+      var dz = (1/(1 + Math.exp(-z)) - t)/n;
+      gc[0] += dz;
+      for(j = 0; j < H; j++){
+        gw3[j] += dz*h2[j];
+        d2[j] = dz*w3[j]*(1 - h2[j]*h2[j]);
+      }
+      d1.fill(0);
+      for(j = 0; j < H; j++){
+        var dj = d2[j], o = j*H;
+        gb2[j] += dj;
+        for(k = 0; k < H; k++){ gW2[o + k] += dj*h1[k]; d1[k] += dj*W2[o + k]; }
+      }
+      for(k = 0; k < H; k++){
+        var dk = d1[k]*(1 - h1[k]*h1[k]);
+        gW1[2*k] += dk*x; gW1[2*k + 1] += dk*y; gb1[k] += dk;
+      }
+    }
+    return { loss: loss/n, acc: correct/n, g: g };
+  }
+
+  /* full-batch Adam with bias correction; returns the loss and accuracy before the update */
+  var B1 = 0.9, B2 = 0.999, EPS = 1e-8;
+  function makeAdam(net){
+    function zeros(){ return params(net).map(function(p){ return new Float64Array(p.length); }); }
+    return { t: 0, m: zeros(), s: zeros() };
+  }
+  function adamStep(net, st, data, lr){
+    var r = lossGrad(net, data), P = params(net);
+    st.t++;
+    var c1 = 1 - Math.pow(B1, st.t), c2 = 1 - Math.pow(B2, st.t);
+    for(var q = 0; q < P.length; q++){
+      var p = P[q], gq = r.g[q], m = st.m[q], s = st.s[q];
+      for(var k = 0; k < p.length; k++){
+        var gk = gq[k];
+        m[k] = B1*m[k] + (1 - B1)*gk;
+        s[k] = B2*s[k] + (1 - B2)*gk*gk;
+        p[k] -= lr*(m[k]/c1)/(Math.sqrt(s[k]/c2) + EPS);
+      }
+    }
+    return { loss: r.loss, acc: r.acc };
+  }
+
+  /* measured by test/calibrate.js over seeds 1..30 (see README):
+     lr        the learning rate at which the most seeds fit the shuffled labels at width 64 (28 of 30 within 6,000 steps)
+     steps     1.2 × the slowest of those fits, rounded up to 500; width 4 does not fit the shuffled labels within it
+     maxSteps  where the page pauses training by itself (2 × steps) */
+  var PRESET = { lr: 0.01, steps: 6500, maxSteps: 13000 };
+
+  /* ---------- text on the page: English and Korean tables with the same keys ---------- */
+  var STRINGS = {
+    en: {
+      'brand': 'Same Moons, Shuffled Labels',
+      'brandSub': 'The same network, from the same starting knobs, trained on the real labels and on shuffled labels',
+      'ctl.width': 'Width',
+      'ctl.train': 'Train',
+      'ctl.pause': 'Pause',
+      'ctl.reset': 'Reset',
+      'ctl.speed': 'speed',
+      'ctl.speed1': '1 step per frame',
+      'ctl.speed5': '5 steps per frame',
+      'ctl.speed20': '20 steps per frame',
+      'ctl.showTest': 'Show test points',
+      'panel.real': 'Real labels',
+      'panel.shuf': 'Shuffled labels',
+      'stat.trainAcc': 'training accuracy',
+      'stat.testAcc': 'test accuracy',
+      'stat.steps': 'steps',
+      'loss.title': 'training loss over steps (top = {top})',
+      'loss.real': 'real labels',
+      'loss.shuf': 'shuffled labels',
+      'legend.test': 'hollow: test points, drawn with their real labels',
+      'note.fit': 'Paused: both networks classify every training point correctly.',
+      'note.max': 'Paused after {n} steps.',
+      'fine': 'Each panel: 2 inputs → {H} → {H} → 1, tanh, the mean binary cross-entropy on the 200 training points, full-batch Adam with learning rate {lr}. The right panel uses the same points with their labels shuffled once. Test points are never used for training; both panels are scored on the real labels of the test points.'
+    },
+    ko: {
+      'brand': '같은 초승달, 섞은 라벨',
+      'brandSub': '같은 신경망을 같은 처음 노브 값에서 실제 라벨과 섞은 라벨로 따로 학습한다',
+      'ctl.width': '폭',
+      'ctl.train': '학습',
+      'ctl.pause': '멈춤',
+      'ctl.reset': '초기화',
+      'ctl.speed': '속도',
+      'ctl.speed1': '프레임마다 1걸음',
+      'ctl.speed5': '프레임마다 5걸음',
+      'ctl.speed20': '프레임마다 20걸음',
+      'ctl.showTest': '테스트 점 보기',
+      'panel.real': '실제 라벨',
+      'panel.shuf': '섞은 라벨',
+      'stat.trainAcc': '학습 정확도',
+      'stat.testAcc': '테스트 정확도',
+      'stat.steps': '걸음',
+      'loss.title': '걸음마다 학습 손실 (위 끝 {top})',
+      'loss.real': '실제 라벨',
+      'loss.shuf': '섞은 라벨',
+      'legend.test': '속 빈 점: 테스트 점 (실제 라벨로 그림)',
+      'note.fit': '멈춤: 두 신경망 모두 학습 점을 전부 맞혔다.',
+      'note.max': '{n}걸음에서 멈췄다.',
+      'fine': '두 패널 모두 입력 2 → {H} → {H} → 1, tanh, 학습 점 200개의 이진 교차 엔트로피 평균, 학습률 {lr}의 전체 배치 Adam이다. 오른쪽 패널은 같은 점의 라벨을 한 번 섞어 쓴다. 테스트 점은 학습에 쓰지 않고, 두 패널 모두 테스트 점의 실제 라벨로 정확도를 잰다.'
+    }
+  };
+  /* the string for key in lang with {name} filled from params; English when lang or key is missing */
+  function t(lang, key, params){
+    var s = (STRINGS[lang] || STRINGS.en)[key];
+    if(s === undefined) s = STRINGS.en[key];
+    if(s === undefined) return key;
+    return s.replace(/\{(\w+)\}/g, function(m, name){ return params && params[name] !== undefined ? String(params[name]) : m; });
+  }
+
+  return {
+    DATA_VERSION: DATA_VERSION, rngOf: rngOf, gaussOf: gaussOf, makeMoons: makeMoons,
+    SHUFFLE_SEED: SHUFFLE_SEED, shuffleLabels: shuffleLabels,
+    WIDTHS: WIDTHS, DEFAULT_WIDTH: DEFAULT_WIDTH, initNet: initNet, params: params,
+    logit: logit, pointLoss: pointLoss, evaluate: evaluate, lossGrad: lossGrad,
+    makeAdam: makeAdam, adamStep: adamStep, PRESET: PRESET,
+    STRINGS: STRINGS, t: t
+  };
+})();
+</script>
+
+<header id="topbar">
+  <div class="brand"><span data-t="brand">Same Moons, Shuffled Labels</span><span class="sub" data-t="brandSub">The same network, from the same starting knobs, trained on the real labels and on shuffled labels</span></div>
+</header>
+<div id="controls">
+  <div class="grp"><span class="gl" data-t="ctl.width">Width</span><div class="seg" id="segWidth"></div></div>
+  <div class="grp">
+    <button class="btn" id="bTrain">Train</button>
+    <button class="btn ghost" id="bReset" data-t="ctl.reset">Reset</button>
+  </div>
+  <label class="grp"><span class="gl" data-t="ctl.speed">speed</span>
+    <select id="speed">
+      <option value="1" data-t="ctl.speed1">1 step per frame</option>
+      <option value="5" data-t="ctl.speed5" selected>5 steps per frame</option>
+      <option value="20" data-t="ctl.speed20">20 steps per frame</option>
+    </select>
+  </label>
+  <div class="grp"><button class="btn ghost" id="bTest" data-t="ctl.showTest">Show test points</button></div>
+</div>
+<main>
+  <div id="panels">
+    <section class="panel" id="panelReal">
+      <h3 data-t="panel.real">Real labels</h3>
+      <canvas class="pc"></canvas>
+      <div class="stats">
+        <div><span data-t="stat.trainAcc">training accuracy</span><b class="tr">–</b></div>
+        <div><span data-t="stat.testAcc">test accuracy</span><b class="te">–</b></div>
+      </div>
+    </section>
+    <section class="panel" id="panelShuf">
+      <h3 data-t="panel.shuf">Shuffled labels</h3>
+      <canvas class="pc"></canvas>
+      <div class="stats">
+        <div><span data-t="stat.trainAcc">training accuracy</span><b class="tr">–</b></div>
+        <div><span data-t="stat.testAcc">test accuracy</span><b class="te">–</b></div>
+      </div>
+    </section>
+    <div class="legend" id="legend"></div>
+  </div>
+  <div id="lossWrap">
+    <div class="stats"><div><span data-t="stat.steps">steps</span><b id="sSteps">0</b></div></div>
+    <div>
+      <div class="losshead">
+        <span id="lossTitle"></span>
+        <span><span class="ln"></span><span data-t="loss.real">real labels</span></span>
+        <span><span class="ln dash"></span><span data-t="loss.shuf">shuffled labels</span></span>
+      </div>
+      <canvas id="lossCv"></canvas>
+    </div>
+  </div>
+  <p class="note" id="note"></p>
+  <p class="fine" id="fine"></p>
+</main>
+
+<script id="ms-ui">
+var MSUI = (function(){
+  'use strict';
+  function $(id){ return document.getElementById(id); }
+
+  var GRID = 96, SHADE_MS = 6, HIST_MAX = 3000;
+  var BOX = { x0: -1.6, x1: 1.6, y0: -1.2, y1: 1.2 };
+  var HUE = [[140, 225], [0, 48]];
+  var INK = '#0b0b0b', SHUF_LINE = '#b3001b', WRONG = '#3a3a3a';
+
+  function makePanel(id){
+    var el = $(id), cv = document.createElement('canvas');
+    cv.width = GRID; cv.height = GRID;
+    var ctx = cv.getContext('2d');
+    return {
+      el: el, cv: el.querySelector('canvas.pc'), data: null, colors: null, net: null, adam: null, hist: [],
+      loss: NaN, acc: NaN, testAcc: NaN, testWrong: null, ver: 0,
+      shade: { cv: cv, ctx: ctx, img: ctx.createImageData(GRID, GRID), row: 0, passVer: -1, cleanVer: -1 }
+    };
+  }
+
+  var S = {
+    lang: 'en', width: MS.DEFAULT_WIDTH, resets: 0,
+    real: makePanel('panelReal'), shuf: makePanel('panelShuf'),
+    test: null, testColors: null, steps: 0, histStride: 1,
+    training: false, trainSpeed: 5, showTest: false, note: null, fitNoted: false, dirty: true
+  };
+  function panels(){ return [S.real, S.shuf]; }
+
+  /* ---------- small helpers ---------- */
+  function T(key, params){ return MS.t(S.lang, key, params); }
+  function lerp(a, b, t){ return a + (b - a)*t; }
+  function num(x, digits){
+    var s = x.toFixed(digits);
+    if(Number(s) === 0) return (0).toFixed(digits);
+    return s.charAt(0) === '-' ? '−' + s.slice(1) : s;
+  }
+  function pct(a){
+    if(!isFinite(a)) return '–';
+    var v = Math.round(1000*a)/10;
+    return (v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)) + '%';
+  }
+  /* the layer-by-layer demo's colors: hue by the angle around (0, 0), range by label */
+  function colorsFor(X, y, n){
+    var out = [];
+    for(var i = 0; i < n; i++){
+      var c = (Math.atan2(X[2*i + 1], X[2*i]) + Math.PI)/(2*Math.PI), h = HUE[y[i]];
+      out.push('hsl(' + lerp(h[0], h[1], c).toFixed(1) + ',72%,' + (y[i] ? 46 : 40) + '%)');
+    }
+    return out;
+  }
+
+  /* ---------- networks ---------- */
+  function newNets(){
+    panels().forEach(function(p){
+      p.net = MS.initNet(S.width, 1 + S.resets);   /* both panels get the same starting knobs */
+      p.adam = MS.makeAdam(p.net);
+      p.hist = [];
+      p.ver++;
+      p.shade.row = 0;
+    });
+    S.steps = 0; S.histStride = 1; S.note = null; S.fitNoted = false;
+    measure();
+    S.dirty = true;
+  }
+  function measure(){
+    var te = S.test;
+    panels().forEach(function(p){
+      var ev = MS.evaluate(p.net, p.data), right = 0;
+      p.loss = ev.loss; p.acc = ev.acc;
+      for(var i = 0; i < te.n; i++){
+        var ok = (MS.logit(p.net, te.X[2*i], te.X[2*i + 1]) > 0) === (te.y[i] === 1);
+        p.testWrong[i] = ok ? 0 : 1;
+        if(ok) right++;
+      }
+      p.testAcc = right/te.n;
+    });
+  }
+  function thin(h){ var out = []; for(var j = 0; j < h.length; j += 2) out.push(h[j]); return out; }
+  /* keeps the loss of every histStride-th step; halves the record when it grows past HIST_MAX */
+  function record(a, b){
+    if(S.steps % S.histStride !== 0) return;
+    S.real.hist.push(a); S.shuf.hist.push(b);
+    if(S.real.hist.length > HIST_MAX){
+      S.real.hist = thin(S.real.hist); S.shuf.hist = thin(S.shuf.hist); S.histStride *= 2;
+    }
+  }
+  function trainSteps(n){
+    if(n <= 0) return;
+    var lr = MS.PRESET.lr;
+    for(var i = 0; i < n; i++){
+      var a = MS.adamStep(S.real.net, S.real.adam, S.real.data, lr);
+      var b = MS.adamStep(S.shuf.net, S.shuf.adam, S.shuf.data, lr);
+      record(a.loss, b.loss);
+      S.steps++;
+      if(!isFinite(a.loss) || !isFinite(b.loss)){ S.training = false; break; }
+    }
+    S.real.ver++; S.shuf.ver++;
+    measure();
+  }
+  /* one frame of live training: pause the first time both panels are at 100%, and at PRESET.maxSteps */
+  function frameTrain(){
+    var n = S.trainSpeed, max = MS.PRESET.maxSteps;
+    if(S.steps < max) n = Math.min(n, max - S.steps);
+    trainSteps(n);
+    if(!S.training) return;
+    if(!S.fitNoted && S.real.acc === 1 && S.shuf.acc === 1){
+      S.fitNoted = true; S.training = false; S.note = { key: 'note.fit' };
+    } else if(S.steps === max){
+      S.training = false; S.note = { key: 'note.max', params: { n: max.toLocaleString('en-US') } };
+    }
+  }
+
+  /* ---------- decision regions ----------
+     Each panel keeps a GRID x GRID picture of the predicted class over BOX and recomputes a few rows per frame,
+     continuing where it stopped. Rows not recomputed yet keep their previous colors. A pass that ends without
+     any knob change since it began leaves the picture up to date, and the work stops until the knobs change. */
+  function shadeRows(p, budget){
+    var sh = p.shade;
+    if(sh.cleanVer === p.ver) return false;
+    var D = sh.img.data, t0 = performance.now(), dx = (BOX.x1 - BOX.x0)/GRID, dy = (BOX.y1 - BOX.y0)/GRID;
+    if(sh.row === 0) sh.passVer = p.ver;
+    for(;;){
+      var r = sh.row, y = BOX.y1 - (r + 0.5)*dy;
+      for(var c = 0; c < GRID; c++){
+        var k = 4*(r*GRID + c);
+        if(MS.logit(p.net, BOX.x0 + (c + 0.5)*dx, y) > 0){ D[k] = 236; D[k + 1] = 120; D[k + 2] = 50; }
+        else { D[k] = 40; D[k + 1] = 130; D[k + 2] = 200; }
+        D[k + 3] = 51;
+      }
+      if(++sh.row === GRID){
+        sh.row = 0;
+        if(sh.passVer === p.ver){ sh.cleanVer = p.ver; break; }
+        sh.passVer = p.ver;
+      }
+      if(performance.now() - t0 >= budget) break;
+    }
+    sh.ctx.putImageData(sh.img, 0, 0);
+    return true;
+  }
+  function shadeNow(p){ p.shade.row = 0; shadeRows(p, Infinity); }
+
+  /* ---------- drawing ---------- */
+  function fitCanvas(cv){
+    var r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    var w = Math.max(1, Math.round(r.width*dpr)), h = Math.max(1, Math.round(r.height*dpr));
+    if(cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h; }
+    var ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx: ctx, w: r.width, h: r.height };
+  }
+  /* fixed view of BOX with the same scale on both axes */
+  function makeCam(w, h){
+    var sc = Math.min(w/(BOX.x1 - BOX.x0), h/(BOX.y1 - BOX.y0));
+    var cx = (BOX.x0 + BOX.x1)/2, cy = (BOX.y0 + BOX.y1)/2;
+    return {
+      sc: sc, w: w, h: h,
+      X: function(x){ return w/2 + (x - cx)*sc; },
+      Y: function(y){ return h/2 - (y - cy)*sc; },
+      ix: function(px){ return cx + (px - w/2)/sc; },
+      iy: function(py){ return cy - (py - h/2)/sc; }
+    };
+  }
+  function niceStep(raw){
+    var p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw/p;
+    return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10)*p;
+  }
+  function drawAxes(ctx, cam){
+    var w = cam.w, h = cam.h, ox = cam.X(0), oy = cam.Y(0), i, v;
+    ctx.strokeStyle = '#8a8985'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(w, oy); ctx.moveTo(ox, 0); ctx.lineTo(ox, h); ctx.stroke();
+    /* ticks about every 110px (0.5 at usual sizes); no label that would be cut at the canvas edge */
+    var st = niceStep(110/cam.sc), dec = Math.max(0, -Math.floor(Math.log10(st) + 1e-9));
+    ctx.fillStyle = '#6b6a66'; ctx.font = '12px Inter, system-ui, sans-serif';
+    var ly = Math.min(Math.max(oy + 5, 4), h - 16);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for(i = Math.ceil(cam.ix(0)/st); i <= Math.floor(cam.ix(w)/st); i++){
+      if(i === 0) continue;
+      v = cam.X(i*st); ctx.fillRect(v - 0.5, oy - 3, 1, 6);
+      if(v > 18 && v < w - 18) ctx.fillText(num(i*st, dec), v, ly);
+    }
+    var lx = Math.min(Math.max(ox - 6, 34), w - 4);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for(i = Math.ceil(cam.iy(h)/st); i <= Math.floor(cam.iy(0)/st); i++){
+      if(i === 0) continue;
+      v = cam.Y(i*st); ctx.fillRect(ox - 3, v - 0.5, 6, 1);
+      if(v > 10 && v < h - 10) ctx.fillText(num(i*st, dec), lx, v);
+    }
+  }
+  /* circle for class A (0), triangle for class B (1) */
+  function markerPath(ctx, x, y, cls, r){
+    ctx.beginPath();
+    if(cls === 0) ctx.arc(x, y, r, 0, 2*Math.PI);
+    else { var t = r*1.35; ctx.moveTo(x, y - t); ctx.lineTo(x + t*0.866, y + t*0.5); ctx.lineTo(x - t*0.866, y + t*0.5); ctx.closePath(); }
+  }
+  function drawPanel(p){
+    var f = fitCanvas(p.cv), ctx = f.ctx, cam = makeCam(f.w, f.h), d = p.data, i;
+    var r = Math.max(3, Math.min(4.6, f.w/170));
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, f.w, f.h);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(p.shade.cv, cam.X(BOX.x0), cam.Y(BOX.y1), (BOX.x1 - BOX.x0)*cam.sc, (BOX.y1 - BOX.y0)*cam.sc);
+    drawAxes(ctx, cam);
+    ctx.lineWidth = 0.9; ctx.strokeStyle = 'rgba(20,20,20,.5)';
+    for(i = 0; i < d.n; i++){
+      markerPath(ctx, cam.X(d.X[2*i]), cam.Y(d.X[2*i + 1]), d.y[i], r);
+      ctx.fillStyle = p.colors[i]; ctx.fill(); ctx.stroke();
+    }
+    if(!S.showTest) return;
+    var te = S.test;
+    for(i = 0; i < te.n; i++){
+      var x = cam.X(te.X[2*i]), y = cam.Y(te.X[2*i + 1]);
+      if(p.testWrong[i]){
+        markerPath(ctx, x, y, te.y[i], r + 3);
+        ctx.strokeStyle = WRONG; ctx.lineWidth = 2; ctx.stroke();
+      }
+      markerPath(ctx, x, y, te.y[i], r);
+      ctx.strokeStyle = S.testColors[i]; ctx.lineWidth = 1.8; ctx.stroke();
+    }
+  }
+  function renderLoss(){
+    var f = fitCanvas($('lossCv')), ctx = f.ctx, A = S.real.hist, B = S.shuf.hist, top = 0, i;
+    ctx.clearRect(0, 0, f.w, f.h);
+    ctx.strokeStyle = '#dedcd6'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, f.h - 0.5); ctx.lineTo(f.w, f.h - 0.5); ctx.stroke();
+    for(i = 0; i < A.length; i++){
+      if(isFinite(A[i]) && A[i] > top) top = A[i];
+      if(isFinite(B[i]) && B[i] > top) top = B[i];
+    }
+    $('lossTitle').textContent = T('loss.title', { top: top > 0 ? top.toFixed(2) : '–' });
+    if(A.length < 2 || !(top > 0)) return;
+    function line(H, color, dash){
+      ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 1.6; ctx.setLineDash(dash); ctx.beginPath();
+      for(var j = 0; j < H.length; j++){
+        var x = j/(H.length - 1)*(f.w - 2) + 1, y = f.h - 3 - (f.h - 8)*Math.min(1, H[j]/top);
+        if(j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke(); ctx.restore();
+    }
+    line(A, INK, []);
+    line(B, SHUF_LINE, [6, 4]);
+  }
+  function renderText(){
+    panels().forEach(function(p){
+      p.el.querySelector('b.tr').textContent = pct(p.acc);
+      p.el.querySelector('b.te').textContent = S.showTest ? pct(p.testAcc) : '–';
+    });
+    $('sSteps').textContent = S.steps.toLocaleString('en-US');
+    $('bTrain').textContent = T(S.training ? 'ctl.pause' : 'ctl.train');
+    $('bTest').classList.toggle('on', S.showTest);
+    $('legend').textContent = S.showTest ? T('legend.test') : '';
+    $('note').textContent = S.note ? T(S.note.key, S.note.params) : '';
+    $('fine').textContent = T('fine', { H: S.width, lr: MS.PRESET.lr });
+    var chips = $('segWidth').children;
+    for(var i = 0; i < chips.length; i++) chips[i].classList.toggle('on', +chips[i].getAttribute('data-v') === S.width);
+  }
+  function draw(){
+    drawPanel(S.real); drawPanel(S.shuf);
+    renderLoss(); renderText();
+  }
+
+  /* ---------- actions ---------- */
+  function setWidth(w){
+    w = +w;
+    if(MS.WIDTHS.indexOf(w) < 0 || w === S.width) return;
+    S.width = w; S.resets = 0; S.training = false;
+    newNets();
+  }
+  function reset(){ S.resets++; S.training = false; newNets(); }
+  function setShowTest(on){ S.showTest = !!on; S.dirty = true; }
+  function startTraining(){ S.note = null; S.training = true; S.dirty = true; }
+  function stopTraining(){ S.training = false; S.dirty = true; }
+  function toggleTraining(){ if(S.training) stopTraining(); else startTraining(); }
+
+  /* ---------- frame loop ---------- */
+  function frame(){
+    if(S.training){ frameTrain(); S.dirty = true; }
+    var a = shadeRows(S.real, SHADE_MS), b = shadeRows(S.shuf, SHADE_MS);
+    if(S.dirty || a || b){ S.dirty = false; draw(); }
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------- wiring ---------- */
+  function parseOptions(){
+    var o = {}, s = (location.search.slice(1) + '&' + location.hash.slice(1)).split('&');
+    s.forEach(function(kv){ if(!kv) return; var p = kv.split('='); o[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || ''); });
+    return o;
+  }
+  function applyStaticText(){
+    var els = document.querySelectorAll('[data-t]');
+    for(var i = 0; i < els.length; i++) els[i].textContent = T(els[i].getAttribute('data-t'));
+  }
+  function keyTarget(e){
+    var tag = (e.target.tagName || '').toLowerCase();
+    return e.key === ' ' && tag !== 'input' && tag !== 'select' && tag !== 'textarea';
+  }
+  function wire(){
+    $('segWidth').innerHTML = MS.WIDTHS.map(function(w){ return '<button data-v="' + w + '">' + w + '</button>'; }).join('');
+    $('segWidth').addEventListener('click', function(e){ var b = e.target.closest('button'); if(b) setWidth(b.getAttribute('data-v')); });
+    $('bTrain').addEventListener('click', toggleTraining);
+    $('bReset').addEventListener('click', reset);
+    $('speed').addEventListener('change', function(){ S.trainSpeed = +this.value; });
+    $('bTest').addEventListener('click', function(){ setShowTest(!S.showTest); });
+    window.addEventListener('resize', function(){ S.dirty = true; });
+    /* Space trains or pauses. Stopping the default on keydown and keyup keeps a focused button from being pressed too. */
+    document.addEventListener('keydown', function(e){
+      if(!keyTarget(e)) return;
+      e.preventDefault();
+      if(!e.repeat) toggleTraining();
+    });
+    document.addEventListener('keyup', function(e){ if(keyTarget(e)) e.preventDefault(); });
+  }
+
+  function init(){
+    var o = parseOptions();
+    S.lang = o.lang === 'ko' ? 'ko' : 'en';
+    document.documentElement.lang = S.lang;
+    applyStaticText();
+    var train = MS.makeMoons('train');
+    S.test = MS.makeMoons('test');
+    S.real.data = train;
+    S.shuf.data = { n: train.n, X: train.X, y: MS.shuffleLabels(train.y, MS.SHUFFLE_SEED) };
+    S.real.colors = colorsFor(train.X, train.y, train.n);
+    S.shuf.colors = colorsFor(train.X, S.shuf.data.y, train.n);
+    S.testColors = colorsFor(S.test.X, S.test.y, S.test.n);
+    S.real.testWrong = new Uint8Array(S.test.n);
+    S.shuf.testWrong = new Uint8Array(S.test.n);
+    var w = parseInt(o.width, 10);
+    S.width = MS.WIDTHS.indexOf(w) >= 0 ? w : MS.DEFAULT_WIDTH;
+    S.showTest = o.test === '1';
+    S.trainSpeed = +$('speed').value;
+    wire();
+    newNets();
+    if(o.train === '1') startTraining();
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  function state(){
+    function ps(p){ return { loss: p.loss, trainAcc: p.acc, testAcc: p.testAcc }; }
+    return { width: S.width, steps: S.steps, training: S.training, showTest: S.showTest, lang: S.lang,
+             real: ps(S.real), shuf: ps(S.shuf) };
+  }
+
+  init();
+  return {
+    S: S,
+    hooks: {
+      setWidth: function(w){ setWidth(w); draw(); return state(); },
+      train: function(n){ S.training = false; trainSteps(n); draw(); return state(); },
+      startTraining: function(){ startTraining(); draw(); },
+      stopTraining: function(){ stopTraining(); draw(); },
+      reset: function(){ reset(); draw(); return state(); },
+      setShowTest: function(on){ setShowTest(on); draw(); },
+      shadeNow: function(){ shadeNow(S.real); shadeNow(S.shuf); draw(); },
+      draw: draw,
+      state: state
+    }
+  };
+})();
+</script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 
 MAS1004 4차시(경사하강법) 수업용 인터랙티브 웹 데모. 학생이 노브 하나를 Δ만큼 밀어 slope를 재고,
 노브 8개의 slope 목록(gradient)을 표로 채우고, Measure와 Take a step 버튼으로 경사하강을 손으로 돌리고,
-learning rate와 시작 위치를 바꿔 결과가 어떻게 갈리는지 본다. 데이터와 8노브 모델은 3차시 데모의 Mystery와 같다.
+learning rate와 시작 위치를 바꿔 결과가 어떻게 갈리는지 본다.
 설계 문서: `docs/superpowers/specs/2026-09-10-lecture04-gradient-descent-design.md`.
 
 의존성 없는 단일 파일이다. `index.html` 하나를 브라우저로 열면 되고(`file://` 포함), GitHub Pages에 그 파일만 올려도 동작한다.
@@ -28,7 +28,7 @@ learning rate와 시작 위치를 바꿔 결과가 어떻게 갈리는지 본다
 
 | 탭 | 모델 | 학생이 하는 일 |
 | --- | --- | --- |
-| 1 One knob at a time | 8노브 | 노브 하나를 골라 손실 곡선을 본다. Δ 슬라이더로 두 점의 slope가 Δ → 0의 값으로 수렴하는 것을 본다. 확대하면 곡선이 직선이 된다 |
+| 1 One knob at a time | 8노브 | 노브 하나를 골라 손실 곡선을 본다. Δ 슬라이더로 두 점의 slope가 Δ → 0의 값으로 수렴하는 것을 본다. 확대하면 곡선이 직선이 된다. 노브를 하나 돌리면 아래 축소판 8개가 전부 바뀐다 |
 | 2 Measure the gradient | 8노브 | "Measure the gradient"를 눌러 노브를 하나씩 밀어 표를 채운다. 카운터가 9 는다. 노브를 돌리면 표가 흐려진다 |
 | 3 Step by step | 8노브 | Measure와 Take a step을 번갈아 누른다. Run으로 자동 반복. learning rate를 바꿔 세 가지 결과(느림, 적당, 발산)를 본다 |
 | 4 Where you start | 12노브 | 주파수와 위상도 노브다. Start A, B, C에서 각각 Run하고 기록표에서 도착 손실이 다른 것을 읽는다 |
@@ -47,12 +47,27 @@ learning rate와 시작 위치를 바꿔 결과가 어떻게 갈리는지 본다
 옵션은 `?`와 `#` 어느 쪽으로 줘도 된다: `index.html?tab=4#start=B`.
 3차시의 `?auto=1` 같은 교수 전용 옵션은 없다. 자동 실행(Run)이 이번 시간의 학생 기능이다.
 
-## 데이터
+## 데이터와 모델
 
-- 3차시 데모의 Mystery 데이터와 점 하나까지 같다. 같은 시드(`rs|v1|data|mystery`, `rs|v1|mystery-truth`)와
-  같은 `DATA_VERSION = 1`을 쓴다. 3차시 파일을 고쳐 데이터가 달라지면 이 데모도 같이 고친다.
-- 8노브 모델은 3차시 탭 5의 모델 그대로다. 12노브 모델은 sin과 cos의 주파수와 위상을 노브로 푼 것이고,
-  정답(w₂ = 2, w₃ = 0, w₅ = 3, w₆ = 0)을 넣으면 8노브 모델과 완전히 같은 함수가 된다.
+- 데이터는 x ∈ [−3, 3]의 점 120개다. 숨은 함수는 8노브 모델의 정답 가중치로 만들고 표준편차 0.08의 잡음을 더한다.
+  시드가 고정되어 있어 교수 화면과 학생 화면이 같다 (`bump-truth|19`, `bump-data|19`, `DATA_VERSION = 1`).
+- **8노브 모델**: 종 모양 봉우리 8개의 합이다. 봉우리 j는 cⱼ에 중심을 두고, 중심은 −3에서 3까지 고르게 놓았다.
+
+  ```
+  y = w₁ g₁(x) + … + w₈ g₈(x),   gⱼ(x) = exp(−(x − cⱼ)² / 2σ²),  σ = 1.1
+  ```
+
+  봉우리의 폭 σ = 1.1이 중심 간격 0.857보다 넓다. 그래서 이웃한 봉우리가 같은 x 구간을 나눠 맡고,
+  노브 하나를 돌리면 옆 노브의 손실 곡선 바닥이 눈에 띄게 움직인다. w₄를 1만큼 돌리면 w₅의 바닥이 0.87 움직인다.
+  이것이 탭 1 아래 줄의 축소판 8개가 노브를 돌릴 때마다 전부 다시 그려지는 이유다.
+- **12노브 모델** (탭 4): 같은 데이터를 다른 모델로 맞춘다. 주파수와 위상을 모르는 sin과 cos 두 개에 매끄러운 항들을 더한다.
+
+  ```
+  y = w₁ sin(w₂x + w₃) + w₄ cos(w₅x + w₆) + w₇ eˣ/20 + w₈ ln(x+4) + w₉ (x/3)⁴ + w₁₀ (x/3)² + w₁₁ (x/3) + w₁₂
+  ```
+
+  좋은 자리에서 출발하면 봉우리 모델과 같은 수준(손실 0.0056)까지 내려가지만, 주파수 노브 때문에 골짜기가 여럿이라
+  출발 위치에 따라 다른 곳에서 멈춘다.
 
 ## 계산 방식
 
@@ -65,8 +80,10 @@ learning rate와 시작 위치를 바꿔 결과가 어떻게 갈리는지 본다
 - 경사하강 중에는 노브 값을 범위로 자르지 않는다. 범위를 벗어나면 다이얼은 끝에 걸리고 숫자만 실제 값을 보인다.
   손실이 유한하지 않거나 10⁶을 넘으면 멈추고 "Diverged: the loss blew up"을 띄운다.
 
-프리셋 값은 `test/calibrate.js`로 실측했다. 8노브: small 0.0002, about right 0.3, too large 0.6 (0.4부터 발산).
-12노브: 0.07. 시작 A, B, C도 같은 스크립트가 고른 자리다.
+프리셋 값은 `test/calibrate.js`로 실측했다. 8노브: small 0.00002, about right 0.5, too large 1.2 (1.0부터 발산).
+12노브: 0.2. learning rate 슬라이더는 로그 눈금으로 10⁻⁵에서 10까지다.
+시작 위치 S0와 시작 A, B, C도 같은 스크립트가 고른 자리다. S0는 gradient 표에 큰 slope와 거의 0인 slope가
+같이 나오는 자리로 골랐다 (최대와 최소의 비 60.6).
 
 ## 구조
 
@@ -82,8 +99,8 @@ learning rate와 시작 위치를 바꿔 결과가 어떻게 갈리는지 본다
 const fs = require('fs');
 const html = fs.readFileSync('index.html', 'utf8');
 const K = (0, eval)(html.match(/<script id="gd-core">([\s\S]*?)<\/script>/)[1] + '\n;GD');
-K.numericalGradient(K.MODELS.m8, K.START.m8);   // { lossNow: 2.387, slopes: [...], evals: 9, delta: 0.001 }
-K.run(K.MODELS.m8, K.START.m8, K.LR.m8.good, 2000).loss;   // 0.00625
+K.numericalGradient(K.MODELS.m8, K.START.m8);   // { lossNow: 3.001, slopes: [...], evals: 9, delta: 0.001 }
+K.run(K.MODELS.m8, K.START.m8, K.LR.m8.good, 2000).loss;   // 0.00531
 ```
 
 ## 테스트

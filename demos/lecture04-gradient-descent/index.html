@@ -167,6 +167,11 @@ table.grad td.bar i{position:absolute;top:0;height:14px;background:var(--model);
 table.grad tr.max td{font-weight:600}
 table.grad.stale td{color:var(--muted)}
 table.grad.stale td.bar i{opacity:.3}
+.k-grad{fill:none;stroke:var(--accent);stroke-width:3;stroke-linecap:round}
+.k-gtick{stroke:var(--accent);stroke-width:2.2;stroke-linecap:round}
+.knob.stale .k-grad,.knob.stale .k-gtick{stroke:var(--muted)}
+.kslope{font:600 .8rem/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap}
+.knob.stale .kslope{color:var(--muted)}
 .counter{font-size:.95rem;color:var(--sub)}
 .counter b{color:var(--ink);font-weight:600}
 .status{font:500 .98rem ui-monospace,Menlo,monospace;color:var(--sub)}
@@ -195,7 +200,7 @@ table.rec button{padding:3px 10px;border-radius:7px;border:1px solid var(--rule2
    ========================================================================= */
 var GD = (function(){
 'use strict';
-var DATA_VERSION = 1;   /* same as lecture 3: the points must be identical */
+var DATA_VERSION = 1;   /* bump this when the data generator changes */
 var DELTA = 0.001;
 var DIVERGE = 1e6;
 
@@ -231,60 +236,64 @@ function gauss(r){
 function clamp(v,lo,hi){ return v < lo ? lo : (v > hi ? hi : v); }
 function r2(v){ return Math.round(v*100)/100; }
 
-/* ---- the lecture 3 mystery basis and its hidden weights ---- */
+/* ---- eight overlapping bumps ----
+   Knob j raises a bell centred at cⱼ. The bells are wider than the spacing between them,
+   so neighbours share the same stretch of x: move one knob and the bottom of the next
+   knob's own loss curve moves with it. ---- */
+var K8 = 8, SIGMA = 1.1, TRUTH_SEED = 19;
+var CENTERS = [];
+for(var ci = 0; ci < K8; ci++) CENTERS.push(r2(-3 + 6*ci/(K8 - 1)));
+function bumpAt(x, c){ var t = (x - c)/SIGMA; return Math.exp(-0.5*t*t); }
 function basis8(x){
-  var u = x/3;
-  return [Math.sin(2*x), Math.cos(3*x), Math.exp(x)/20, Math.log(x + 4), u*u*u*u, u*u, u, 1];
+  var b = new Array(K8);
+  for(var j = 0; j < K8; j++) b[j] = bumpAt(x, CENTERS[j]);
+  return b;
 }
-function mysteryTruth(){
-  var r = rngOf('mystery-truth'), w = [], j;
-  for(j = 0; j < 8; j++){
+function truthWeights(){
+  var r = rngOf('bump-truth|' + TRUTH_SEED), w = [];
+  for(var j = 0; j < K8; j++){
     var s = r() < 0.5 ? -1 : 1;
     w.push(r2(s*(0.6 + 1.9*r())));
   }
-  /* the constant term is chosen so that the function averages to zero on [-3, 3] */
-  var mean = 0, n = 600;
-  for(var i = 0; i < n; i++){
-    var b = basis8(-3 + 6*(i + 0.5)/n);
-    for(j = 0; j < 7; j++) mean += w[j]*b[j]/n;
-  }
-  w[7] = r2(-mean);
   return w;
 }
-var TRUTH8 = mysteryTruth();
-function genData(r){
-  var pts = [];
+var TRUTH8 = truthWeights();
+function genData(){
+  var r = rngOf('bump-data|' + TRUTH_SEED), pts = [];
   for(var i = 0; i < 120; i++){
-    var x = -3 + 6*(i + r())/120;
-    var b = basis8(x), y = 0;
-    for(var j = 0; j < 8; j++) y += TRUTH8[j]*b[j];
+    var x = -3 + 6*(i + r())/120, b = basis8(x), y = 0;
+    for(var j = 0; j < K8; j++) y += TRUTH8[j]*b[j];
     pts.push([r2(x), r2(y + 0.08*gauss(r))]);
   }
   return pts;
 }
-var DATA = genData(rngOf('data|mystery'));
+var DATA = genData();
 var N = DATA.length;
 var XS = DATA.map(function(p){ return p[0]; }), YS = DATA.map(function(p){ return p[1]; });
-var B8 = XS.map(basis8);   /* cached basis values per data point */
+var B8 = XS.map(basis8);   /* cached bump values per data point: the centres of m8 never move */
 
 /* ---- models ---- */
 function knob(name, sub, min, max){ return {name:name, sub:sub, min:min, max:max, step:0.01, big:0.1, init:0}; }
+function atX(c){ return 'at ' + (c < 0 ? '−' : '') + Math.abs(c).toFixed(1); }
 var M8 = {
-  key:'m8', label:'Eight knobs', k:8,
-  eq:'y = w₁ sin(2x) + w₂ cos(3x) + w₃ eˣ/20 + w₄ ln(x+4) + w₅ (x/3)⁴ + w₆ (x/3)² + w₇ (x/3) + w₈',
+  key:'m8', label:'Eight bumps', k:8,
+  eq:'y = w₁ g₁(x) + w₂ g₂(x) + … + w₈ g₈(x),   gⱼ(x) = exp(−(x − cⱼ)² / 2σ²),  σ = 1.1',
   names:['w₁','w₂','w₃','w₄','w₅','w₆','w₇','w₈'],
-  subs:['sin(2x)','cos(3x)','eˣ/20','ln(x+4)','(x/3)⁴','(x/3)²','x/3','1'],
-  f:function(p, x){ var b = basis8(x), y = 0; for(var j = 0; j < 8; j++) y += p[j]*b[j]; return y; },
-  predictAt:function(p, i){ var b = B8[i], y = 0; for(var j = 0; j < 8; j++) y += p[j]*b[j]; return y; }
+  subs:CENTERS.map(atX),
+  f:function(p, x){ var y = 0; for(var j = 0; j < K8; j++) y += p[j]*bumpAt(x, CENTERS[j]); return y; },
+  predictAt:function(p, i){ var b = B8[i], y = 0; for(var j = 0; j < K8; j++) y += p[j]*b[j]; return y; }
 };
 M8.knobs = M8.names.map(function(nm, j){ return knob(nm, M8.subs[j], -5, 5); });
+
+/* m12: the same data, a different model. Two waves whose frequency and phase are knobs,
+   plus the smooth terms. It can reach the same fit as the bumps, but only from the right start. */
 var FEAT = XS.map(function(x){ var u = x/3; return [Math.exp(x)/20, Math.log(x + 4), u*u*u*u, u*u, u]; });
 var M12 = {
   key:'m12', label:'Twelve knobs', k:12,
-  eq:'y = w₁ sin(w₂x + w₃) + w₄ cos(w₅x + w₆) + w₇ eˣ/20 + w₈ ln(x+4) + w₉ (x/3)⁴ + w₁₀ (x/3)² + w₁₁ (x/3) + w₁₂',
-  names:['w₁','w₂','w₃','w₄','w₅','w₆','w₇','w₈','w₉','w₁₀','w₁₁','w₁₂'],
-  subs:['amplitude','frequency','phase','amplitude','frequency','phase','eˣ/20','ln(x+4)','(x/3)⁴','(x/3)²','x/3','1'],
-  groups:[{label:'w₁ sin(w₂x + w₃)', idx:[0,1,2]}, {label:'w₄ cos(w₅x + w₆)', idx:[3,4,5]}, {label:'the other terms', idx:[6,7,8,9,10,11]}],
+  eq:'y = w\u2081 sin(w\u2082x + w\u2083) + w\u2084 cos(w\u2085x + w\u2086) + w\u2087 e\u02e3/20 + w\u2088 ln(x+4) + w\u2089 (x/3)\u2074 + w\u2081\u2080 (x/3)\u00b2 + w\u2081\u2081 (x/3) + w\u2081\u2082',
+  names:['w\u2081','w\u2082','w\u2083','w\u2084','w\u2085','w\u2086','w\u2087','w\u2088','w\u2089','w\u2081\u2080','w\u2081\u2081','w\u2081\u2082'],
+  subs:['amplitude','frequency','phase','amplitude','frequency','phase','e\u02e3/20','ln(x+4)','(x/3)\u2074','(x/3)\u00b2','x/3','1'],
+  groups:[{label:'w\u2081 sin(w\u2082x + w\u2083)', idx:[0,1,2]}, {label:'w\u2084 cos(w\u2085x + w\u2086)', idx:[3,4,5]}, {label:'the other terms', idx:[6,7,8,9,10,11]}],
   f:function(p, x){
     var u = x/3;
     return p[0]*Math.sin(p[1]*x + p[2]) + p[3]*Math.cos(p[4]*x + p[5]) +
@@ -297,10 +306,9 @@ var M12 = {
   }
 };
 M12.knobs = M12.names.map(function(nm, j){
-  var s = M12.subs[j];
-  return s === 'frequency' ? knob(nm, s, 0, 6) : s === 'phase' ? knob(nm, s, -3.2, 3.2) : knob(nm, s, -5, 5);
+  var sb = M12.subs[j];
+  return sb === 'frequency' ? knob(nm, sb, 0, 6) : sb === 'phase' ? knob(nm, sb, -3.2, 3.2) : knob(nm, sb, -5, 5);
 });
-function embed8(p8){ return [p8[0], 2, 0, p8[1], 3, 0, p8[2], p8[3], p8[4], p8[5], p8[6], p8[7]]; }
 var MODELS = {m8:M8, m12:M12};
 
 /* ---- loss: mean squared error over the 120 points ---- */
@@ -429,18 +437,19 @@ function randomStart12(seed){
 
 /* ---- measured constants (test/calibrate.js). Re-run it if the data or the models change. ---- */
 var START = {
-  m8:[0,0,0,0,0,0,0,0],
+  m8:[-1.52,1.06,1.7,-0.75,-1.88,-0.84,1.43,0.34],
   m12:{ A:[2.01,2.23,-2.87,-1.24,0.64,-2.27,-0.69,-1.88,0.72,-0.9,-0.6,-0.47],
-        B:[2.38,0.57,-2.76,1.49,1.05,-1.44,-1.02,1.58,-0.53,0.88,-1.05,-0.63],
-        C:[-1.71,4.31,1.76,0.9,0.9,1.76,-0.76,-1.48,-1.39,0.81,0.93,-0.4] }
+        B:[0.99,3.67,-2.11,1.38,2.55,-0.7,-1,-0.64,-0.34,-1.84,0.24,1.56],
+        C:[-1.83,5.17,0.61,-1.82,5.83,-2.35,-0.17,1.02,-1.02,-0.21,0.79,-0.11] }
 };
-var LR = { m8:{small:0.0002, good:0.3, large:0.6}, m12:{good:0.07} };
+var LR = { m8:{small:0.00002, good:0.5, large:1.2}, m12:{good:0.2} };
 
 return { DATA_VERSION:DATA_VERSION, DELTA:DELTA, DIVERGE:DIVERGE,
-  DATA:DATA, N:N, TRUTH8:TRUTH8, MODELS:MODELS, embed8:embed8, loss:loss, clamp:clamp, rngOf:rngOf,
+  DATA:DATA, N:N, TRUTH8:TRUTH8, MODELS:MODELS, loss:loss, clamp:clamp, rngOf:rngOf,
   numericalGradient:numericalGradient, step:step, runner:runner, run:run,
   lossCurve:lossCurve, slopeAt:slopeAt, lossGrid:lossGrid,
-  leastSquares8:leastSquares8, randomStart12:randomStart12, START:START, LR:LR };
+  leastSquares8:leastSquares8, randomStart12:randomStart12, START:START, LR:LR,
+  CENTERS:CENTERS, SIGMA:SIGMA };
 })();
 </script>
 
@@ -543,33 +552,56 @@ function makeKnob(spec, onInput, small){
   var zeroRef = clamp(0, spec.min, spec.max);
   var ang = function(v){ return A0 + (v - spec.min)/(spec.max - spec.min)*(A1 - A0); };
 
+  var gArc  = sv('path',{class:'k-grad', d:''});
+  var gTick = sv('line',{class:'k-gtick', x1:50, y1:50, x2:50, y2:50});
   var track = sv('path',{class:'k-track', d:arcPath(50,50,40,A0,A1)});
   var vpath = sv('path',{class:'k-val', d:''});
   var face  = sv('circle',{class:'k-face', cx:50, cy:50, r:29});
   var ind   = sv('line',{class:'k-ind', x1:50, y1:35, x2:50, y2:20});
   var hub   = sv('circle',{class:'k-hub', cx:50, cy:50, r:5});
   var svg = sv('svg',{viewBox:'0 0 100 100'});
-  [track, vpath, face, ind, hub].forEach(function(n){ svg.appendChild(n); });
+  [track, vpath, gArc, gTick, face, ind, hub].forEach(function(n){ svg.appendChild(n); });
   var dial = h('div',{class:'kdial'}); dial.appendChild(svg);
 
   var valEl = h('div',{class:'kval', text:'0'});
   var minus = h('button',{class:'kstep', type:'button', 'aria-label':'decrease', text:'−'});
   var plus  = h('button',{class:'kstep', type:'button', 'aria-label':'increase', text:'+'});
+  var slopeEl = h('div',{class:'kslope'});
   var info = h('div',{class:'kinfo'},[
     h('div',{class:'klabel'},[spec.name, h('span',{text:spec.sub})]),
-    h('div',{class:'kvalrow'},[minus, valEl, plus])
+    h('div',{class:'kvalrow'},[minus, valEl, plus]),
+    slopeEl
   ]);
   var el = h('div',{
     class:'knob' + (small ? ' sm' : ''), tabindex:'0', role:'slider',
     'aria-label': spec.name + ' ' + spec.sub, 'aria-valuemin': spec.min, 'aria-valuemax': spec.max
   }, [dial, info]);
 
+  /* the slope mark: an arc from the current angle towards where w - lr x slope would go,
+     as long as this knob's |slope| is large next to the largest one in the gradient */
+  var gSlope = null, gMax = 0;
+  function paintSlope(){
+    if(gSlope === null || !isFinite(gSlope)){
+      gArc.setAttribute('d', ''); gTick.setAttribute('x2', 50); gTick.setAttribute('y2', 50);
+      slopeEl.textContent = '';
+      return;
+    }
+    var a0 = ang(value);
+    var span = 70*(gMax > 0 ? Math.min(1, Math.abs(gSlope)/gMax) : 0);
+    var a1 = clamp(a0 + (gSlope > 0 ? -span : span), A0 - 6, A1 + 6);
+    gArc.setAttribute('d', arcPath(50, 50, 47, a0, a1));
+    var t0 = polar(50, 50, 44.5, a1), t1 = polar(50, 50, 48.8, a1);
+    gTick.setAttribute('x1', t0[0].toFixed(2)); gTick.setAttribute('y1', t0[1].toFixed(2));
+    gTick.setAttribute('x2', t1[0].toFixed(2)); gTick.setAttribute('y2', t1[1].toFixed(2));
+    slopeEl.textContent = 'slope ' + (gSlope >= 0 ? '+' : '') + fmt(gSlope, 3);
+  }
   function paint(){
     var a = ang(value);
     vpath.setAttribute('d', arcPath(50,50,40, ang(zeroRef), a));
     ind.setAttribute('transform', 'rotate(' + a.toFixed(2) + ' 50 50)');
     valEl.textContent = fmtP(value, spec.step);
     el.setAttribute('aria-valuenow', value.toFixed(3));
+    paintSlope();
   }
   var api = {
     spec:spec, el:el,
@@ -584,7 +616,13 @@ function makeKnob(spec, onInput, small){
       raw = value = clamp(v, spec.min, spec.max);
       paint(); if(fire !== false) onInput();
     },
-    nudge:function(mult){ api.setRaw(value + spec.step*mult, true); }
+    nudge:function(mult){ api.setRaw(value + spec.step*mult, true); },
+    setSlope:function(slope, maxAbs, stale){
+      gSlope = (slope === null || slope === undefined) ? null : slope;
+      gMax = maxAbs || 0;
+      el.classList.toggle('stale', !!stale);
+      paintSlope();
+    }
   };
   var last = null;
   dial.addEventListener('pointerdown', function(e){
@@ -799,6 +837,13 @@ function makeKnobs(model, box, onInput){
   });
 }
 function syncKnobs(knobs, p){ knobs.forEach(function(k, j){ k.setLoose(p[j]); }); }
+/* put the measured gradient on the dials: each knob shows which way the rule would turn it */
+function showSlopes(knobs, grad, stale){
+  var maxAbs = 0;
+  grad.slopes.forEach(function(s){ if(isFinite(s) && Math.abs(s) > maxAbs) maxAbs = Math.abs(s); });
+  knobs.forEach(function(k, j){ if(k) k.setSlope(grad.slopes[j], maxAbs, stale); });
+}
+function clearSlopes(knobs){ knobs.forEach(function(k){ if(k) k.setSlope(null); }); }
 function knobValues(knobs){ return knobs.map(function(k){ return k.loose !== undefined ? k.loose : k.value; }); }
 
 function makeCounter(tabNo){
@@ -885,14 +930,14 @@ function makeThumbs(model, getP, onPick, opts){
 }
 
 /* ---------- Tab 1: One knob at a time ---------- */
-var DELTAS = [1, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001];
+var DELTAS = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1];   /* the slider grows to the right */
 function tab1(){
   var root = h('section',{class:'stage', id:'stage1'}), m = MODELS.m8;
-  var sel = 0, deltaIdx = 0, zoom = 0;          /* zoom 0 = full range, 1 = ±0.05 around the point */
+  var sel = 5, deltaIdx = DELTAS.length - 1, zoom = 0;   /* delta starts at 1; zoom 0 = full range, 1 = ±0.05 */
   var secant = true;                            /* the capture script turns the two points off for the first slide */
   var cv = h('canvas'), knobBox = h('div',{class:'knobs two'}), knobs;
   var chips = h('div',{class:'chips'});
-  var deltaIn = h('input',{type:'range', min:0, max:DELTAS.length - 1, step:1, value:0});
+  var deltaIn = h('input',{type:'range', min:0, max:DELTAS.length - 1, step:1, value:deltaIdx});
   var deltaVal = h('span',{class:'val'});
   var zoomIn = h('input',{type:'range', min:0, max:100, step:1, value:0});
   var zoomVal = h('span',{class:'val', text:'full'});
@@ -930,13 +975,20 @@ function tab1(){
     if(zoom === 0) return [spec.min, spec.max];
     return [state.p8[sel] - half, state.p8[sel] + half];
   }
-  var last = {};
+  var last = {}, cache = null, measured = null;
   function update(knobsMoved){
     var p = state.p8, spec = m.knobs[sel], r = range();
-    var curve = GD.lossCurve(m, p, sel, r[0], r[1], 241);
-    var L0 = GD.loss(m, p), q = p.slice(); q[sel] = p[sel] + delta();
-    var L1 = GD.loss(m, q), slope = (L1 - L0)/delta(), tangent = GD.slopeAt(m, p, sel, 1e-6);
-    counter.bump(2);                      /* the two loss computations the slope needs */
+    var key = sel + '|' + r[0] + '|' + r[1] + '|' + p.join(',');
+    if(!cache || cache.key !== key){
+      cache = {key:key, curve:GD.lossCurve(m, p, sel, r[0], r[1], 241),
+               L0:GD.loss(m, p), tangent:GD.slopeAt(m, p, sel, 1e-6)};
+    }
+    var curve = cache.curve, L0 = cache.L0, tangent = cache.tangent;
+    var q = p.slice(); q[sel] = p[sel] + delta();
+    var L1 = GD.loss(m, q), slope = (L1 - L0)/delta();
+    /* the counter follows the measurement, not the picture: zooming costs nothing */
+    var mkey = sel + '|' + p.join(',') + '|' + delta();
+    if(measured !== mkey){ measured = mkey; counter.bump(2); }
     last = {slope:slope, tangent:tangent};
     drawCurve(cv, {curve:curve, name:spec.name, sub:spec.sub, xLo:r[0], xHi:r[1], x0:p[sel], L0:L0, x1:q[sel], L1:L1, slope:slope, tangent:secant ? tangent : undefined, showSecant:secant});
     deltaVal.textContent = 'Δ = ' + delta();
@@ -948,8 +1000,13 @@ function tab1(){
       '<span style="color:var(--muted)">slope at Δ → 0: ' + fmt(tangent, 3) + '</span>';
     if(knobsMoved !== false) thumbs.draw();
   }
-  deltaIn.addEventListener('input', function(){ deltaIdx = +deltaIn.value; update(false); });
-  zoomIn.addEventListener('input', function(){ zoom = zoomIn.value/100; update(false); });
+  var pending = 0;
+  function requestUpdate(){
+    if(pending) return;
+    pending = requestAnimationFrame(function(){ pending = 0; update(false); });
+  }
+  deltaIn.addEventListener('input', function(){ deltaIdx = +deltaIn.value; requestUpdate(); });
+  zoomIn.addEventListener('input', function(){ zoom = zoomIn.value/100; requestUpdate(); });
   resetBtn.addEventListener('click', function(){ state.p8 = GD.START.m8.slice(); syncKnobs(knobs, state.p8); counter.reset(); update(true); });
   window.GDUI.hooks.tab1 = {
     pickKnob:pick,
@@ -1022,21 +1079,25 @@ function tab2(){
   root.appendChild(h('div',{class:'head'},[h('h2',{text:'Nudge every knob by Δ and measure the loss again'}), h('span',{class:'eq', style:'font-size:.95rem', text:'slope = (Loss(w + Δ) − Loss(w)) / Δ,   Δ = 0.001'})]));
   root.appendChild(h('div',{class:'work three'},[
     h('div',{class:'plots'},[h('div',{class:'card'},[h('h3',{text:'Data (blue), your curve (orange), residuals (green)'}), cv])]),
-    h('div',{class:'side'},[knobBox, h('div',{class:'btns'},[measureBtn, resetBtn]), score, counter.el]),
+    h('div',{class:'side'},[knobBox, h('div',{class:'tip', text:'After measuring, the red mark on each dial shows which way the rule would turn that knob, and how far next to the other knobs.'}), h('div',{class:'btns'},[measureBtn, resetBtn]), score, counter.el]),
     h('div',{class:'side'},[h('div',{class:'card', id:'stage2-table'},[h('h3',{text:'The gradient: one slope per knob'}), table.el])])
   ]));
   knobs = makeKnobs(m, knobBox, function(){ state.p8 = knobValues(knobs); moved(); });
   function draw(){ geom = drawPlot(cv, {ds:DS8, pts:GD.DATA, model:m, params:state.p8, showResid:true, hover:hover}); }
   function paintScore(){ score.innerHTML = '<div class="lbl">Loss: mean squared error</div><div class="big">' + fmtLoss(GD.loss(m, state.p8)) + '</div>'; }
-  function moved(){ paintScore(); draw(); if(lastGrad) table.setStale('Position changed. Measure again.'); }
+  function moved(){
+    paintScore(); draw();
+    if(lastGrad){ table.setStale('Position changed. Measure again.'); showSlopes(knobs, lastGrad, true); }
+  }
   function measure(){
     lastGrad = GD.numericalGradient(m, state.p8, GD.DELTA);
     counter.bump(lastGrad.evals);
     table.show(lastGrad, state.p8, true);
+    showSlopes(knobs, lastGrad, false);
     return lastGrad;
   }
   measureBtn.addEventListener('click', measure);
-  resetBtn.addEventListener('click', function(){ state.p8 = GD.START.m8.slice(); syncKnobs(knobs, state.p8); lastGrad = null; table.clear(); counter.reset(); paintScore(); draw(); });
+  resetBtn.addEventListener('click', function(){ state.p8 = GD.START.m8.slice(); syncKnobs(knobs, state.p8); lastGrad = null; table.clear(); clearSlopes(knobs); counter.reset(); paintScore(); draw(); });
   attachHover(cv, function(){ return GD.DATA; }, function(){ return geom; }, function(i){ hover = i; draw(); });
   window.GDUI.hooks.tab2 = {
     measure:measure,
@@ -1050,7 +1111,7 @@ function tab2(){
 
 /* ---------------- learning rate slider: log scale 1e-4 .. 1, with preset chips ---------------- */
 function makeLrSlider(presets, initial, onChange){
-  var LO = -4, HI = 0, inp = h('input',{type:'range', min:0, max:1000, step:1});
+  var LO = -5, HI = 1, inp = h('input',{type:'range', min:0, max:1000, step:1});
   var val = h('span',{class:'val'}), chips = h('div',{class:'chips'}), value = initial;
   function toV(t){ return Math.pow(10, LO + (HI - LO)*t/1000); }
   function toT(v){ return Math.round((Math.log(v)/Math.LN10 - LO)/(HI - LO)*1000); }
@@ -1257,7 +1318,7 @@ function tab3(){
   var chart = h('canvas'), score = h('div',{class:'score'});
   var table = makeGradTable(m);
   var runs = [];                                 /* finished loss histories, greyed on the chart (max 3) */
-  var map = makeMapPanel(m, function(){ return state.p8; }, {a:0, b:3, id:'stage3-map'});
+  var map = makeMapPanel(m, function(){ return state.p8; }, {a:4, b:5, id:'stage3-map'});
   var knobs = makeKnobs(m, knobBox, function(){
     state.p8 = knobValues(knobs); stepper.setP(state.p8);
     if(stepper.S().grad) table.setStale('Position changed. Measure again.');
@@ -1265,7 +1326,7 @@ function tab3(){
   var stepper = makeStepper(m, 3, {
     p0:GD.START.m8, lr:GD.LR.m8.good, onChange:onChange,
     onArchive:function(history, path){ runs.push(history); if(runs.length > 3) runs.shift(); map.keep(path); },
-    onReset:function(){ table.clear(); }
+    onReset:function(){ table.clear(); clearSlopes(knobs); }
   });
   var lr = makeLrSlider(GD.LR.m8, GD.LR.m8.good, function(v){ stepper.setLr(v); });
   root.appendChild(h('div',{class:'head'},[h('h2',{text:'Measure, step, measure, step'}), h('span',{class:'k', text:'After every step the gradient belongs to the old position. Measure it again.'})]));
@@ -1286,8 +1347,9 @@ function tab3(){
   function onChange(S){
     state.p8 = S.p.slice(); syncKnobs(knobs, state.p8);
     score.innerHTML = '<div class="lbl">Loss: mean squared error</div><div class="big">' + fmtLoss(S.history[S.history.length - 1]) + '</div>';
-    if(S.grad && !S.stale) table.showPair(S.prevGrad, S.grad, S.p);
-    else if(S.grad && S.stale) table.setStale('Gradient is from the old position. Measure again.');
+    if(S.grad && !S.stale){ table.showPair(S.prevGrad, S.grad, S.p); showSlopes(knobs, S.grad, false); }
+    else if(S.grad && S.stale){ table.setStale('Gradient is from the old position. Measure again.'); showSlopes(knobs, S.grad, true); }
+    else clearSlopes(knobs);
     draw();
     drawLossChart(chart, {series:runs.map(function(hh){ return {history:hh, color:C.muted, width:1.5}; }).concat([{history:S.history, color:C.model, width:2.5}])});
     if(S.steps !== lastSteps || !(stepper && stepper.running())){ map.update(S.path, S.grad && !S.stale ? S.grad : null); lastSteps = S.steps; }
@@ -1295,7 +1357,7 @@ function tab3(){
   attachHover(cv, function(){ return GD.DATA; }, function(){ return geom; }, function(i){ hover = i; draw(); });
   window.GDUI.hooks.tab3 = {
     measure:function(){ stepper.measure(); }, step:stepper.takeStep, run:function(n){ stepper.run(n); }, stop:stepper.stop,
-    reset:function(){ runs = []; map.reset(); table.clear(); stepper.reset(GD.START.m8); runs = []; map.reset(); },
+    reset:function(){ runs = []; map.reset(); table.clear(); clearSlopes(knobs); stepper.reset(GD.START.m8); runs = []; map.reset(); },
     setLr:function(v){ lr.set(v); },
     setKnob:function(j, v){ state.p8[j] = v; syncKnobs(knobs, state.p8); stepper.setP(state.p8); },
     stepDisabled:stepper.stepDisabled,
@@ -1368,7 +1430,7 @@ function tab4(){
     startRow.querySelectorAll('.ds').forEach(function(b){ b.classList.toggle('active', b.dataset.n === name); });
     state.p12 = p0.slice();
     stepper.reset(p0);          /* the finished path stays on the map in grey */
-    table.clear(); thumbs.draw();
+    table.clear(); clearSlopes(knobs); thumbs.draw();
   }
   function draw(){ geom = drawPlot(cv, {ds:DS8, pts:GD.DATA, model:m, params:state.p12, showResid:true, hover:hover}); }
   function addRecord(S){
@@ -1386,8 +1448,9 @@ function tab4(){
   function onChange(S){
     state.p12 = S.p.slice(); knobs.forEach(function(k, j){ k.setLoose(state.p12[j]); });
     score.innerHTML = '<div class="lbl">Loss: mean squared error</div><div class="big">' + fmtLoss(S.history[S.history.length - 1]) + '</div>';
-    if(S.grad && !S.stale) table.showPair(S.prevGrad, S.grad, S.p);
-    else if(S.grad && S.stale) table.setStale('Gradient is from the old position. Measure again.');
+    if(S.grad && !S.stale){ table.showPair(S.prevGrad, S.grad, S.p); showSlopes(knobs, S.grad, false); }
+    else if(S.grad && S.stale){ table.setStale('Gradient is from the old position. Measure again.'); showSlopes(knobs, S.grad, true); }
+    else clearSlopes(knobs);
     draw();
     if(S.steps !== lastSteps || !running()){ map.update(S.path, S.grad && !S.stale ? S.grad : null); lastSteps = S.steps; }
     if(wasRunning && !running() && S.steps > 0){ addRecord(S); thumbs.draw(); }

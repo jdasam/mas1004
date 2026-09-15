@@ -60,7 +60,7 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,58fr) minma
 #patchCard{display:flex;flex-direction:column;min-height:0;gap:6px}
 .phead{display:flex;align-items:baseline;gap:6px 18px;flex-wrap:wrap}
 .help{font-size:.95rem;color:var(--sub)}
-.help b{color:var(--ink);font-weight:600}
+.help b{color:var(--ink);font-weight:600;white-space:nowrap}
 /* the status message floats over the top of the patch so the canvas never jumps when it appears */
 .status{position:absolute;left:10px;top:8px;max-width:calc(100% - 20px);z-index:2;pointer-events:none;
   font-size:1rem;font-weight:600;color:var(--ink);background:rgba(255,255,255,.94);border:1px solid var(--rule);border-radius:8px;padding:3px 10px}
@@ -159,6 +159,7 @@ kbd{font:600 .8em ui-monospace,Menlo,monospace;border:1px solid var(--rule2);bor
 .phit{fill:transparent;cursor:crosshair}
 .phit.pin{cursor:crosshair}
 .tmpwire{fill:none;stroke:#0b0b0b;stroke-width:3;stroke-dasharray:9 6;pointer-events:none}
+.marquee{fill:rgba(42,120,214,.06);stroke:#2a78d6;stroke-width:1.6;stroke-dasharray:7 5;pointer-events:none}
 .node.dead .nbody{stroke:#8a8985;stroke-dasharray:7 5}
 .node.dead.sel .nbody{stroke:#0b0b0b}
 .ndeadbg{fill:#fff;stroke:#8a8985;stroke-width:1;pointer-events:none}
@@ -206,7 +207,7 @@ kbd{font:600 .8em ui-monospace,Menlo,monospace;border:1px solid var(--rule2);bor
 <main id="main">
   <section class="card" id="patchCard">
     <div class="phead">
-      <div class="help"><b>Add</b>: double-click the canvas or press + Neuron. <b>Connect</b>: drag from a right dot to a left dot. <b>Delete</b>: select a neuron or wire and press <kbd>Delete</kbd>.</div>
+      <div class="help"><b>Add</b>: double-click the canvas or press + Neuron. <b>Connect</b>: drag from a right dot to a left dot. <b>Delete</b>: select a neuron or wire and press <kbd>Delete</kbd>. <b>Select several</b>: <kbd>Shift</kbd>+click or drag a box on empty space.</div>
     </div>
     <div id="patchWrap"><svg id="patch" xmlns="http://www.w3.org/2000/svg"></svg><div class="status" id="status"></div></div>
   </section>
@@ -1051,7 +1052,7 @@ var ADAM_LR = 0.02;
 var S = {
   g:null, preset:'line', lr:0.1, opt:QP.opt === 'adam' ? 'adam' : 'gd', adam:null,
   grad:null, gradMax:0, stale:true, steps:0, history:[], running:false, speed:10,
-  diverged:false, sel:null, showNeurons:false, structVer:0,
+  diverged:false, sel:null, msel:[], showNeurons:false, structVer:0,
   seed:1, base:null, baseSig:'', presetSig:'', tooBig:false, runEntry:null
 };
 var NEW_BIAS = 0.5;   /* a new neuron's bias: 0 would put every new ReLU's kink at x = 0 */
@@ -1087,7 +1088,7 @@ function setMsg(text, bad){
 var HIST_MAX = 200, UH = {undo:[], redo:[], coalesce:null};
 function snapshot(label){
   return {g:NP.clone(S.g), preset:S.preset, steps:S.steps, hist:S.history, histLen:S.history.length,
-          sel:S.sel ? S.sel.id : null, label:label};
+          sel:S.sel ? S.sel.id : null, msel:S.msel.slice(), label:label};
 }
 function paintHistButtons(){
   el.undoBtn.disabled = !UH.undo.length;
@@ -1121,7 +1122,7 @@ function paintPresetChips(){
   el.presets.querySelectorAll('.ds').forEach(function(b){ b.classList.toggle('active', b.dataset.key === S.preset); });
 }
 function restoreEntry(en){
-  var keep = S.sel ? S.sel.id : null;
+  var keep = S.sel ? S.sel.id : null, keepN = S.msel.slice();
   S.g = NP.clone(en.g); S.preset = en.preset; S.steps = en.steps;
   S.history = en.hist.slice(0, en.histLen);
   if(!S.history.length) S.history = [currentLoss()];
@@ -1132,14 +1133,20 @@ function restoreEntry(en){
   S.structVer++;
   S.presetSig = graphSig(NP.buildPreset(S.preset)); S.baseSig = S.presetSig; S.base = null;
   var exists = function(id){ return !!id && !!(NP.getNode(S.g, id) || NP.getEdge(S.g, id)); };
-  S.sel = null;
-  select(exists(keep) ? keep : (exists(en.sel) ? en.sel : null));
+  S.sel = null; S.msel = [];
+  /* keep what is selected now if it still exists, otherwise bring back the selection of that moment */
+  if(liveNodes(keepN).length) setNodeSel(keepN);
+  else if(exists(keep)) select(keep);
+  else if(en.msel && liveNodes(en.msel).length >= 2) setNodeSel(en.msel);
+  else select(exists(en.sel) ? en.sel : null);
   paintPresetChips();
   render();
   syncInspector(true);
 }
 function undo(){
   var en = null;
+  /* an undo in the middle of a drag ends that drag, so the rest of it cannot slip past the history */
+  if(drag){ drag = null; empty(gTemp); }
   if(S.running){
     stopRun();
     var ri = S.runEntry ? UH.undo.indexOf(S.runEntry) : -1;
@@ -1157,6 +1164,7 @@ function undo(){
   return true;
 }
 function redo(){
+  if(drag){ drag = null; empty(gTemp); }
   if(S.running) stopRun();
   if(!UH.redo.length){ setMsg('Nothing to redo.'); paintHistButtons(); return false; }
   var en = UH.redo.pop();
@@ -1182,17 +1190,31 @@ function edited(structural){
   if(structural) pruneGrad();
   S.diverged = isBad(currentLoss()) && S.diverged;
   if(structural) S.structVer++;
+  if(S.msel.length && liveNodes(S.msel).length !== S.msel.length) setNodeSel(S.msel);
   if(S.sel){
     var gone = S.sel.type === 'node' ? !NP.getNode(S.g, S.sel.id) : !NP.getEdge(S.g, S.sel.id);
-    if(gone) S.sel = null;
+    if(gone){ S.sel = null; S.msel = []; }
   }
   requestRender();
 }
+/* The selection: S.msel lists the selected nodes in graph order. S.sel is {type:'node'} when exactly one
+   node is selected, {type:'edge'} for a wire, and null when nothing or several nodes are selected. */
+function liveNodes(ids){
+  return S.g.nodes.filter(function(n){ return ids.indexOf(n.id) >= 0; }).map(function(n){ return n.id; });
+}
+function setNodeSel(ids){
+  S.msel = liveNodes(ids || []);
+  S.sel = S.msel.length === 1 ? {type:'node', id:S.msel[0]} : null;
+  requestRender();
+}
+function clearSel(){ S.sel = null; S.msel = []; requestRender(); }
+function isNodeSel(id){ return S.msel.indexOf(id) >= 0; }
+function selectionIds(){ return S.msel.length ? S.msel.slice() : (S.sel ? [S.sel.id] : []); }
 function select(id){
-  if(id === null || id === undefined){ S.sel = null; }
-  else if(NP.getNode(S.g, id)) S.sel = {type:'node', id:id};
-  else if(NP.getEdge(S.g, id)) S.sel = {type:'edge', id:id};
-  else S.sel = null;
+  if(id === null || id === undefined){ S.sel = null; S.msel = []; }
+  else if(NP.getNode(S.g, id)){ S.sel = {type:'node', id:id}; S.msel = [id]; }
+  else if(NP.getEdge(S.g, id)){ S.sel = {type:'edge', id:id}; S.msel = []; }
+  else { S.sel = null; S.msel = []; }
   requestRender();
 }
 function addNeuron(opts){
@@ -1200,7 +1222,7 @@ function addNeuron(opts){
   var en = record('Add neuron');
   var n = NP.addNeuron(S.g, {px:opts.px, py:opts.py, act:opts.act, bias:typeof opts.bias === 'number' ? opts.bias : NEW_BIAS});
   en.label = 'Add ' + n.name;
-  S.sel = {type:'node', id:n.id};
+  S.sel = {type:'node', id:n.id}; S.msel = [n.id];
   setMsg('Added ' + n.name + ' (' + NP.ACTS[n.act].label + '). Drag from a right dot to connect it.');
   edited(true);
   return n.id;
@@ -1226,21 +1248,83 @@ function connect(from, to){
   edited(true);
   return e.id;
 }
+function namesOf(ids){ return ids.map(nodeName).join(', '); }
+/* a list of names that stays short: N1, N2, N3 and 4 more */
+function shortNames(ids){ return ids.length <= 4 ? namesOf(ids) : namesOf(ids.slice(0, 3)) + ' and ' + (ids.length - 3) + ' more'; }
+function selNeurons(){ return S.msel.filter(function(id){ var n = NP.getNode(S.g, id); return n && n.kind === 'neuron'; }); }
 function removeSelection(){
+  if(S.msel.length >= 2){
+    var ids = selNeurons();
+    if(!ids.length){ setMsg('x and ŷ cannot be removed.', true); return false; }
+    var nms = shortNames(ids);
+    record(ids.length === 1 ? 'Remove ' + nodeName(ids[0]) : 'Remove ' + ids.length + ' neurons');
+    ids.forEach(function(id){ NP.removeNode(S.g, id); });
+    setMsg('Removed ' + nms + ' and ' + (ids.length === 1 ? 'its' : 'their') + ' wires.');
+    S.sel = null; S.msel = []; S.adam = NP.makeAdam(); edited(true);
+    return true;
+  }
   if(!S.sel) return false;
   if(S.sel.type === 'node'){
     if(S.sel.id === 'x' || S.sel.id === 'out'){ setMsg('x and ŷ cannot be removed.', true); return false; }
     var nm = nodeName(S.sel.id);
     if(!NP.getNode(S.g, S.sel.id)) return false;
     record('Remove ' + nm);
-    if(NP.removeNode(S.g, S.sel.id)){ setMsg('Removed ' + nm + ' and its wires.'); S.sel = null; S.adam = NP.makeAdam(); edited(true); return true; }
+    if(NP.removeNode(S.g, S.sel.id)){ setMsg('Removed ' + nm + ' and its wires.'); S.sel = null; S.msel = []; S.adam = NP.makeAdam(); edited(true); return true; }
   } else {
     var e = NP.getEdge(S.g, S.sel.id);
     if(!e) return false;
     record('Remove wire ' + nodeName(e.from) + ' → ' + nodeName(e.to));
-    if(NP.removeEdge(S.g, e.id)){ setMsg('Removed the wire ' + nodeName(e.from) + ' → ' + nodeName(e.to) + '.'); S.sel = null; S.adam = NP.makeAdam(); edited(true); return true; }
+    if(NP.removeEdge(S.g, e.id)){ setMsg('Removed the wire ' + nodeName(e.from) + ' → ' + nodeName(e.to) + '.'); S.sel = null; S.msel = []; S.adam = NP.makeAdam(); edited(true); return true; }
   }
   return false;
+}
+/* every pair [from, to] that is allowed becomes a wire; the rest are skipped and counted. One Undo entry. */
+function skipReason(from, to, reason){
+  if(from === to) return 'same neuron';
+  if(to === 'x') return 'into x';
+  if(from === 'out') return 'out of ŷ';
+  for(var i = 0; i < S.g.edges.length; i++) if(S.g.edges[i].from === from && S.g.edges[i].to === to) return 'already connected';
+  if(/loop/i.test(reason || '')) return 'would make a loop';
+  return 'not allowed';
+}
+function connectMany(pairs){
+  var snap = snapshot('Connect'), made = [], skips = {}, order = [], nskip = 0;
+  pairs.forEach(function(pr){
+    var chk = NP.canConnect(S.g, pr[0], pr[1]), e = chk.ok ? NP.connect(S.g, pr[0], pr[1]) : null;
+    if(e){ made.push(e); return; }
+    var why = skipReason(pr[0], pr[1], chk.reason);
+    if(!skips[why]){ skips[why] = 0; order.push(why); }
+    skips[why]++; nskip++;
+  });
+  var k = made.length;
+  var text = k ? 'Connected ' + k + ' wire' + (k === 1 ? '' : 's') : 'No new wires';
+  if(nskip) text += ', skipped ' + nskip + ' (' + order.map(function(w){ return order.length > 1 ? skips[w] + ' ' + w : w; }).join(', ') + ')';
+  setMsg(text, !k);
+  if(k){
+    snap.label = k === 1 ? 'Connect ' + edgeLabel(made[0]) : 'Connect ' + k + ' wires';
+    pushEntry(snap);
+    edited(true);
+  }
+  return k;
+}
+function setActMany(ids, key){
+  var nodes = ids.map(function(id){ return NP.getNode(S.g, id); }).filter(function(n){ return n && n.kind !== 'input' && n.act !== key; });
+  if(!NP.ACTS[key] || !nodes.length) return false;
+  record('Set ' + (nodes.length === 1 ? nodes[0].name : nodes.length + ' neurons') + ' to ' + NP.ACTS[key].label);
+  nodes.forEach(function(n){ NP.setAct(S.g, n.id, key); });
+  setMsg((nodes.length === 1 ? nodes[0].name + ' is' : nodes.length + ' neurons are') + ' now ' + NP.ACTS[key].label);
+  edited(false);
+  return true;
+}
+function randomizeMany(ids){
+  var list = ids.filter(function(id){ var n = NP.getNode(S.g, id); return n && n.kind === 'neuron'; });
+  if(!list.length) return false;
+  record('Randomize ' + (list.length === 1 ? nodeName(list[0]) : list.length + ' neurons'));
+  list.forEach(function(id){ NP.randomize(S.g, S.seed, id); S.seed++; });
+  S.adam = NP.makeAdam();
+  setMsg('New random weights for ' + shortNames(list));
+  edited(false);
+  return true;
 }
 function setWeight(id, w){ NP.setWeight(S.g, id, w); edited(false); }
 function setBias(id, b){ NP.setBias(S.g, id, b); edited(false); }
@@ -1399,7 +1483,7 @@ function loadPreset(key){
   S.adam = NP.makeAdam();
   S.grad = null; S.stale = true; S.steps = 0; S.diverged = false;
   S.history = [currentLoss()];
-  S.sel = null; S.structVer++;
+  S.sel = null; S.msel = []; S.structVer++;
   S.presetSig = graphSig(S.g); S.baseSig = S.presetSig; S.base = null; S.tooBig = false;
   paintPresetChips();
   setMsg('');
@@ -1407,7 +1491,7 @@ function loadPreset(key){
   return true;
 }
 function reset(){
-  var sel = S.sel;
+  var sel = S.sel, keepN = S.msel.slice();
   record('Reset');
   if(S.base){
     if(S.running) stopRun();
@@ -1416,13 +1500,14 @@ function reset(){
     S.grad = null; S.stale = true; S.steps = 0;
     S.diverged = isBad(currentLoss()); S.tooBig = S.diverged;
     S.history = [currentLoss()];
-    S.sel = null; S.structVer++;
+    S.sel = null; S.msel = []; S.structVer++;
     setMsg('Reset: your network as it was when training started.');
     render();
   } else {
     loadPreset(S.preset);
   }
-  if(sel) select(sel.id);
+  if(keepN.length >= 2) setNodeSel(keepN);
+  else if(sel) select(sel.id);
 }
 
 /* ---------------- patch geometry ---------------- */
@@ -1528,7 +1613,7 @@ function renderPatch(){
   var deadIds = deadList();
   g.nodes.forEach(function(n){
     var p = pos[n.id], l = p.x - NW/2, t = p.y - NH/2;
-    var sel = S.sel && S.sel.type === 'node' && S.sel.id === n.id, dead = deadIds.indexOf(n.id) >= 0;
+    var sel = isNodeSel(n.id), dead = deadIds.indexOf(n.id) >= 0;
     var grp = sv('g',{class:'node ' + n.kind + (sel ? ' sel' : '') + (dead ? ' dead' : ''), 'data-node':n.id});
     grp.appendChild(sv('rect',{class:'nbody', x:l, y:t, width:NW, height:NH, rx:10, 'data-role':'node', 'data-id':n.id}));
     grp.appendChild(sv('text',{class:'nname', x:l + 12, y:t + 22}, n.name));
@@ -1565,16 +1650,35 @@ function renderPatch(){
   });
   renderTemp();
 }
+function hasOutlet(id){ var n = NP.getNode(S.g, id); return !!n && n.kind !== 'output'; }
+function hasInlet(id){ var n = NP.getNode(S.g, id); return !!n && n.kind !== 'input'; }
 function renderTemp(){
   empty(gTemp);
-  if(!drag || drag.mode !== 'connect') return;
-  var n = NP.getNode(S.g, drag.from || drag.to);
-  if(!n) return;
-  var c = toPx(n), x1 = c.x + NW/2, y1 = c.y, x2 = drag.x, y2 = drag.y;
-  /* dragging backwards from a left dot: the wire runs from the pointer into that dot */
-  if(!drag.from){ x1 = drag.x; y1 = drag.y; x2 = c.x - NW/2; y2 = c.y; }
-  var dx = Math.max(40, Math.abs(x2 - x1)*0.5);
-  gTemp.appendChild(sv('path',{class:'tmpwire', d:'M' + x1 + ' ' + y1 + ' C' + (x1 + dx) + ' ' + y1 + ' ' + (x2 - dx) + ' ' + y2 + ' ' + x2 + ' ' + y2}));
+  if(!drag) return;
+  if(drag.mode === 'marquee'){
+    if(!drag.moved) return;
+    gTemp.appendChild(sv('rect',{class:'marquee', x:Math.min(drag.x0, drag.x), y:Math.min(drag.y0, drag.y),
+      width:Math.abs(drag.x - drag.x0), height:Math.abs(drag.y - drag.y0)}));
+    return;
+  }
+  if(drag.mode !== 'connect') return;
+  var anchor = drag.from || drag.to, ids = [anchor];
+  /* dragging from a dot of a selected node draws a wire from (or into) every selected node */
+  if(S.msel.length >= 2 && isNodeSel(anchor)) ids = S.msel.filter(drag.from ? hasOutlet : hasInlet);
+  ids.forEach(function(id){
+    var n = NP.getNode(S.g, id);
+    if(!n) return;
+    var c = toPx(n), x1 = c.x + NW/2, y1 = c.y, x2 = drag.x, y2 = drag.y;
+    /* dragging backwards from a left dot: the wire runs from the pointer into that dot */
+    if(!drag.from){ x1 = drag.x; y1 = drag.y; x2 = c.x - NW/2; y2 = c.y; }
+    var dx = Math.max(40, Math.abs(x2 - x1)*0.5);
+    gTemp.appendChild(sv('path',{class:'tmpwire', d:'M' + x1 + ' ' + y1 + ' C' + (x1 + dx) + ' ' + y1 + ' ' + (x2 - dx) + ' ' + y2 + ' ' + x2 + ' ' + y2}));
+  });
+}
+/* nodes whose center lies inside the marquee */
+function nodesInBox(x0, y0, x1, y1){
+  var lx = Math.min(x0, x1), hx = Math.max(x0, x1), ly = Math.min(y0, y1), hy = Math.max(y0, y1);
+  return S.g.nodes.filter(function(n){ var c = toPx(n); return c.x >= lx && c.x <= hx && c.y >= ly && c.y <= hy; }).map(function(n){ return n.id; });
 }
 
 /* ---------------- patch interaction ---------------- */
@@ -1587,6 +1691,9 @@ function roleOf(target){
 svg.addEventListener('pointerdown', function(e){
   if(e.button !== 0) return;
   var r = roleOf(e.target), p = svgPoint(e);
+  /* preventDefault keeps focus where it was, so let go of a knob here or Delete would stay ignored */
+  var ae = document.activeElement;
+  if(ae && ae.closest && ae.closest('.knob') && ae.blur) ae.blur();
   e.preventDefault();
   if(r.role === 'outlet'){
     drag = {mode:'connect', from:r.id, x0:p.x, y0:p.y, x:p.x, y:p.y, moved:false};
@@ -1595,16 +1702,29 @@ svg.addEventListener('pointerdown', function(e){
     drag = {mode:'connect', to:r.id, x0:p.x, y0:p.y, x:p.x, y:p.y, moved:false};
     renderTemp();
   } else if(r.role === 'node'){
-    var n = NP.getNode(S.g, r.id), c = toPx(n);
-    drag = {mode:'move', id:r.id, dx:p.x - c.x, dy:p.y - c.y, x0:p.x, y0:p.y, moved:false, snap:snapshot('Move ' + n.name), rec:false};
-    if(!S.sel || S.sel.id !== r.id) select(r.id);
+    var n = NP.getNode(S.g, r.id), add = e.shiftKey || e.ctrlKey || e.metaKey, inSel = isNodeSel(r.id), group = false;
+    if(add){
+      /* Shift (or Ctrl, Cmd) + click adds the node to the selection or takes it out */
+      if(inSel){ setNodeSel(S.msel.filter(function(id){ return id !== r.id; })); return; }
+      setNodeSel(S.msel.concat([r.id]));
+    } else if(inSel && S.msel.length >= 2){
+      group = true;   /* a drag moves the whole selection; a click without moving selects just this node */
+    } else if(!S.sel || S.sel.id !== r.id){
+      select(r.id);
+    }
+    var ids = S.msel.length ? S.msel.slice() : [r.id];
+    var starts = ids.map(function(id){ var m = NP.getNode(S.g, id); return {id:id, px:m.px, py:m.py}; });
+    drag = {mode:'move', id:r.id, starts:starts, group:group, x0:p.x, y0:p.y, moved:false,
+            snap:snapshot(ids.length === 1 ? 'Move ' + n.name : 'Move ' + ids.length + ' neurons'), rec:false};
   } else if(r.role === 'nbox'){
     var ed = NP.getEdge(S.g, r.id);
     drag = {mode:'nbox', id:r.id, x0:p.x, y0:p.y, lastY:p.y, raw:ed.w, moved:false, snap:snapshot('Change w ' + edgeLabel(ed)), rec:false};
   } else if(r.role === 'wire'){
     select(r.id);
   } else {
-    if(S.sel) select(null);
+    /* empty canvas: a drag draws a selection box, a click (on release, without moving) clears the selection */
+    var additive = e.shiftKey || e.ctrlKey || e.metaKey;
+    drag = {mode:'marquee', x0:p.x, y0:p.y, x:p.x, y:p.y, moved:false, add:additive, base:additive ? S.msel.slice() : []};
   }
 });
 window.addEventListener('pointermove', function(e){
@@ -1613,12 +1733,29 @@ window.addEventListener('pointermove', function(e){
   if(Math.abs(p.x - drag.x0) + Math.abs(p.y - drag.y0) > 4) drag.moved = true;
   if(drag.mode === 'move'){
     if(!drag.moved) return;
-    var n = NP.getNode(S.g, drag.id);
-    if(!n) return;
-    var q = fromPx(p.x - drag.dx, p.y - drag.dy);
-    if(!drag.rec && (q.px !== n.px || q.py !== n.py)){ pushEntry(drag.snap); drag.rec = true; }
-    n.px = q.px; n.py = q.py;
+    /* every moving node shifts by the same delta, limited so that all of them stay inside the canvas */
+    var ddx = (p.x - drag.x0)/Math.max(1, PW - 2*MX), ddy = (p.y - drag.y0)/Math.max(1, PH - 2*MY);
+    var loX = Infinity, hiX = -Infinity, loY = Infinity, hiY = -Infinity;
+    drag.starts.forEach(function(s0){ loX = Math.min(loX, s0.px); hiX = Math.max(hiX, s0.px); loY = Math.min(loY, s0.py); hiY = Math.max(hiY, s0.py); });
+    ddx = clamp(ddx, -loX, 1 - hiX); ddy = clamp(ddy, -loY, 1 - hiY);
+    var changed = false;
+    drag.starts.forEach(function(s0){
+      var m = NP.getNode(S.g, s0.id);
+      if(m && (m.px !== clamp(s0.px + ddx, 0, 1) || m.py !== clamp(s0.py + ddy, 0, 1))) changed = true;
+    });
+    if(!changed) return;
+    if(!drag.rec){ pushEntry(drag.snap); drag.rec = true; }
+    drag.starts.forEach(function(s0){
+      var m = NP.getNode(S.g, s0.id);
+      if(m){ m.px = clamp(s0.px + ddx, 0, 1); m.py = clamp(s0.py + ddy, 0, 1); }
+    });
     requestRender();
+  } else if(drag.mode === 'marquee'){
+    if(!drag.moved) return;
+    drag.x = clamp(p.x, 0, PW); drag.y = clamp(p.y, 0, PH);
+    var want = liveNodes(drag.base.concat(nodesInBox(drag.x0, drag.y0, drag.x, drag.y)));
+    if(want.join(',') !== S.msel.join(',') || (S.sel && S.sel.type === 'edge')) setNodeSel(want);
+    renderTemp();
   } else if(drag.mode === 'connect'){
     drag.x = p.x; drag.y = p.y;
     renderTemp();
@@ -1642,13 +1779,27 @@ window.addEventListener('pointerup', function(e){
   if(d.mode === 'connect'){
     empty(gTemp);
     if(d.moved){
-      var target = nodeAt(p);
+      var target = nodeAt(p), T = target ? target.id : null, grp = S.msel.length >= 2, pairs = null;
+      var mk = function(list, fn){ return list.map(fn); };
       /* dropping back on the same box is a shaky click, not a request: cancel quietly */
-      if(target && d.from && target.id !== d.from) connect(d.from, target.id);
-      else if(target && d.to && target.id !== d.to) connect(target.id, d.to);
+      if(T && d.from && T !== d.from){
+        if(grp && isNodeSel(d.from)) pairs = mk(S.msel.filter(hasOutlet), function(s){ return [s, T]; });
+        else if(grp && isNodeSel(T)) pairs = mk(S.msel.filter(hasInlet), function(t){ return [d.from, t]; });
+        else connect(d.from, T);
+      } else if(T && d.to && T !== d.to){
+        if(grp && isNodeSel(d.to)) pairs = mk(S.msel.filter(hasInlet), function(t){ return [T, t]; });
+        else if(grp && isNodeSel(T)) pairs = mk(S.msel.filter(hasOutlet), function(s){ return [s, d.to]; });
+        else connect(T, d.to);
+      }
+      if(pairs) connectMany(pairs);
     }
   } else if(d.mode === 'nbox'){
     if(!d.moved) select(d.id);
+  } else if(d.mode === 'move'){
+    if(!d.moved && d.group) select(d.id);
+  } else if(d.mode === 'marquee'){
+    if(!d.moved && !d.add && (S.sel || S.msel.length)) clearSel();
+    empty(gTemp);
   }
 });
 svg.addEventListener('dblclick', function(e){
@@ -1782,12 +1933,41 @@ function addKnob(box, kind, id, name, sub){
 }
 function edgeLabel(e){ return nodeName(e.from) + ' → ' + nodeName(e.to); }
 function buildInspector(){
-  var key = (S.sel ? S.sel.type + ':' + S.sel.id : 'none') + '|' + S.structVer;
+  var key = (S.msel.length >= 2 ? 'group:' + S.msel.join(',') : S.sel ? S.sel.type + ':' + S.sel.id : 'none') + '|' + S.structVer;
   if(key === insp.key) return false;
-  insp.key = key; insp.knobs = []; insp.seg = null; insp.deadEl = null;
+  insp.key = key; insp.knobs = []; insp.seg = null; insp.deadEl = null; insp.group = null;
   var root = el.inspector;
   empty(root);
   var g = S.g;
+  if(S.msel.length >= 2){
+    var ids = S.msel.slice(), neurons = selNeurons(), actIds = ids.filter(hasInlet);
+    root.appendChild(h('div',{class:'ihead'},[
+      h('span',{class:'iname', text:ids.length + ' neurons selected'}),
+      neurons.length ? h('button',{class:'btn ghost sm', type:'button', id:'removeGroupBtn', text:'Remove ' + neurons.length + ' neuron' + (neurons.length === 1 ? '' : 's'), onclick:removeSelection}) : null
+    ]));
+    root.appendChild(h('div',{class:'itext', text:namesOf(ids) + '.'}));
+    insp.group = actIds;
+    if(actIds.length){
+      var gseg = h('div',{class:'seg', id:'groupActSeg'});
+      NP.ACT_KEYS.forEach(function(k){
+        var b = h('button',{type:'button', text:NP.ACTS[k].label, onclick:function(){ setActMany(S.msel.filter(hasInlet), k); }});
+        b.dataset.act = k;
+        gseg.appendChild(b);
+      });
+      insp.seg = gseg;
+      root.appendChild(h('div',{class:'irow'},[h('span',{class:'gl', text:'Activation'}), gseg]));
+    }
+    if(neurons.length) root.appendChild(h('div',{class:'irow'},[
+      h('button',{class:'btn ghost sm', type:'button', id:'randGroupBtn', text:'Randomize these neurons', title:'Draw new random weights and biases for ' + namesOf(neurons), onclick:function(){ randomizeMany(S.msel); }})
+    ]));
+    root.appendChild(h('div',{class:'itext', html:'Drag from the right dot of a selected neuron to wire all of them at once. <kbd>Shift</kbd>+click adds or removes one, <kbd>Esc</kbd> clears.'}));
+    if(actIds.length){
+      var gb = h('div',{class:'knobs'});
+      actIds.forEach(function(id){ addKnob(gb, 'b', id, 'b', nodeName(id)); });
+      root.appendChild(gb);
+    }
+    return true;
+  }
   if(!S.sel){
     var nNeur = g.nodes.filter(function(n){ return n.kind === 'neuron'; }).length;
     root.appendChild(h('div',{class:'ihead'},[h('span',{class:'iname', text:'Knobs'})]));
@@ -1866,7 +2046,12 @@ function syncInspector(force){
       k.kn.setSlope(s === undefined ? null : s, S.gradMax, S.stale);
     } else k.kn.setSlope(null);
   });
-  if(insp.seg && S.sel && S.sel.type === 'node'){
+  if(insp.seg && insp.group){
+    /* a button is on only when every selected neuron has that activation */
+    var acts = insp.group.map(function(id){ var m = NP.getNode(S.g, id); return m ? m.act : null; });
+    var same = acts.length && acts.every(function(a){ return a === acts[0]; }) ? acts[0] : null;
+    insp.seg.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.act === same); });
+  } else if(insp.seg && S.sel && S.sel.type === 'node'){
     var nd = NP.getNode(S.g, S.sel.id);
     if(nd) insp.seg.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.act === nd.act); });
   }
@@ -1961,7 +2146,16 @@ document.addEventListener('keydown', function(e){
     if(!e.repeat) toggleRun();
   } else if(e.key === 'Delete' || e.key === 'Backspace'){
     if(e.target && e.target.closest && e.target.closest('.knob')) return;
-    if(S.sel){ e.preventDefault(); removeSelection(); }
+    if(S.sel || S.msel.length){ e.preventDefault(); removeSelection(); }
+  } else if(e.key === 'Escape'){
+    if(drag){
+      /* Escape cancels a wire or a box and keeps the selection it started from; it does nothing during a move */
+      e.preventDefault();
+      if(drag.mode === 'connect'){ drag = null; empty(gTemp); }
+      else if(drag.mode === 'marquee'){ var base = drag.base; drag = null; empty(gTemp); setNodeSel(base); }
+      return;
+    }
+    if(S.sel || S.msel.length){ e.preventDefault(); clearSel(); }
   }
 });
 document.addEventListener('keyup', function(e){ if(e.key === ' ' || e.code === 'Space') e.preventDefault(); });
@@ -1980,7 +2174,7 @@ function stateObj(){
     nodes:S.g.nodes.length, neurons:S.g.nodes.filter(function(n){ return n.kind === 'neuron'; }).length,
     edges:S.g.edges.length, knobs:NP.knobCount(S.g), loss:currentLoss(), steps:S.steps, historyLength:S.history.length,
     running:S.running, diverged:S.diverged, measured:!!S.grad && !S.stale, stale:S.stale,
-    stepDisabled:el.stepBtn.disabled, sel:S.sel ? S.sel.id : null, showNeurons:S.showNeurons, msg:el.status.textContent,
+    stepDisabled:el.stepBtn.disabled, sel:S.sel ? S.sel.id : null, selection:selectionIds(), showNeurons:S.showNeurons, msg:el.status.textContent,
     dead:NP.deadNeurons(S.g), seed:S.seed, undo:UH.undo.length, redo:UH.redo.length, warn:el.warn.classList.contains('hide') ? '' : el.warn.textContent,
     edgeList:S.g.edges.map(function(e){ return {id:e.id, from:e.from, to:e.to, w:e.w}; }),
     nodeList:S.g.nodes.map(function(n){ return {id:n.id, kind:n.kind, name:n.name, act:n.act, bias:n.bias, px:n.px, py:n.py}; })
@@ -1997,7 +2191,14 @@ return {
     },
     addNeuron:function(opts){ var id = addNeuron(opts || freeSpot()); render(); return id; },
     connect:function(from, to){ var id = connect(from, to); render(); return id; },
-    select:function(id){ select(id); render(); },
+    /* select(id), select([ids]), select(id or [ids], true) adds to the node selection, select(null) clears */
+    select:function(id, additive){
+      if(Object.prototype.toString.call(id) === '[object Array]') setNodeSel((additive ? S.msel : []).concat(id));
+      else if(additive && id && NP.getNode(S.g, id)) setNodeSel(S.msel.concat([id]));
+      else select(id);
+      render();
+    },
+    selection:selectionIds,
     setWeight:function(id, w){ if(NP.getEdge(S.g, id)) record('Change w ' + edgeLabel(NP.getEdge(S.g, id))); setWeight(id, w); render(); },
     setBias:function(id, b){ if(NP.getNode(S.g, id)) record('Change b ' + nodeName(id)); setBias(id, b); render(); },
     setAct:function(id, a){ setAct(id, a); render(); },

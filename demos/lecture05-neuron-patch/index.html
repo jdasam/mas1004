@@ -1,0 +1,2029 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neuron Patch · MAS1004</title>
+<style>
+:root{
+  --surface:#fcfcfb; --panel:#ffffff; --ink:#0b0b0b; --sub:#52514e; --muted:#8a8985;
+  --rule:#dedcd6; --rule2:#c4c2bb; --accent:#b3001b; --soft:#f3f2ee;
+  --data:#2a78d6; --model:#eb6834; --ok:#0ca30c; --bad:#d03b3b; --pos:#d03b3b; --neg:#2a78d6;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--surface); color:var(--ink);
+  font:400 18px/1.45 Inter,Pretendard,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased; height:100vh; display:flex; flex-direction:column;
+}
+button,input,select{font-family:inherit;font-size:inherit}
+h1,h2,h3{margin:0;font-weight:600}
+
+#topbar{flex:none;padding:8px 20px 8px;background:var(--surface);border-bottom:1px solid var(--rule);display:flex;flex-direction:column;gap:8px}
+.row{display:flex;align-items:center;gap:10px 22px;flex-wrap:wrap}
+.brand{font-size:1.2rem;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+.brand span{display:block;font-size:.78rem;font-weight:500;color:var(--sub);letter-spacing:.01em}
+.grp{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gl{font-size:.9rem;color:var(--sub);font-weight:600;white-space:nowrap}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.ds{
+  padding:6px 14px;border-radius:999px;border:1px solid var(--rule2);background:#fff;color:var(--sub);
+  font-size:.95rem;font-weight:600;cursor:pointer;
+}
+.ds:hover{border-color:var(--ink);color:var(--ink)}
+.ds.active{border-color:var(--data);color:var(--data);background:#eef4fc}
+.btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{
+  padding:8px 15px;border-radius:10px;border:1px solid var(--ink);background:var(--ink);color:#fff;
+  font-weight:600;font-size:1rem;cursor:pointer;transition:.12s;white-space:nowrap;
+}
+.btn:hover{background:#333}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.ghost{background:#fff;color:var(--ink)}
+.btn.ghost:hover{background:#f2f1ee}
+.btn.ghost:disabled:hover{background:#fff}
+.btn.auto{border-color:var(--accent);background:var(--accent);min-width:84px}
+.btn.auto:hover{background:#8f0016}
+.btn.sm{padding:5px 11px;font-size:.9rem}
+.seg{display:inline-flex;border:1px solid var(--rule2);border-radius:9px;overflow:hidden;background:#fff}
+.seg button{padding:6px 11px;border:none;background:#fff;color:var(--sub);font-weight:600;cursor:pointer;font-size:.95rem}
+.seg button+button{border-left:1px solid var(--rule2)}
+.seg button.on{background:var(--ink);color:#fff}
+.rule{font:600 .98rem ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap}
+.lr input[type=range]{width:170px;accent-color:var(--ink)}
+.lr .val{font:600 1.02rem ui-monospace,Menlo,monospace;min-width:6ch;text-align:right;font-variant-numeric:tabular-nums}
+
+main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,58fr) minmax(0,42fr);gap:14px;padding:12px 20px 14px}
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:14px;padding:10px 14px}
+.card h3{font-size:.95rem;color:var(--sub);font-weight:600;margin-bottom:6px}
+#patchCard{display:flex;flex-direction:column;min-height:0;gap:6px}
+.phead{display:flex;align-items:baseline;gap:6px 18px;flex-wrap:wrap}
+.help{font-size:.95rem;color:var(--sub)}
+.help b{color:var(--ink);font-weight:600}
+/* the status message floats over the top of the patch so the canvas never jumps when it appears */
+.status{position:absolute;left:10px;top:8px;max-width:calc(100% - 20px);z-index:2;pointer-events:none;
+  font-size:1rem;font-weight:600;color:var(--ink);background:rgba(255,255,255,.94);border:1px solid var(--rule);border-radius:8px;padding:3px 10px}
+.status:empty{display:none}
+.status.bad{color:var(--accent)}
+#patchWrap{position:relative;flex:1;min-height:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:#fff}
+#patch{position:absolute;left:0;top:0;width:100%;height:100%;display:block;user-select:none;-webkit-user-select:none;touch-action:none}
+.right{display:flex;flex-direction:column;gap:12px;min-height:0;min-width:0}
+#plotCard{flex:none}
+#inspector{flex:1;min-height:0;overflow:auto}
+
+.scorerow{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:18px;align-items:stretch;margin-bottom:6px}
+.score .lbl{font-size:.88rem;color:var(--sub);font-weight:600;white-space:nowrap}
+.score .big{font-size:3rem;font-weight:700;line-height:1.05;letter-spacing:-.02em;font-variant-numeric:tabular-nums;min-width:4.2ch}
+.stats{display:flex;flex-direction:column;justify-content:center;gap:2px;font-size:1.05rem;color:var(--sub);white-space:nowrap}
+.stats b{color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
+.hist{display:flex;flex-direction:column;min-width:0}
+.hist .lbl{font-size:.8rem;color:var(--sub);font-weight:600}
+#hist{display:block;width:100%;height:78px}
+#plot{display:block;width:100%;height:clamp(200px, calc(100vh - 690px), 360px)}
+.legend{display:flex;gap:6px 18px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:.9rem;color:var(--sub)}
+.legend i{display:inline-block;width:18px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.legend .dot{width:10px;height:10px;border-radius:50%}
+.legend .ds{margin-left:auto;padding:4px 12px;font-size:.9rem}
+.note{border:1px solid var(--rule);border-radius:12px;padding:8px 14px;background:#fff;font-size:.98rem;line-height:1.45;margin-bottom:6px}
+.note.warn{border-left:4px solid var(--bad)}
+.note.hide{display:none}
+
+.ihead{display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap}
+.ihead .iname{font-size:1.35rem;font-weight:700}
+.ihead .ikind{font-size:.95rem;color:var(--sub)}
+.ihead .btn{margin-left:auto}
+.irow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 10px}
+.ksec{grid-column:1/-1;font-size:.9rem;color:var(--sub);font-weight:600;margin:4px 0 -2px}
+.itext{font-size:1rem;color:var(--sub);margin:4px 0 8px}
+.itext b{color:var(--ink)}
+.swatch{display:inline-block;width:26px;height:5px;border-radius:3px;vertical-align:middle;margin:0 6px 0 2px}
+
+.knobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:8px}
+.knob{display:flex;align-items:center;gap:12px;padding:8px 10px;border:1px solid var(--rule);border-radius:12px;background:#fff;outline:none;--kc:var(--model)}
+.knob:focus{border-color:var(--ink)}
+.knob.drag{border-color:var(--ink)}
+.knob.sm{gap:8px;padding:5px 8px}
+.kdial{width:84px;height:84px;flex:none;cursor:ns-resize;touch-action:none}
+.knob.sm .kdial{width:62px;height:62px}
+.kdial svg{width:100%;height:100%;display:block}
+.k-track{fill:none;stroke:var(--rule);stroke-width:8;stroke-linecap:round}
+.k-val{fill:none;stroke:var(--kc);stroke-width:8;stroke-linecap:round}
+.k-face{fill:#fff;stroke:var(--rule2);stroke-width:1.5}
+.k-ind{stroke:var(--ink);stroke-width:4;stroke-linecap:round}
+.k-hub{fill:var(--ink)}
+.kinfo{display:flex;flex-direction:column;gap:3px;min-width:0}
+.klabel{font-size:1.05rem;font-weight:600;white-space:nowrap}
+.klabel span{color:var(--muted);font-weight:500;margin-left:6px;font-size:.88em}
+.knob.sm .klabel{font-size:.95rem}
+.kvalrow{display:flex;align-items:center;gap:6px}
+.kval{font:600 1.3rem/1 ui-monospace,SFMono-Regular,Menlo,monospace;min-width:5.6ch;text-align:right;font-variant-numeric:tabular-nums}
+.knob.sm .kval{font-size:1.05rem;min-width:5ch}
+.kstep{width:30px;height:30px;border-radius:8px;border:1px solid var(--rule2);background:#fff;font-size:1.1rem;line-height:1;cursor:pointer;color:var(--ink)}
+.kstep:hover{border-color:var(--ink)}
+.knob.sm .kstep{width:26px;height:26px;font-size:1rem}
+.k-grad{fill:none;stroke:var(--accent);stroke-width:3;stroke-linecap:round}
+.k-gtick{stroke:var(--accent);stroke-width:2.2;stroke-linecap:round}
+.knob.stale .k-grad,.knob.stale .k-gtick{stroke:var(--muted)}
+.kslope{font:600 .8rem/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap;min-height:1.2em}
+.knob.stale .kslope{color:var(--muted)}
+kbd{font:600 .8em ui-monospace,Menlo,monospace;border:1px solid var(--rule2);border-radius:5px;padding:1px 5px;background:#fff}
+
+/* ---- patch ---- */
+.bg{fill:#fff}
+.whit{fill:none;stroke:transparent;stroke-width:18;cursor:pointer;pointer-events:stroke}
+.wvis{fill:none;stroke-linecap:round;pointer-events:none}
+.wsel{fill:none;stroke:#0b0b0b;stroke-opacity:.18;stroke-linecap:round;pointer-events:none}
+.nbox{fill:#fff;stroke-width:1.8;cursor:ns-resize}
+.nbox.sel{stroke:#0b0b0b;stroke-width:3}
+.nbtext{font:600 14px ui-monospace,SFMono-Regular,Menlo,monospace;text-anchor:middle;fill:#0b0b0b;pointer-events:none}
+.nbtext.dense{font-size:13px}
+.wslope,.bslope{font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#b3001b;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}
+.wslope{text-anchor:middle}
+.bslope{text-anchor:end;stroke-width:0}
+.wslope.stale,.bslope.stale{fill:#8a8985}
+.nbody{fill:#fff;stroke:#c4c2bb;stroke-width:1.6;cursor:grab}
+.node.input .nbody{fill:#f3f2ee}
+.node.output .nbody{stroke:#eb6834;stroke-width:2.4}
+.node.sel .nbody{stroke:#0b0b0b;stroke-width:3.2}
+.nname{font:700 18px Inter,system-ui,sans-serif;fill:#0b0b0b;pointer-events:none}
+.nact{font:600 14px Inter,system-ui,sans-serif;fill:#52514e;text-anchor:end;pointer-events:none}
+.nbias{font:600 13px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#0b0b0b;pointer-events:none}
+.ncbox{fill:#f7f6f3;pointer-events:none}
+.nzero{stroke:#dedcd6;stroke-width:1;pointer-events:none}
+.ncurve{fill:none;stroke:#0b0b0b;stroke-width:1.8;stroke-linejoin:round;pointer-events:none}
+.node.output .ncurve{stroke:#eb6834;stroke-width:2.4}
+.node.input .ncurve{stroke:#8a8985}
+.port{fill:#fff;stroke:#0b0b0b;stroke-width:2;pointer-events:none}
+.port.pout{fill:#0b0b0b}
+.phit{fill:transparent;cursor:crosshair}
+.phit.pin{cursor:crosshair}
+.tmpwire{fill:none;stroke:#0b0b0b;stroke-width:3;stroke-dasharray:9 6;pointer-events:none}
+.node.dead .nbody{stroke:#8a8985;stroke-dasharray:7 5}
+.node.dead.sel .nbody{stroke:#0b0b0b}
+.ndeadbg{fill:#fff;stroke:#8a8985;stroke-width:1;pointer-events:none}
+.ndead{font:600 12px Inter,system-ui,sans-serif;fill:#52514e;text-anchor:middle;pointer-events:none}
+.itext.deadnote{color:var(--accent);font-weight:600}
+.itext.deadnote:empty{display:none}
+@media(max-height:720px){
+  #plot{height:150px}
+  .score .big{font-size:2.2rem}
+}
+
+@media(max-width:1180px){
+  body{height:auto;min-height:100vh}
+  main{grid-template-columns:minmax(0,1fr)}
+  #patchWrap{flex:none;height:560px}
+  #inspector{overflow:visible}
+  #plot{height:320px}
+}
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="row">
+    <div class="brand">Neuron Patch<span>MAS1004 &middot; Data &amp; AI &middot; Lecture 5</span></div>
+    <div class="grp"><span class="gl">Start from</span><div class="chips" id="presets"></div></div>
+    <button class="btn ghost" type="button" id="addBtn">+ Neuron</button>
+  </div>
+  <div class="row" id="trainbar">
+    <div class="btns">
+      <button class="btn" type="button" id="measureBtn">Measure the gradient</button>
+      <button class="btn" type="button" id="stepBtn" disabled>Take a step</button>
+    </div>
+    <span class="rule" id="ruleText">w ← w − lr × slope</span>
+    <div class="btns">
+      <button class="btn auto" type="button" id="runBtn">Run</button>
+      <div class="seg" id="speedSeg"></div><span class="gl">steps per frame</span>
+      <button class="btn ghost" type="button" id="resetBtn">Reset</button>
+      <button class="btn ghost sm" type="button" id="undoBtn" title="Undo (Ctrl+Z / ⌘Z)" disabled>Undo</button>
+      <button class="btn ghost sm" type="button" id="redoBtn" title="Redo (Ctrl+Shift+Z / ⌘⇧Z)" disabled>Redo</button>
+      <button class="btn ghost sm" type="button" id="randBtn" title="Draw new random weights and biases">Randomize</button>
+    </div>
+    <div class="grp lr"><span class="gl">Learning rate</span><input type="range" id="lrIn" min="0" max="1000" step="1"><span class="val" id="lrVal"></span></div>
+  </div>
+</header>
+<main id="main">
+  <section class="card" id="patchCard">
+    <div class="phead">
+      <div class="help"><b>Add</b>: double-click the canvas or press + Neuron. <b>Connect</b>: drag from a right dot to a left dot. <b>Delete</b>: select a neuron or wire and press <kbd>Delete</kbd>.</div>
+    </div>
+    <div id="patchWrap"><svg id="patch" xmlns="http://www.w3.org/2000/svg"></svg><div class="status" id="status"></div></div>
+  </section>
+  <div class="right">
+    <section class="card" id="plotCard">
+      <div class="scorerow">
+        <div class="score"><div class="lbl">Loss: mean squared error</div><div class="big" id="lossBig">0</div></div>
+        <div class="stats"><div>Knobs: <b id="knobCount">0</b></div><div>Step <b id="stepCount">0</b></div></div>
+        <div class="hist"><div class="lbl">Loss against step</div><canvas id="hist"></canvas></div>
+      </div>
+      <div class="note warn hide" id="warn"></div>
+      <canvas id="plot"></canvas>
+      <div class="legend" id="legend">
+        <span><i class="dot" style="background:var(--data)"></i>data</span>
+        <span><i style="background:var(--model);height:4px"></i>ŷ(x), the model</span>
+        <span id="legNeurons" style="display:none"><i style="background:#52514e;opacity:.6"></i>w × h(x) for each input of ŷ</span>
+        <button class="ds" type="button" id="neuronsBtn">Show neurons</button>
+      </div>
+    </section>
+    <section class="card" id="inspector"></section>
+  </div>
+</main>
+
+<script id="np-core">
+/* =========================================================================
+   Core: data (lecture 4's eight bumps), a graph of neurons, forward pass,
+   loss, gradient (reverse-mode accumulation), numerical gradient, gradient
+   descent, Adam, presets. No DOM access. Everything is deterministic.
+   ========================================================================= */
+var NP = (function(){
+'use strict';
+var DATA_VERSION = 1;   /* bump this when the data generator changes */
+var DELTA = 0.001;
+var DIVERGE = 1e6;
+
+/* ---- random numbers: copied from lecture 4 (gd-core) so the seeds give the same numbers ---- */
+function xmur3(str){
+  var h = 1779033703 ^ str.length;
+  for(var i = 0; i < str.length; i++){
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = h << 13 | h >>> 19;
+  }
+  return function(){
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return (h ^= h >>> 16) >>> 0;
+  };
+}
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function rngOf(key){ var h = xmur3('rs|v' + DATA_VERSION + '|' + key); h(); return mulberry32(h()); }
+function gauss(r){
+  var u = 0, v = 0;
+  while(u === 0) u = r();
+  while(v === 0) v = r();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+function r2(v){ return Math.round(v*100)/100; }
+
+/* ---- eight overlapping bumps: the same data as lecture 4 ---- */
+var K8 = 8, SIGMA = 1.1, TRUTH_SEED = 19;
+var CENTERS = [];
+for(var ci = 0; ci < K8; ci++) CENTERS.push(r2(-3 + 6*ci/(K8 - 1)));
+function bumpAt(x, c){ var t = (x - c)/SIGMA; return Math.exp(-0.5*t*t); }
+function basis8(x){
+  var b = new Array(K8);
+  for(var j = 0; j < K8; j++) b[j] = bumpAt(x, CENTERS[j]);
+  return b;
+}
+function truthWeights(){
+  var r = rngOf('bump-truth|' + TRUTH_SEED), w = [];
+  for(var j = 0; j < K8; j++){
+    var s = r() < 0.5 ? -1 : 1;
+    w.push(r2(s*(0.6 + 1.9*r())));
+  }
+  return w;
+}
+var TRUTH8 = truthWeights();
+function genData(){
+  var r = rngOf('bump-data|' + TRUTH_SEED), pts = [];
+  for(var i = 0; i < 120; i++){
+    var x = -3 + 6*(i + r())/120, b = basis8(x), y = 0;
+    for(var j = 0; j < K8; j++) y += TRUTH8[j]*b[j];
+    pts.push([r2(x), r2(y + 0.08*gauss(r))]);
+  }
+  return pts;
+}
+var DATA = genData();
+var N = DATA.length;
+var XS = DATA.map(function(p){ return p[0]; }), YS = DATA.map(function(p){ return p[1]; });
+var DXS = new Float64Array(XS), DYS = new Float64Array(YS);
+
+/* ---- activations. df(z, h) is the slope of h = f(z) ---- */
+var ACTS = {
+  linear:  { key:'linear',  label:'Linear',  f:function(z){ return z; },                 df:function(){ return 1; } },
+  relu:    { key:'relu',    label:'ReLU',    f:function(z){ return z > 0 ? z : 0; },     df:function(z){ return z > 0 ? 1 : 0; } },
+  tanh:    { key:'tanh',    label:'tanh',    f:function(z){ return Math.tanh(z); },      df:function(z, h){ return 1 - h*h; } },
+  sigmoid: { key:'sigmoid', label:'sigmoid', f:function(z){ return 1/(1 + Math.exp(-z)); }, df:function(z, h){ return h*(1 - h); } },
+  step:    { key:'step',    label:'step',    f:function(z){ return z > 0 ? 1 : 0; },     df:function(){ return 0; } }
+};
+var ACT_KEYS = ['linear', 'relu', 'tanh', 'sigmoid', 'step'];
+var ACT_CODE = { linear:0, relu:1, tanh:2, sigmoid:3, step:4 };
+
+/* ---- graph ---- */
+function createGraph(){
+  return {
+    nodes: [
+      { id:'x', kind:'input', name:'x', px:0.07, py:0.5 },
+      { id:'out', kind:'output', name:'ŷ', act:'linear', bias:0, px:0.93, py:0.5 }
+    ],
+    edges: [],
+    seq: 0
+  };
+}
+function getNode(g, id){
+  for(var i = 0; i < g.nodes.length; i++) if(g.nodes[i].id === id) return g.nodes[i];
+  return null;
+}
+function getEdge(g, id){
+  for(var i = 0; i < g.edges.length; i++) if(g.edges[i].id === id) return g.edges[i];
+  return null;
+}
+function copyObj(o){ var c = {}; for(var k in o) if(Object.prototype.hasOwnProperty.call(o, k)) c[k] = o[k]; return c; }
+function clone(g){
+  return { nodes: g.nodes.map(copyObj), edges: g.edges.map(copyObj), seq: g.seq };
+}
+function nextNum(list, prefix){
+  var m = 0;
+  for(var i = 0; i < list.length; i++){
+    var id = list[i].id;
+    if(id.charAt(0) === prefix){ var v = parseInt(id.slice(1), 10); if(v > m) m = v; }
+  }
+  return m + 1;
+}
+/* a free spot: the candidate farthest from every existing node */
+function freeSpot(g){
+  var best = null, bestD = -1;
+  for(var cx = 0; cx < 7; cx++){
+    for(var cy = 0; cy < 5; cy++){
+      var px = 0.25 + 0.5*cx/6, py = 0.15 + 0.7*cy/4, d = Infinity;
+      for(var i = 0; i < g.nodes.length; i++){
+        var nd = g.nodes[i], dx = nd.px - px, dy = nd.py - py, dd = dx*dx + dy*dy;
+        if(dd < d) d = dd;
+      }
+      if(d > bestD + 1e-9){ bestD = d; best = { px:px, py:py }; }
+    }
+  }
+  return best;
+}
+function addNeuron(g, opts){
+  opts = opts || {};
+  var k = nextNum(g.nodes, 'n'), spot = (opts.px === undefined || opts.py === undefined) ? freeSpot(g) : null;
+  var node = {
+    id: 'n' + k, kind: 'neuron', name: 'N' + k,
+    act: ACTS[opts.act] ? opts.act : 'relu',
+    bias: typeof opts.bias === 'number' ? opts.bias : 0,
+    px: opts.px === undefined ? spot.px : opts.px,
+    py: opts.py === undefined ? spot.py : opts.py
+  };
+  g.nodes.push(node);
+  return node;
+}
+function removeEdge(g, id){
+  for(var i = 0; i < g.edges.length; i++) if(g.edges[i].id === id){ g.edges.splice(i, 1); return true; }
+  return false;
+}
+function removeNode(g, id){
+  if(id === 'x' || id === 'out') return false;
+  var idx = -1;
+  for(var i = 0; i < g.nodes.length; i++) if(g.nodes[i].id === id) idx = i;
+  if(idx < 0) return false;
+  g.nodes.splice(idx, 1);
+  g.edges = g.edges.filter(function(e){ return e.from !== id && e.to !== id; });
+  return true;
+}
+function reaches(g, a, b){   /* is there a path a -> ... -> b ? */
+  var seen = {}, stack = [a];
+  while(stack.length){
+    var u = stack.pop();
+    if(u === b) return true;
+    if(seen[u]) continue;
+    seen[u] = true;
+    for(var i = 0; i < g.edges.length; i++) if(g.edges[i].from === u) stack.push(g.edges[i].to);
+  }
+  return false;
+}
+function canConnect(g, from, to){
+  var a = getNode(g, from), b = getNode(g, to);
+  if(!a || !b) return { ok:false, reason:'No such node' };
+  if(from === to) return { ok:false, reason:'A node cannot connect to itself' };
+  if(b.kind === 'input') return { ok:false, reason:'Nothing can connect into x' };
+  if(a.kind === 'output') return { ok:false, reason:'ŷ has no outlet' };
+  for(var i = 0; i < g.edges.length; i++){
+    if(g.edges[i].from === from && g.edges[i].to === to) return { ok:false, reason:'Already connected' };
+  }
+  if(reaches(g, to, from)) return { ok:false, reason:'That would make a loop' };
+  return { ok:true, reason:'' };
+}
+function initWeight(g){
+  var r = rngOf('np|w|' + g.seq);
+  var s = r() < 0.5 ? -1 : 1;
+  return r2(s*(0.3 + 0.9*r()));
+}
+function connect(g, from, to, w){
+  if(!canConnect(g, from, to).ok) return null;
+  var e = { id: 'e' + nextNum(g.edges, 'e'), from: from, to: to, w: typeof w === 'number' ? w : initWeight(g) };
+  g.seq++;
+  g.edges.push(e);
+  return e;
+}
+function setWeight(g, id, w){ var e = getEdge(g, id); if(!e) return false; e.w = w; return true; }
+function setBias(g, id, b){ var n = getNode(g, id); if(!n || n.kind === 'input') return false; n.bias = b; return true; }
+function setAct(g, id, key){ var n = getNode(g, id); if(!n || n.kind === 'input' || !ACTS[key]) return false; n.act = key; return true; }
+function knobCount(g){
+  var k = g.edges.length;
+  for(var i = 0; i < g.nodes.length; i++) if(g.nodes[i].kind !== 'input') k++;
+  return k;
+}
+
+/* topological order of every node (Kahn; ties broken by position in g.nodes) */
+function order(g){
+  var nn = g.nodes.length, indeg = {}, i, res = [], done = {};
+  for(i = 0; i < nn; i++) indeg[g.nodes[i].id] = 0;
+  for(i = 0; i < g.edges.length; i++) if(indeg[g.edges[i].to] !== undefined) indeg[g.edges[i].to]++;
+  while(res.length < nn){
+    var pick = -1;
+    for(i = 0; i < nn; i++){ var id = g.nodes[i].id; if(!done[id] && indeg[id] === 0){ pick = i; break; } }
+    if(pick < 0){   /* a cycle: should not happen through connect(); append the rest */
+      for(i = 0; i < nn; i++) if(!done[g.nodes[i].id]){ done[g.nodes[i].id] = true; res.push(g.nodes[i].id); }
+      break;
+    }
+    var pid = g.nodes[pick].id;
+    done[pid] = true; res.push(pid);
+    for(i = 0; i < g.edges.length; i++) if(g.edges[i].from === pid && indeg[g.edges[i].to] !== undefined) indeg[g.edges[i].to]--;
+  }
+  return res;
+}
+
+/* ---- compiled graph: typed arrays in topological order, cached by structure key ---- */
+var CACHE = [], CACHE_MAX = 8;
+function structureKey(g){
+  var s = '', i;
+  for(i = 0; i < g.nodes.length; i++){ var nd = g.nodes[i]; s += nd.id + ':' + (nd.kind === 'input' ? '-' : nd.act) + ','; }
+  s += '|';
+  for(i = 0; i < g.edges.length; i++){ var e = g.edges[i]; s += e.from + '>' + e.to + ','; }
+  return s;
+}
+function compile(g){
+  var key = structureKey(g), i;
+  for(i = 0; i < CACHE.length; i++) if(CACHE[i].key === key){
+    var hit = CACHE[i];
+    if(i > 0){ CACHE.splice(i, 1); CACHE.unshift(hit); }
+    return hit;
+  }
+  var ids = order(g), nn = ids.length, ne = g.edges.length, pos = {}, gIndex = {};
+  for(i = 0; i < g.nodes.length; i++) gIndex[g.nodes[i].id] = i;
+  for(i = 0; i < nn; i++) pos[ids[i]] = i;
+  var act = new Int8Array(nn), isInput = new Uint8Array(nn), nodeIdx = new Int32Array(nn);
+  var inStart = new Int32Array(nn + 1), inSrc = new Int32Array(ne), inEdge = new Int32Array(ne);
+  var counts = new Int32Array(nn);
+  for(i = 0; i < ne; i++) counts[pos[g.edges[i].to]]++;
+  for(i = 0; i < nn; i++) inStart[i + 1] = inStart[i] + counts[i];
+  var fill = new Int32Array(nn);
+  for(i = 0; i < ne; i++){
+    var t = pos[g.edges[i].to], slot = inStart[t] + fill[t]++;
+    inSrc[slot] = pos[g.edges[i].from]; inEdge[slot] = i;
+  }
+  for(i = 0; i < nn; i++){
+    var nd = g.nodes[gIndex[ids[i]]];
+    nodeIdx[i] = gIndex[ids[i]];
+    isInput[i] = nd.kind === 'input' ? 1 : 0;
+    act[i] = isInput[i] ? 0 : ACT_CODE[nd.act];
+  }
+  var c = { key:key, nn:nn, ne:ne, ids:ids, pos:pos, act:act, isInput:isInput, nodeIdx:nodeIdx,
+            inStart:inStart, inSrc:inSrc, inEdge:inEdge, outPos: pos.out === undefined ? -1 : pos.out,
+            W:new Float64Array(ne), B:new Float64Array(nn), gW:new Float64Array(ne), gB:new Float64Array(nn),
+            bufN:-1, Z:null, H:null, dH:null, dZ:null };
+  CACHE.unshift(c);
+  if(CACHE.length > CACHE_MAX) CACHE.pop();
+  return c;
+}
+function loadParams(c, g){
+  var i;
+  for(i = 0; i < c.ne; i++) c.W[i] = g.edges[i].w;
+  for(i = 0; i < c.nn; i++) c.B[i] = c.isInput[i] ? 0 : g.nodes[c.nodeIdx[i]].bias;
+}
+function buffers(c, n){
+  if(c.bufN !== n){
+    c.bufN = n;
+    c.Z = new Float64Array(c.nn*n); c.H = new Float64Array(c.nn*n);
+    c.dH = new Float64Array(c.nn*n); c.dZ = new Float64Array(n);
+  }
+}
+/* forward pass over all xs at once; fills c.Z and c.H (row p = node at topological position p) */
+function forwardBatch(c, xs, n){
+  var Z = c.Z, H = c.H, W = c.W, B = c.B, inStart = c.inStart, inSrc = c.inSrc, inEdge = c.inEdge;
+  for(var p = 0; p < c.nn; p++){
+    var base = p*n, i;
+    if(c.isInput[p]){
+      for(i = 0; i < n; i++){ Z[base + i] = xs[i]; H[base + i] = xs[i]; }
+      continue;
+    }
+    var b = B[p];
+    for(i = 0; i < n; i++) Z[base + i] = b;
+    for(var j = inStart[p]; j < inStart[p + 1]; j++){
+      var w = W[inEdge[j]], sb = inSrc[j]*n;
+      for(i = 0; i < n; i++) Z[base + i] += w*H[sb + i];
+    }
+    switch(c.act[p]){
+      case 0: for(i = 0; i < n; i++) H[base + i] = Z[base + i]; break;
+      case 1: for(i = 0; i < n; i++){ var z1 = Z[base + i]; H[base + i] = z1 > 0 ? z1 : 0; } break;
+      case 2: for(i = 0; i < n; i++) H[base + i] = Math.tanh(Z[base + i]); break;
+      case 3: for(i = 0; i < n; i++) H[base + i] = 1/(1 + Math.exp(-Z[base + i])); break;
+      default: for(i = 0; i < n; i++) H[base + i] = Z[base + i] > 0 ? 1 : 0;
+    }
+  }
+}
+function dataArrays(data){
+  if(!data || data === DATA) return { xs:DXS, ys:DYS, n:N };
+  var n = data.length, xs = new Float64Array(n), ys = new Float64Array(n);
+  for(var i = 0; i < n; i++){ xs[i] = data[i][0]; ys[i] = data[i][1]; }
+  return { xs:xs, ys:ys, n:n };
+}
+function lossOf(c, ys, n){
+  if(c.outPos < 0 || n === 0) return NaN;
+  var H = c.H, base = c.outPos*n, s = 0;
+  for(var i = 0; i < n; i++){ var e = H[base + i] - ys[i]; s += e*e; }
+  return s/n;
+}
+
+function forward(g, x){
+  var c = compile(g), xs = new Float64Array([x]);
+  loadParams(c, g); buffers(c, 1); forwardBatch(c, xs, 1);
+  var Z = {}, H = {};
+  for(var p = 0; p < c.nn; p++){ Z[c.ids[p]] = c.Z[p]; H[c.ids[p]] = c.H[p]; }
+  return { out: c.outPos < 0 ? NaN : c.H[c.outPos], Z:Z, H:H };
+}
+function curves(g, xs){
+  var c = compile(g), n = xs.length, X = xs instanceof Float64Array ? xs : new Float64Array(xs);
+  loadParams(c, g); buffers(c, n); forwardBatch(c, X, n);
+  var H = {};
+  for(var p = 0; p < c.nn; p++) H[c.ids[p]] = c.H.slice(p*n, (p + 1)*n);
+  return { out: c.outPos < 0 ? new Float64Array(n) : c.H.slice(c.outPos*n, (c.outPos + 1)*n), H:H };
+}
+function predict(g, xs){ return curves(g, xs).out; }
+function loss(g, data){
+  var d = dataArrays(data), c = compile(g);
+  loadParams(c, g); buffers(c, d.n); forwardBatch(c, d.xs, d.n);
+  return lossOf(c, d.ys, d.n);
+}
+
+/* ---- gradient by reverse-mode accumulation: dL/dŷ = 2(ŷ - y)/n, then back through every node ---- */
+function gradient(g, data){
+  var d = dataArrays(data), c = compile(g), n = d.n, i, p, j;
+  loadParams(c, g); buffers(c, n); forwardBatch(c, d.xs, n);
+  var L = lossOf(c, d.ys, n);
+  var Z = c.Z, H = c.H, dH = c.dH, dZ = c.dZ, W = c.W, gW = c.gW, gB = c.gB;
+  dH.fill(0); gW.fill(0); gB.fill(0);
+  if(c.outPos >= 0){
+    var ob = c.outPos*n;
+    for(i = 0; i < n; i++) dH[ob + i] = 2*(H[ob + i] - d.ys[i])/n;
+  }
+  for(p = c.nn - 1; p >= 0; p--){
+    if(c.isInput[p]) continue;
+    var base = p*n, sumB = 0;
+    switch(c.act[p]){
+      case 0: for(i = 0; i < n; i++) dZ[i] = dH[base + i]; break;
+      case 1: for(i = 0; i < n; i++) dZ[i] = Z[base + i] > 0 ? dH[base + i] : 0; break;
+      case 2: for(i = 0; i < n; i++){ var h2 = H[base + i]; dZ[i] = dH[base + i]*(1 - h2*h2); } break;
+      case 3: for(i = 0; i < n; i++){ var h3 = H[base + i]; dZ[i] = dH[base + i]*h3*(1 - h3); } break;
+      default: for(i = 0; i < n; i++) dZ[i] = 0;
+    }
+    for(i = 0; i < n; i++) sumB += dZ[i];
+    gB[p] = sumB;
+    for(j = c.inStart[p]; j < c.inStart[p + 1]; j++){
+      var s = c.inSrc[j], sb = s*n, w = W[c.inEdge[j]], sumW = 0;
+      if(c.isInput[s]){
+        for(i = 0; i < n; i++) sumW += dZ[i]*H[sb + i];
+      } else {
+        for(i = 0; i < n; i++){ sumW += dZ[i]*H[sb + i]; dH[sb + i] += w*dZ[i]; }
+      }
+      gW[c.inEdge[j]] += sumW;
+    }
+  }
+  var dW = {}, dB = {};
+  for(i = 0; i < c.ne; i++) dW[g.edges[i].id] = gW[i];
+  for(p = 0; p < c.nn; p++) if(!c.isInput[p]) dB[c.ids[p]] = gB[p];
+  return { loss:L, dW:dW, dB:dB };
+}
+
+/* ---- numerical gradient: nudge each knob by delta, measure again (lecture 4 convention) ---- */
+function numericGradient(g, data, delta){
+  delta = delta || DELTA;
+  var L0 = loss(g, data), dW = {}, dB = {}, i, v;
+  for(i = 0; i < g.edges.length; i++){
+    var e = g.edges[i]; v = e.w;
+    e.w = v + delta; dW[e.id] = (loss(g, data) - L0)/delta; e.w = v;
+  }
+  for(i = 0; i < g.nodes.length; i++){
+    var nd = g.nodes[i];
+    if(nd.kind === 'input') continue;
+    v = nd.bias;
+    nd.bias = v + delta; dB[nd.id] = (loss(g, data) - L0)/delta; nd.bias = v;
+  }
+  return { loss:L0, dW:dW, dB:dB };
+}
+
+/* ---- updates ---- */
+function step(g, grad, lr){
+  var i;
+  for(i = 0; i < g.edges.length; i++){ var s = grad.dW[g.edges[i].id]; if(typeof s === 'number') g.edges[i].w -= lr*s; }
+  for(i = 0; i < g.nodes.length; i++){
+    var nd = g.nodes[i];
+    if(nd.kind === 'input') continue;
+    var sb = grad.dB[nd.id];
+    if(typeof sb === 'number') nd.bias -= lr*sb;
+  }
+}
+/* Adam, copied from layer-by-layer-2d. Each knob keeps its own step count, keyed by id,
+   so a new wire or neuron starts fresh. State of removed knobs is dropped. */
+var B1 = 0.9, B2 = 0.999, EPS = 1e-8;
+function makeAdam(){
+  var state = {};
+  function upd(key, value, gk, lr, alive){
+    var st = state[key];
+    if(!st){ st = state[key] = { t:0, m:0, s:0 }; }
+    alive[key] = true;
+    st.t++;
+    st.m = B1*st.m + (1 - B1)*gk;
+    st.s = B2*st.s + (1 - B2)*gk*gk;
+    var c1 = 1 - Math.pow(B1, st.t), c2 = 1 - Math.pow(B2, st.t);
+    return value - lr*(st.m/c1)/(Math.sqrt(st.s/c2) + EPS);
+  }
+  return {
+    step: function(g, grad, lr){
+      var alive = {}, i;
+      for(i = 0; i < g.edges.length; i++){
+        var e = g.edges[i], s = grad.dW[e.id];
+        if(typeof s === 'number') e.w = upd('w|' + e.id + '|' + e.from + '>' + e.to, e.w, s, lr, alive);
+      }
+      for(i = 0; i < g.nodes.length; i++){
+        var nd = g.nodes[i];
+        if(nd.kind === 'input') continue;
+        var sb = grad.dB[nd.id];
+        if(typeof sb === 'number') nd.bias = upd('b|' + nd.id, nd.bias, sb, lr, alive);
+      }
+      for(var k in state) if(!alive[k]) delete state[k];
+    },
+    reset: function(){ state = {}; }
+  };
+}
+var PLAIN = { step: step };
+function isDiverged(L){ return !isFinite(L) || L > DIVERGE; }
+function trainSteps(g, lr, n, opt){
+  if(opt === 'adam') opt = makeAdam();
+  var o = opt && typeof opt.step === 'function' ? opt : PLAIN, steps = 0, diverged = false;
+  for(var t = 0; t < n; t++){
+    var grad = gradient(g);
+    if(isDiverged(grad.loss)){ diverged = true; break; }
+    o.step(g, grad, lr);
+    steps++;
+  }
+  var L = loss(g);
+  if(isDiverged(L)) diverged = true;
+  return { loss:L, steps:steps, diverged:diverged };
+}
+
+/* ---- random re-initialization: new weights and biases from a seed (the Randomize buttons) ---- */
+function randomize(g, seed, nodeId){
+  var target = nodeId || null, i, j;
+  if(target){ var tn = getNode(g, target); if(!tn || tn.kind !== 'neuron') return false; }
+  var r = rngOf('np|init|' + seed + '|' + (target || 'all'));
+  for(i = 0; i < g.edges.length; i++){
+    var e = g.edges[i];
+    if(target && e.from !== target && e.to !== target) continue;
+    var s = r() < 0.5 ? -1 : 1;
+    e.w = r2(s*(0.3 + 0.9*r()));
+  }
+  for(i = 0; i < g.nodes.length; i++){
+    var nd = g.nodes[i];
+    if(nd.kind === 'input' || (target && nd.id !== target)) continue;
+    if(nd.kind === 'output'){
+      var m = 0;
+      for(j = 0; j < N; j++) m += YS[j];
+      nd.bias = r2(m/N);
+      continue;
+    }
+    var ins = [];
+    for(j = 0; j < g.edges.length; j++) if(g.edges[j].to === nd.id) ins.push(g.edges[j]);
+    if(ins.length === 1 && ins[0].from === 'x'){
+      /* put the kink (where w x + b = 0) inside the data */
+      var c = -2.5 + 5*r();
+      nd.bias = r2(-ins[0].w*c);
+    } else {
+      nd.bias = r2(-0.5 + r());
+    }
+  }
+  return true;
+}
+/* ReLU or step neurons that output 0 for every data point: their slopes are all 0 */
+function deadNeurons(g, data){
+  var d = dataArrays(data), c = compile(g), out = [], p, i;
+  loadParams(c, g); buffers(c, d.n); forwardBatch(c, d.xs, d.n);
+  for(p = 0; p < c.nn; p++){
+    if(c.isInput[p] || c.act[p] !== 1 && c.act[p] !== 4) continue;
+    var nd = g.nodes[c.nodeIdx[p]];
+    if(nd.kind !== 'neuron') continue;
+    var alive = false, base = p*d.n;
+    for(i = 0; i < d.n && !alive; i++) if(c.Z[base + i] > 0) alive = true;
+    if(!alive) out.push(nd.id);
+  }
+  out.sort(function(a, b){ return parseInt(a.slice(1), 10) - parseInt(b.slice(1), 10); });
+  return out;
+}
+
+/* ---- presets ---- */
+var PRESETS = [
+  { key:'line',    label:'1 neuron' },
+  { key:'relu1',   label:'1 ReLU' },
+  { key:'relu3',   label:'3 ReLU' },
+  { key:'linear3', label:'3 Linear' },
+  { key:'layers2', label:'2 layers' },
+  { key:'empty',   label:'Empty' }
+];
+function column(k, count){ var out = []; for(var i = 0; i < count; i++) out.push(count === 1 ? 0.5 : 0.18 + 0.64*i/(count - 1)); return out; }
+function build3(act){
+  var g = createGraph(), ys = column(0, 3);
+  /* kinks at x = -1.5, 0, 1.5 (where w x + b = 0) */
+  var win = [1, -1, 1], bin = [1.5, 0, -1.5], wout = [0.8, 0.8, -0.8];
+  for(var i = 0; i < 3; i++){
+    var nd = addNeuron(g, { px:0.5, py:ys[i], act:act, bias:bin[i] });
+    connect(g, 'x', nd.id, win[i]);
+    connect(g, nd.id, 'out', wout[i]);
+  }
+  g.nodes[1].bias = 0.5;
+  return g;
+}
+function buildPreset(key){
+  var g = createGraph(), i, j, nd;
+  if(key === 'line'){
+    connect(g, 'x', 'out', -0.5);
+    g.nodes[1].bias = 0;
+  } else if(key === 'relu1'){
+    nd = addNeuron(g, { px:0.5, py:0.5, act:'relu', bias:0 });
+    connect(g, 'x', nd.id, 1);
+    connect(g, nd.id, 'out', -0.5);
+    g.nodes[1].bias = 1;
+  } else if(key === 'relu3'){
+    g = build3('relu');
+  } else if(key === 'linear3'){
+    g = build3('linear');
+  } else if(key === 'layers2'){
+    var r = rngOf('np|layers2|' + LAYERS2_SEED), ys = column(0, 4), L1 = [], L2 = [];
+    /* x and ŷ a little further out so the 16 number boxes between the layers have room */
+    g.nodes[0].px = 0.055; g.nodes[1].px = 0.945;
+    for(i = 0; i < 4; i++){ nd = addNeuron(g, { px:0.35, py:ys[i], act:'tanh', bias:0 }); L1.push(nd.id); }
+    for(i = 0; i < 4; i++){ nd = addNeuron(g, { px:0.65, py:ys[i], act:'tanh', bias:0 }); L2.push(nd.id); }
+    for(i = 0; i < 4; i++){
+      connect(g, 'x', L1[i], r2(LAYERS2_SCALE[0]*gauss(r)));
+      getNode(g, L1[i]).bias = r2(LAYERS2_SCALE[1]*gauss(r));
+    }
+    for(j = 0; j < 4; j++){
+      for(i = 0; i < 4; i++) connect(g, L1[i], L2[j], r2(LAYERS2_SCALE[2]*gauss(r)));
+      getNode(g, L2[j]).bias = r2(LAYERS2_SCALE[3]*gauss(r));
+    }
+    for(j = 0; j < 4; j++) connect(g, L2[j], 'out', r2(LAYERS2_SCALE[4]*gauss(r)));
+    g.nodes[1].bias = 0;
+  } else if(key !== 'empty'){
+    return null;
+  }
+  return g;
+}
+
+/* ---- measured constants (test/calibrate.js). Re-run it if the data or the presets change. ---- */
+var LAYERS2_SEED = 1;
+var LAYERS2_SCALE = [0.8, 0.8, 0.5, 0.3, 0.5];   /* x->L1 w, L1 bias, L1->L2 w, L2 bias, L2->out w */
+/* Plain GD. Edges seen in calibration: line diverges at 0.56, relu1 kills its neuron at 0.32,
+   relu3 kills a neuron at 0.18 and diverges at 0.32, linear3 diverges at 0.18, layers2 stalls at 0.32. */
+var PRESET_LR = { line:0.1, relu1:0.1, relu3:0.05, linear3:0.05, layers2:0.1, empty:0.05 };
+
+return {
+  DATA_VERSION:DATA_VERSION, DELTA:DELTA, DIVERGE:DIVERGE,
+  DATA:DATA, N:N, XS:XS, YS:YS, rngOf:rngOf,
+  ACTS:ACTS, ACT_KEYS:ACT_KEYS,
+  createGraph:createGraph, addNeuron:addNeuron, removeNode:removeNode,
+  canConnect:canConnect, connect:connect, removeEdge:removeEdge,
+  setWeight:setWeight, setBias:setBias, setAct:setAct,
+  getNode:getNode, getEdge:getEdge, clone:clone,
+  initWeight:initWeight, order:order,
+  forward:forward, curves:curves, predict:predict, loss:loss,
+  gradient:gradient, numericGradient:numericGradient,
+  knobCount:knobCount, step:step, makeAdam:makeAdam, trainSteps:trainSteps,
+  randomize:randomize, deadNeurons:deadNeurons,
+  PRESETS:PRESETS, buildPreset:buildPreset, PRESET_LR:PRESET_LR
+};
+})();
+</script>
+
+<script id="np-ui">
+/* =========================================================================
+   UI: the patch (SVG), the inspector knobs, the plot, the training bar.
+   The knob widget, the plot pieces and the stepper pattern come from lecture 4.
+   ========================================================================= */
+var NPUI = (function(){
+'use strict';
+if(typeof NP === 'undefined'){
+  document.getElementById('status').textContent = 'The core script did not load.';
+  return {S:null, hooks:{}, selfCheck:function(){ return {core:false}; }};
+}
+var SVGNS = 'http://www.w3.org/2000/svg';
+
+/* ---------------- small helpers ---------------- */
+function h(tag, attrs, kids){
+  var e = document.createElement(tag), k;
+  if(attrs) for(k in attrs){
+    var v = attrs[k];
+    if(v === null || v === undefined) continue;
+    if(k === 'class') e.className = v;
+    else if(k === 'text') e.textContent = v;
+    else if(k === 'html') e.innerHTML = v;
+    else if(k.slice(0,2) === 'on') e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
+  }
+  (kids || []).forEach(function(c){
+    if(c === null || c === undefined || c === false) return;
+    e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  });
+  return e;
+}
+function sv(tag, attrs, text){
+  var e = document.createElementNS(SVGNS, tag), k;
+  for(k in attrs) if(attrs[k] !== null && attrs[k] !== undefined) e.setAttribute(k, attrs[k]);
+  if(text !== undefined) e.textContent = text;
+  return e;
+}
+function empty(el){ while(el.firstChild) el.removeChild(el.firstChild); }
+function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+function fmt(v, d){
+  if(!isFinite(v)) return v > 0 ? '∞' : (v < 0 ? '−∞' : 'NaN');
+  var s = v.toFixed(d); return s === '-' + (0).toFixed(d) ? (0).toFixed(d) : s.replace('-', '−');
+}
+function fmtP(v, step){ var d = step >= 1 ? 0 : step >= 0.1 ? 1 : 2; return fmt(v, d); }
+function fmtLoss(v){
+  if(!isFinite(v)) return '∞';
+  if(v >= 10000) return v.toExponential(2).replace('e+','e');
+  if(v >= 100) return v.toFixed(1);
+  if(v >= 10) return v.toFixed(2);
+  return v.toFixed(3);
+}
+function fmtBig(s){ return (s >= 0 ? '+' : '−') + Math.abs(s).toExponential(1).replace('e+', 'e'); }
+function fmtSlope(s){
+  if(!isFinite(s)) return '∞';
+  var a = Math.abs(s), d = a >= 100 ? 0 : a >= 10 ? 1 : a >= 1 ? 2 : 3;
+  if(a >= 10000) return fmtBig(s);
+  return (s >= 0 ? '+' : '') + fmt(s, d);
+}
+function fmtSlope2(s){
+  if(!isFinite(s)) return '∞';
+  var a = Math.abs(s), d = a >= 100 ? 0 : a >= 10 ? 1 : 2;
+  if(a >= 1000) return fmtBig(s);
+  return (s >= 0 ? '+' : '') + fmt(s, d);
+}
+function qparams(){
+  var out = {}, all = (location.search||'').replace(/^\?/,'') + '&' + (location.hash||'').replace(/^#/,'');
+  all.split('&').forEach(function(kv){
+    if(!kv) return;
+    var i = kv.indexOf('='), key = i < 0 ? kv : kv.slice(0,i);
+    if(i < 0){ out[key] = '1'; return; }
+    try{ out[key] = decodeURIComponent(kv.slice(i+1)); }catch(err){ out[key] = kv.slice(i+1); }
+  });
+  return out;
+}
+var QP = qparams();
+var C = {
+  surface:'#fcfcfb', grid:'#ebe9e4', axis:'#b5b3ac', tick:'#52514e', ink:'#0b0b0b', muted:'#8a8985',
+  data:'#2a78d6', model:'#eb6834', accent:'#b3001b', pos:'#d03b3b', neg:'#2a78d6'
+};
+
+/* ---------------- knob widget (lecture 4) ---------------- */
+var A0 = -140, A1 = 140;
+function polar(cx,cy,r,deg){ var t = (deg-90)*Math.PI/180; return [cx + r*Math.cos(t), cy + r*Math.sin(t)]; }
+function arcPath(cx,cy,r,a,b){
+  if(Math.abs(b-a) < 0.35) return 'M ' + polar(cx,cy,r,a).join(' ');
+  var p0 = polar(cx,cy,r,a), p1 = polar(cx,cy,r,b);
+  return 'M ' + p0[0].toFixed(2) + ' ' + p0[1].toFixed(2) +
+         ' A ' + r + ' ' + r + ' 0 ' + (Math.abs(b-a) > 180 ? 1 : 0) + ' ' + (b > a ? 1 : 0) +
+         ' ' + p1[0].toFixed(2) + ' ' + p1[1].toFixed(2);
+}
+function makeKnob(spec, onInput, small){
+  var raw = spec.init, value = spec.init;
+  var zeroRef = clamp(0, spec.min, spec.max);
+  var ang = function(v){ return A0 + (v - spec.min)/(spec.max - spec.min)*(A1 - A0); };
+
+  var gArc  = sv('path',{class:'k-grad', d:''});
+  var gTick = sv('line',{class:'k-gtick', x1:50, y1:50, x2:50, y2:50});
+  var track = sv('path',{class:'k-track', d:arcPath(50,50,40,A0,A1)});
+  var vpath = sv('path',{class:'k-val', d:''});
+  var face  = sv('circle',{class:'k-face', cx:50, cy:50, r:29});
+  var ind   = sv('line',{class:'k-ind', x1:50, y1:35, x2:50, y2:20});
+  var hub   = sv('circle',{class:'k-hub', cx:50, cy:50, r:5});
+  var svg = sv('svg',{viewBox:'0 0 100 100'});
+  [track, vpath, gArc, gTick, face, ind, hub].forEach(function(n){ svg.appendChild(n); });
+  var dial = h('div',{class:'kdial'}); dial.appendChild(svg);
+
+  var valEl = h('div',{class:'kval', text:'0'});
+  var minus = h('button',{class:'kstep', type:'button', 'aria-label':'decrease', text:'−'});
+  var plus  = h('button',{class:'kstep', type:'button', 'aria-label':'increase', text:'+'});
+  var slopeEl = h('div',{class:'kslope'});
+  var info = h('div',{class:'kinfo'},[
+    h('div',{class:'klabel'},[spec.name, h('span',{text:spec.sub})]),
+    h('div',{class:'kvalrow'},[minus, valEl, plus]),
+    slopeEl
+  ]);
+  var el = h('div',{
+    class:'knob' + (small ? ' sm' : ''), tabindex:'0', role:'slider',
+    'aria-label': spec.name + ' ' + spec.sub, 'aria-valuemin': spec.min, 'aria-valuemax': spec.max
+  }, [dial, info]);
+
+  var gSlope = null, gMax = 0;
+  function paintSlope(){
+    if(gSlope === null || !isFinite(gSlope)){
+      gArc.setAttribute('d', ''); gTick.setAttribute('x2', 50); gTick.setAttribute('y2', 50);
+      gTick.setAttribute('x1', 50); gTick.setAttribute('y1', 50);
+      slopeEl.textContent = '';
+      return;
+    }
+    var a0 = ang(value);
+    var span = 70*(gMax > 0 ? Math.min(1, Math.abs(gSlope)/gMax) : 0);
+    var a1 = clamp(a0 + (gSlope > 0 ? -span : span), A0 - 6, A1 + 6);
+    gArc.setAttribute('d', arcPath(50, 50, 47, a0, a1));
+    var t0 = polar(50, 50, 44.5, a1), t1 = polar(50, 50, 48.8, a1);
+    gTick.setAttribute('x1', t0[0].toFixed(2)); gTick.setAttribute('y1', t0[1].toFixed(2));
+    gTick.setAttribute('x2', t1[0].toFixed(2)); gTick.setAttribute('y2', t1[1].toFixed(2));
+    slopeEl.textContent = 'slope ' + (gSlope >= 0 ? '+' : '') + fmt(gSlope, 3);
+  }
+  function paint(){
+    var a = ang(value);
+    vpath.setAttribute('d', arcPath(50,50,40, ang(zeroRef), a));
+    ind.setAttribute('transform', 'rotate(' + a.toFixed(2) + ' 50 50)');
+    valEl.textContent = fmtP(value, spec.step);
+    el.setAttribute('aria-valuenow', value.toFixed(3));
+    paintSlope();
+  }
+  var api = {
+    spec:spec, el:el,
+    get value(){ return value; },
+    setRaw:function(v, fire){
+      raw = clamp(v, spec.min, spec.max);
+      var s = Math.round(raw/spec.step)*spec.step;
+      value = Math.round(clamp(s, spec.min, spec.max)*1e6)/1e6;
+      paint(); if(fire !== false) onInput();
+    },
+    setExact:function(v, fire){
+      raw = value = clamp(v, spec.min, spec.max);
+      paint(); if(fire !== false) onInput();
+    },
+    nudge:function(mult){ api.setRaw(value + spec.step*mult, true); },
+    setSlope:function(slope, maxAbs, stale){
+      gSlope = (slope === null || slope === undefined) ? null : slope;
+      gMax = maxAbs || 0;
+      el.classList.toggle('stale', !!stale);
+      paintSlope();
+    }
+  };
+  var last = null;
+  function gesture(kind){ if(spec.onGesture) spec.onGesture(kind); }
+  dial.addEventListener('pointerdown', function(e){
+    e.preventDefault(); dial.setPointerCapture(e.pointerId);
+    last = {x:e.clientX, y:e.clientY, rec:false}; el.classList.add('drag'); el.focus();
+  });
+  dial.addEventListener('pointermove', function(e){
+    if(!last) return;
+    var d = (last.y - e.clientY) + (e.clientX - last.x)*0.35;
+    last.x = e.clientX; last.y = e.clientY;
+    if(d === 0) return;
+    if(!last.rec){ last.rec = true; gesture('drag'); }
+    api.setRaw(raw + d*(spec.max - spec.min)/280*(e.shiftKey ? 0.15 : 1), true);
+  });
+  function endDrag(e){
+    if(!last) return;
+    last = null; el.classList.remove('drag');
+    try{ dial.releasePointerCapture(e.pointerId); }catch(err){}
+  }
+  dial.addEventListener('pointerup', endDrag);
+  dial.addEventListener('pointercancel', endDrag);
+  dial.addEventListener('dblclick', function(){ gesture('drag'); api.setRaw(spec.init, true); });
+  /* the wheel turns a knob only after it has been clicked; otherwise it scrolls the inspector */
+  el.addEventListener('wheel', function(e){
+    if(!el.contains(document.activeElement)) return;
+    e.preventDefault();
+    gesture('nudge');
+    api.nudge((e.deltaY < 0 ? 1 : -1)*(e.shiftKey ? 1 : spec.big/spec.step));
+  }, {passive:false});
+  el.addEventListener('keydown', function(e){
+    var big = e.shiftKey ? spec.big/spec.step : 1, dir = 0;
+    if(e.key === 'ArrowUp' || e.key === 'ArrowRight') dir = 1;
+    else if(e.key === 'ArrowDown' || e.key === 'ArrowLeft') dir = -1;
+    else if(e.key === 'PageUp'){ dir = 1; big = spec.big/spec.step; }
+    else if(e.key === 'PageDown'){ dir = -1; big = spec.big/spec.step; }
+    else if(e.key === 'Home'){ gesture('drag'); api.setRaw(spec.init, true); e.preventDefault(); return; }
+    else return;
+    e.preventDefault(); gesture('nudge'); api.nudge(dir*big);
+  });
+  minus.addEventListener('click', function(e){ gesture('nudge'); api.nudge(e.shiftKey ? -spec.big/spec.step : -1); });
+  plus.addEventListener('click', function(e){ gesture('nudge'); api.nudge(e.shiftKey ? spec.big/spec.step : 1); });
+  paint();
+  return api;
+}
+
+/* ---------------- canvas helpers ---------------- */
+function prepFixed(cv){
+  var w = cv.clientWidth, hpx = cv.clientHeight;
+  if(!w || !hpx) return null;
+  var dpr = window.devicePixelRatio || 1;
+  var W = Math.round(w*dpr), H = Math.round(hpx*dpr);
+  if(cv.width !== W) cv.width = W;
+  if(cv.height !== H) cv.height = H;
+  var ctx = cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx:ctx, W:w, H:hpx};
+}
+function niceStep(span, want){
+  var raw = span/want, mag = Math.pow(10, Math.floor(Math.log10(raw))), n = raw/mag;
+  return (n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10)*mag;
+}
+function decimalsOf(step){ return step >= 1 ? 0 : step >= 0.1 ? 1 : 2; }
+
+/* ---------------- state ---------------- */
+var NW = 132, NH = 86, PORT_R = 8, DIVERGE = 1e6;
+var MINI_XS = new Float64Array(48), PLOT_XS = new Float64Array(241), i0;
+for(i0 = 0; i0 < MINI_XS.length; i0++) MINI_XS[i0] = -3 + 6*i0/(MINI_XS.length - 1);
+for(i0 = 0; i0 < PLOT_XS.length; i0++) PLOT_XS[i0] = -3 + 6*i0/(PLOT_XS.length - 1);
+var PRESET_KEYS = NP.PRESETS.map(function(p){ return p.key; });
+var ADAM_LR = 0.02;
+
+var S = {
+  g:null, preset:'line', lr:0.1, opt:QP.opt === 'adam' ? 'adam' : 'gd', adam:null,
+  grad:null, gradMax:0, stale:true, steps:0, history:[], running:false, speed:10,
+  diverged:false, sel:null, showNeurons:false, structVer:0,
+  seed:1, base:null, baseSig:'', presetSig:'', tooBig:false, runEntry:null
+};
+var NEW_BIAS = 0.5;   /* a new neuron's bias: 0 would put every new ReLU's kink at x = 0 */
+var el = {
+  presets:document.getElementById('presets'), addBtn:document.getElementById('addBtn'),
+  measureBtn:document.getElementById('measureBtn'), stepBtn:document.getElementById('stepBtn'),
+  runBtn:document.getElementById('runBtn'), resetBtn:document.getElementById('resetBtn'),
+  undoBtn:document.getElementById('undoBtn'), redoBtn:document.getElementById('redoBtn'), randBtn:document.getElementById('randBtn'),
+  speedSeg:document.getElementById('speedSeg'), lrIn:document.getElementById('lrIn'), lrVal:document.getElementById('lrVal'),
+  ruleText:document.getElementById('ruleText'),
+  status:document.getElementById('status'), wrap:document.getElementById('patchWrap'), svg:document.getElementById('patch'),
+  lossBig:document.getElementById('lossBig'), knobCount:document.getElementById('knobCount'), stepCount:document.getElementById('stepCount'),
+  hist:document.getElementById('hist'), plot:document.getElementById('plot'), warn:document.getElementById('warn'),
+  neuronsBtn:document.getElementById('neuronsBtn'), legNeurons:document.getElementById('legNeurons'),
+  inspector:document.getElementById('inspector')
+};
+if(S.opt === 'adam') el.ruleText.textContent = 'update rule: Adam';
+
+function nodeName(id){ var n = NP.getNode(S.g, id); return n ? n.name : id; }
+function isBad(L){ return !isFinite(L) || L > DIVERGE; }
+function currentLoss(){ return NP.loss(S.g); }
+
+var msgTimer = 0;
+function setMsg(text, bad){
+  el.status.textContent = text || '';
+  el.status.classList.toggle('bad', !!bad);
+  if(msgTimer) clearTimeout(msgTimer);
+  if(text) msgTimer = setTimeout(function(){ el.status.textContent = ''; msgTimer = 0; }, 6000);
+}
+
+/* ---------------- undo / redo ---------------- */
+/* S.history only grows by push or is replaced by a new array, so an entry keeps that array and its length */
+var HIST_MAX = 200, UH = {undo:[], redo:[], coalesce:null};
+function snapshot(label){
+  return {g:NP.clone(S.g), preset:S.preset, steps:S.steps, hist:S.history, histLen:S.history.length,
+          sel:S.sel ? S.sel.id : null, label:label};
+}
+function paintHistButtons(){
+  el.undoBtn.disabled = !UH.undo.length;
+  el.redoBtn.disabled = !UH.redo.length;
+}
+function pushEntry(entry){
+  UH.undo.push(entry);
+  if(UH.undo.length > HIST_MAX) UH.undo.shift();
+  UH.redo = [];
+  UH.coalesce = null;
+  paintHistButtons();
+  return entry;
+}
+function record(label){ return pushEntry(snapshot(label)); }
+/* wheel, arrow keys and +/- on the same knob within 800 ms make one entry */
+function recordCoalesced(key, label){
+  var now = Date.now();
+  if(UH.coalesce && UH.coalesce.key === key && now - UH.coalesce.t < 800 && UH.undo.length){ UH.coalesce.t = now; return; }
+  record(label);
+  UH.coalesce = {key:key, t:now};
+}
+function graphSig(g){
+  if(!g) return '';
+  var s = '', i;
+  for(i = 0; i < g.nodes.length; i++) s += g.nodes[i].id + ':' + (g.nodes[i].act || '-') + ',';
+  s += '|';
+  for(i = 0; i < g.edges.length; i++) s += g.edges[i].from + '>' + g.edges[i].to + ',';
+  return s;
+}
+function paintPresetChips(){
+  el.presets.querySelectorAll('.ds').forEach(function(b){ b.classList.toggle('active', b.dataset.key === S.preset); });
+}
+function restoreEntry(en){
+  var keep = S.sel ? S.sel.id : null;
+  S.g = NP.clone(en.g); S.preset = en.preset; S.steps = en.steps;
+  S.history = en.hist.slice(0, en.histLen);
+  if(!S.history.length) S.history = [currentLoss()];
+  S.adam = NP.makeAdam();
+  S.stale = true;
+  pruneGrad();
+  S.diverged = isBad(currentLoss()); S.tooBig = S.diverged;
+  S.structVer++;
+  S.presetSig = graphSig(NP.buildPreset(S.preset)); S.baseSig = S.presetSig; S.base = null;
+  var exists = function(id){ return !!id && !!(NP.getNode(S.g, id) || NP.getEdge(S.g, id)); };
+  S.sel = null;
+  select(exists(keep) ? keep : (exists(en.sel) ? en.sel : null));
+  paintPresetChips();
+  render();
+  syncInspector(true);
+}
+function undo(){
+  var en = null;
+  if(S.running){
+    stopRun();
+    var ri = S.runEntry ? UH.undo.indexOf(S.runEntry) : -1;
+    if(ri >= 0){ en = UH.undo[ri]; UH.undo.length = ri; }
+  }
+  if(!en){
+    if(!UH.undo.length){ setMsg('Nothing to undo.'); paintHistButtons(); return false; }
+    en = UH.undo.pop();
+  }
+  UH.redo.push(snapshot(en.label));
+  UH.coalesce = null;
+  restoreEntry(en);
+  paintHistButtons();
+  setMsg('Undid ' + en.label);
+  return true;
+}
+function redo(){
+  if(S.running) stopRun();
+  if(!UH.redo.length){ setMsg('Nothing to redo.'); paintHistButtons(); return false; }
+  var en = UH.redo.pop();
+  UH.undo.push(snapshot(en.label));
+  UH.coalesce = null;
+  restoreEntry(en);
+  paintHistButtons();
+  setMsg('Redid ' + en.label);
+  return true;
+}
+
+/* ---------------- editing ---------------- */
+/* drop slopes of knobs that no longer exist, so a new neuron or wire that reuses an id starts blank */
+function pruneGrad(){
+  if(!S.grad) return;
+  var dW = {}, dB = {}, k;
+  for(k in S.grad.dW) if(NP.getEdge(S.g, k)) dW[k] = S.grad.dW[k];
+  for(k in S.grad.dB) if(NP.getNode(S.g, k)) dB[k] = S.grad.dB[k];
+  S.grad = {loss:S.grad.loss, dW:dW, dB:dB};
+}
+function edited(structural){
+  if(S.grad) S.stale = true;
+  if(structural) pruneGrad();
+  S.diverged = isBad(currentLoss()) && S.diverged;
+  if(structural) S.structVer++;
+  if(S.sel){
+    var gone = S.sel.type === 'node' ? !NP.getNode(S.g, S.sel.id) : !NP.getEdge(S.g, S.sel.id);
+    if(gone) S.sel = null;
+  }
+  requestRender();
+}
+function select(id){
+  if(id === null || id === undefined){ S.sel = null; }
+  else if(NP.getNode(S.g, id)) S.sel = {type:'node', id:id};
+  else if(NP.getEdge(S.g, id)) S.sel = {type:'edge', id:id};
+  else S.sel = null;
+  requestRender();
+}
+function addNeuron(opts){
+  opts = opts || {};
+  var en = record('Add neuron');
+  var n = NP.addNeuron(S.g, {px:opts.px, py:opts.py, act:opts.act, bias:typeof opts.bias === 'number' ? opts.bias : NEW_BIAS});
+  en.label = 'Add ' + n.name;
+  S.sel = {type:'node', id:n.id};
+  setMsg('Added ' + n.name + ' (' + NP.ACTS[n.act].label + '). Drag from a right dot to connect it.');
+  edited(true);
+  return n.id;
+}
+function refuseText(from, to, reason){
+  if(from === to) return 'A neuron cannot connect to itself.';
+  if(to === 'x') return 'Nothing can connect into x. It is the input.';
+  if(from === 'out') return 'ŷ is the output. It has no outlet.';
+  for(var i = 0; i < S.g.edges.length; i++){
+    var e = S.g.edges[i];
+    if(e.from === from && e.to === to) return nodeName(from) + ' and ' + nodeName(to) + ' are already connected.';
+  }
+  if(/loop/i.test(reason || '')) return 'That wire would make a loop: ' + nodeName(to) + ' already feeds ' + nodeName(from) + '.';
+  return reason ? reason + '.' : 'That connection is not allowed.';
+}
+function connect(from, to){
+  var chk = NP.canConnect(S.g, from, to);
+  if(!chk.ok){ setMsg(refuseText(from, to, chk.reason), true); return null; }
+  record('Connect ' + nodeName(from) + ' → ' + nodeName(to));
+  var e = NP.connect(S.g, from, to);
+  if(!e){ UH.undo.pop(); paintHistButtons(); setMsg('That connection is not allowed.', true); return null; }
+  setMsg('Connected ' + nodeName(from) + ' → ' + nodeName(to) + ', w = ' + fmt(e.w, 2) + '.');
+  edited(true);
+  return e.id;
+}
+function removeSelection(){
+  if(!S.sel) return false;
+  if(S.sel.type === 'node'){
+    if(S.sel.id === 'x' || S.sel.id === 'out'){ setMsg('x and ŷ cannot be removed.', true); return false; }
+    var nm = nodeName(S.sel.id);
+    if(!NP.getNode(S.g, S.sel.id)) return false;
+    record('Remove ' + nm);
+    if(NP.removeNode(S.g, S.sel.id)){ setMsg('Removed ' + nm + ' and its wires.'); S.sel = null; S.adam = NP.makeAdam(); edited(true); return true; }
+  } else {
+    var e = NP.getEdge(S.g, S.sel.id);
+    if(!e) return false;
+    record('Remove wire ' + nodeName(e.from) + ' → ' + nodeName(e.to));
+    if(NP.removeEdge(S.g, e.id)){ setMsg('Removed the wire ' + nodeName(e.from) + ' → ' + nodeName(e.to) + '.'); S.sel = null; S.adam = NP.makeAdam(); edited(true); return true; }
+  }
+  return false;
+}
+function setWeight(id, w){ NP.setWeight(S.g, id, w); edited(false); }
+function setBias(id, b){ NP.setBias(S.g, id, b); edited(false); }
+function setAct(id, key){
+  var n = NP.getNode(S.g, id);
+  if(!n || n.kind === 'input' || !NP.ACTS[key] || n.act === key) return false;
+  record('Set ' + n.name + ' to ' + NP.ACTS[key].label);
+  if(NP.setAct(S.g, id, key)) edited(false);
+  return true;
+}
+function randomizeAll(){
+  record('Randomize');
+  NP.randomize(S.g, S.seed); S.seed++;
+  S.adam = NP.makeAdam();
+  setMsg('New random weights');
+  edited(false);
+}
+function randomizeNode(id){
+  var n = NP.getNode(S.g, id);
+  if(!n || n.kind !== 'neuron') return false;
+  record('Randomize ' + n.name);
+  NP.randomize(S.g, S.seed, id); S.seed++;
+  S.adam = NP.makeAdam();
+  setMsg('New random weights for ' + n.name);
+  edited(false);
+  return true;
+}
+function deadText(id){ return nodeName(id) + ' outputs 0 for every point, so its slopes are 0. Try Randomize this neuron.'; }
+var deadCache = {t:0, ids:[]}, lastDeadKey = '';
+function deadList(){
+  var now = Date.now();
+  if(!S.running || now - deadCache.t > 200){ deadCache.ids = NP.deadNeurons(S.g); deadCache.t = now; }
+  return deadCache.ids;
+}
+function noteDead(){
+  var ids = deadList(), key = ids.join(','), prev = lastDeadKey ? lastDeadKey.split(',') : [];
+  if(key === lastDeadKey) return;
+  lastDeadKey = key;
+  for(var i = 0; i < ids.length; i++) if(prev.indexOf(ids[i]) < 0){ setMsg(deadText(ids[i])); return; }
+}
+
+/* ---------------- training ---------------- */
+function setLr(v){
+  if(!(v > 0) || !isFinite(v)) return;
+  S.lr = v;
+  paintLr();
+}
+function lrToT(v){ return Math.round((Math.log(v)/Math.LN10 + 5)/6*1000); }
+function lrFromT(t){ return +Math.pow(10, -5 + 6*t/1000).toPrecision(2); }
+function paintLr(){
+  el.lrIn.value = lrToT(S.lr);
+  el.lrVal.textContent = S.lr.toPrecision(2).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+}
+function applyUpdate(grad){
+  if(S.opt === 'adam') S.adam.step(S.g, grad, S.lr);
+  else NP.step(S.g, grad, S.lr);
+}
+function noteGrad(grad){
+  S.grad = grad;
+  var m = 0, k;
+  for(k in grad.dW) if(isFinite(grad.dW[k]) && Math.abs(grad.dW[k]) > m) m = Math.abs(grad.dW[k]);
+  for(k in grad.dB) if(isFinite(grad.dB[k]) && Math.abs(grad.dB[k]) > m) m = Math.abs(grad.dB[k]);
+  S.gradMax = m;
+}
+/* the network Reset goes back to: taken when training starts on a network that differs from its preset */
+function captureBase(){
+  var sig = graphSig(S.g);
+  if(sig === S.baseSig) return;
+  S.baseSig = sig;
+  S.base = sig === S.presetSig ? null : NP.clone(S.g);
+}
+/* the loss plot starts from the loss the knobs have now, not from before the last edit */
+function syncHistoryStart(){
+  var L = currentLoss();
+  if(isFinite(L) && S.history[S.history.length - 1] !== L) S.history.push(L);
+}
+function measure(){
+  if(S.diverged || S.running) return null;
+  captureBase();
+  syncHistoryStart();
+  noteGrad(NP.gradient(S.g));
+  S.stale = false;
+  render();
+  return S.grad;
+}
+function canStep(){ return !!S.grad && !S.stale && !S.diverged && !S.running; }
+function takeStep(){
+  if(!canStep()) return null;
+  record('Take a step');
+  S.tooBig = false;
+  applyUpdate(S.grad);
+  S.steps++;
+  var L = currentLoss();
+  S.history.push(L);
+  S.stale = true;
+  if(isBad(L)) S.diverged = true;
+  render();
+  return L;
+}
+/* n steps of gradient + update. One entry in the history per step. */
+function trainN(n){
+  if(S.diverged) return;
+  if(isBad(currentLoss())){ S.diverged = true; S.tooBig = true; return; }
+  S.tooBig = false;
+  syncHistoryStart();
+  var grad = null;
+  for(var t = 0; t < n; t++){
+    grad = NP.gradient(S.g);
+    if(t > 0){
+      S.history.push(grad.loss);
+      if(isBad(grad.loss)){ S.diverged = true; break; }
+    }
+    applyUpdate(grad);
+    S.steps++;
+  }
+  if(grad) noteGrad(grad);
+  S.stale = true;
+  if(!S.diverged){
+    var L = currentLoss();
+    S.history.push(L);
+    if(isBad(L)) S.diverged = true;
+  }
+}
+var raf = 0;
+function startRun(){
+  if(S.running || S.diverged) return;
+  S.runEntry = record('Run');
+  captureBase();
+  S.running = true;
+  paintButtons();
+  raf = requestAnimationFrame(tick);
+}
+function stopRun(){
+  var was = S.running;
+  S.running = false;
+  if(raf) cancelAnimationFrame(raf);
+  raf = 0;
+  /* slopes left over from the last training step look like a measurement: hide them */
+  if(was) S.grad = null;
+  render();
+}
+function toggleRun(){ if(S.running) stopRun(); else startRun(); }
+function tick(){
+  raf = 0;
+  if(!S.running) return;
+  trainN(S.speed);
+  if(S.diverged){ stopRun(); return; }
+  render();
+  raf = requestAnimationFrame(tick);
+}
+function loadPreset(key){
+  if(PRESET_KEYS.indexOf(key) < 0) return false;
+  if(S.running) stopRun();
+  S.preset = key;
+  S.g = NP.buildPreset(key);
+  S.adam = NP.makeAdam();
+  S.grad = null; S.stale = true; S.steps = 0; S.diverged = false;
+  S.history = [currentLoss()];
+  S.sel = null; S.structVer++;
+  S.presetSig = graphSig(S.g); S.baseSig = S.presetSig; S.base = null; S.tooBig = false;
+  paintPresetChips();
+  setMsg('');
+  render();
+  return true;
+}
+function reset(){
+  var sel = S.sel;
+  record('Reset');
+  if(S.base){
+    if(S.running) stopRun();
+    S.g = NP.clone(S.base);
+    S.adam = NP.makeAdam();
+    S.grad = null; S.stale = true; S.steps = 0;
+    S.diverged = isBad(currentLoss()); S.tooBig = S.diverged;
+    S.history = [currentLoss()];
+    S.sel = null; S.structVer++;
+    setMsg('Reset: your network as it was when training started.');
+    render();
+  } else {
+    loadPreset(S.preset);
+  }
+  if(sel) select(sel.id);
+}
+
+/* ---------------- patch geometry ---------------- */
+var PW = 0, PH = 0, MX = NW/2 + 16, MY = NH/2 + 14;
+function toPx(n){ return {x: MX + n.px*Math.max(1, PW - 2*MX), y: MY + n.py*Math.max(1, PH - 2*MY)}; }
+function fromPx(x, y){ return {px: clamp((x - MX)/Math.max(1, PW - 2*MX), 0, 1), py: clamp((y - MY)/Math.max(1, PH - 2*MY), 0, 1)}; }
+function nodeAt(p){
+  var best = null, bd = Infinity;
+  S.g.nodes.forEach(function(n){
+    var c = toPx(n);
+    if(p.x >= c.x - NW/2 - 18 && p.x <= c.x + NW/2 + 6 && p.y >= c.y - NH/2 - 8 && p.y <= c.y + NH/2 + 8){
+      var d = (p.x - c.x)*(p.x - c.x) + (p.y - c.y)*(p.y - c.y);
+      if(d < bd){ bd = d; best = n; }
+    }
+  });
+  return best;
+}
+/* where the + Neuron button puts a new neuron: the first candidate spot whose box is clear of every node */
+function freeSpot(){
+  var cols = [0.5, 0.36, 0.64, 0.22, 0.78], rows = [0.5, 0.3, 0.7, 0.12, 0.88, 0.4, 0.6, 0.2, 0.8];
+  for(var ci = 0; ci < cols.length; ci++) for(var ri = 0; ri < rows.length; ri++){
+    var cand = toPx({px:cols[ci], py:rows[ri]}), ok = true;
+    for(var k = 0; k < S.g.nodes.length && ok; k++){
+      var c = toPx(S.g.nodes[k]);
+      if(Math.abs(c.x - cand.x) < NW + 16 && Math.abs(c.y - cand.y) < NH + 16) ok = false;
+    }
+    if(ok) return {px:cols[ci], py:rows[ri]};
+  }
+  /* no clear spot: the point of a fine grid farthest from every node, measured in box sizes */
+  var best = {px:0.5, py:0.5}, bestD = -1;
+  for(var gx = 0; gx <= 14; gx++) for(var gy = 0; gy <= 18; gy++){
+    var px = 0.15 + 0.7*gx/14, py = 0.05 + 0.9*gy/18, q = toPx({px:px, py:py}), d = Infinity;
+    for(var j = 0; j < S.g.nodes.length; j++){
+      var cc = toPx(S.g.nodes[j]), ddx = (cc.x - q.x)/(NW + 16), ddy = (cc.y - q.y)/(NH + 16), dd = ddx*ddx + ddy*ddy;
+      if(dd < d) d = dd;
+    }
+    if(d > bestD){ bestD = d; best = {px:px, py:py}; }
+  }
+  return best;
+}
+
+/* ---------------- patch rendering ---------------- */
+var svg = el.svg;
+var bgRect = sv('rect',{class:'bg', x:0, y:0, width:10, height:10, 'data-role':'bg'});
+var gWires = sv('g',{}), gNodes = sv('g',{}), gBoxes = sv('g',{}), gTemp = sv('g',{});
+[bgRect, gWires, gBoxes, gNodes, gTemp].forEach(function(n){ svg.appendChild(n); });
+
+/* the t where a bezier with flat end tangents has y weight A on its start point: (1-t)^2 (1+2t) = A */
+function tForA(A){
+  var lo = 0, hi = 1;
+  for(var it = 0; it < 30; it++){ var m = (lo + hi)/2; if((1 - m)*(1 - m)*(1 + 2*m) > A) lo = m; else hi = m; }
+  return (lo + hi)/2;
+}
+function wireGeom(e, pos){
+  var a = pos[e.from], b = pos[e.to];
+  var x1 = a.x + NW/2, y1 = a.y, x2 = b.x - NW/2, y2 = b.y;
+  var dx = Math.max(50, Math.abs(x2 - x1)*0.5);
+  return {x1:x1, y1:y1, x2:x2, y2:y2, c1:x1 + dx, c2:x2 - dx,
+    d:'M' + x1.toFixed(1) + ' ' + y1.toFixed(1) + ' C' + (x1 + dx).toFixed(1) + ' ' + y1.toFixed(1) + ' ' + (x2 - dx).toFixed(1) + ' ' + y2.toFixed(1) + ' ' + x2.toFixed(1) + ' ' + y2.toFixed(1)};
+}
+function renderPatch(){
+  PW = el.wrap.clientWidth; PH = el.wrap.clientHeight;
+  if(!PW || !PH) return;
+  svg.setAttribute('viewBox', '0 0 ' + PW + ' ' + PH);
+  bgRect.setAttribute('width', PW); bgRect.setAttribute('height', PH);
+  empty(gWires); empty(gNodes); empty(gBoxes);
+  var g = S.g, pos = {}, cur = NP.curves(g, MINI_XS);
+  g.nodes.forEach(function(n){ pos[n.id] = toPx(n); });
+  var dW = S.grad ? S.grad.dW : null, dB = S.grad ? S.grad.dB : null, staleCls = S.stale ? ' stale' : '';
+
+  /* where along its wire each number box sits. The box height is A*y(from) + (1-A)*y(to).
+     Wires that fan into one node get their boxes near that node with A = 1/(k+1), wires that fan out
+     of one node near the source, so the k boxes land at k different heights. */
+  var indeg = {}, outdeg = {};
+  g.edges.forEach(function(e){ indeg[e.to] = (indeg[e.to] || 0) + 1; outdeg[e.from] = (outdeg[e.from] || 0) + 1; });
+  var dense = g.edges.length > 12;
+
+  g.edges.forEach(function(e){
+    var wg = wireGeom(e, pos), sel = S.sel && S.sel.type === 'edge' && S.sel.id === e.id;
+    var w = e.w, col = !isFinite(w) || w === 0 ? C.muted : (w > 0 ? C.pos : C.neg);
+    var width = 1.5 + (isFinite(w) ? Math.min(Math.abs(w), 3) : 3)*1.8;
+    var grp = sv('g',{class:'wire', 'data-edge':e.id});
+    if(sel) grp.appendChild(sv('path',{class:'wsel', d:wg.d, 'stroke-width':width + 12}));
+    grp.appendChild(sv('path',{class:'wvis', d:wg.d, stroke:col, 'stroke-width':width}));
+    grp.appendChild(sv('path',{class:'whit', d:wg.d, 'data-role':'wire', 'data-id':e.id}));
+    gWires.appendChild(grp);
+    var kin = indeg[e.to], kout = outdeg[e.from], A;
+    if(kin >= 2 && kin >= kout) A = 1/(kin + 1);
+    else if(kout >= 2) A = 1 - 1/(kout + 1);
+    else A = 0.5;
+    var t = tForA(A), u = 1 - t;
+    var mx = u*u*u*wg.x1 + 3*u*u*t*wg.c1 + 3*u*t*t*wg.c2 + t*t*t*wg.x2;
+    var my = A*wg.y1 + (1 - A)*wg.y2;
+    var bx = sv('g',{class:'numbox', 'data-edge':e.id, transform:'translate(' + mx.toFixed(1) + ' ' + my.toFixed(1) + ')'});
+    var bw = dense ? 48 : 56;
+    bx.appendChild(sv('rect',{class:'nbox' + (sel ? ' sel' : ''), x:-bw/2, y:-12, width:bw, height:24, rx:6, stroke:col, 'data-role':'nbox', 'data-id':e.id}));
+    bx.appendChild(sv('text',{class:'nbtext' + (dense ? ' dense' : ''), x:0, y:5}, Math.abs(w) >= 1000 ? fmtBig(w) : fmt(w, 2)));
+    /* slope labels on the wires of a small patch; a crowded one has them only on the inspector knobs */
+    if(dW && dW[e.id] !== undefined && !dense) bx.appendChild(sv('text',{class:'wslope' + staleCls, x:0, y:-17}, 'slope ' + fmtSlope(dW[e.id])));
+    gBoxes.appendChild(bx);
+  });
+
+  var deadIds = deadList();
+  g.nodes.forEach(function(n){
+    var p = pos[n.id], l = p.x - NW/2, t = p.y - NH/2;
+    var sel = S.sel && S.sel.type === 'node' && S.sel.id === n.id, dead = deadIds.indexOf(n.id) >= 0;
+    var grp = sv('g',{class:'node ' + n.kind + (sel ? ' sel' : '') + (dead ? ' dead' : ''), 'data-node':n.id});
+    grp.appendChild(sv('rect',{class:'nbody', x:l, y:t, width:NW, height:NH, rx:10, 'data-role':'node', 'data-id':n.id}));
+    grp.appendChild(sv('text',{class:'nname', x:l + 12, y:t + 22}, n.name));
+    grp.appendChild(sv('text',{class:'nact', x:l + NW - 12, y:t + 22}, n.kind === 'input' ? 'input' : NP.ACTS[n.act].label));
+    /* the mini curve: this node's output h(x) over x in [-3, 3] */
+    var cx0 = l + 10, cx1 = l + NW - 10, cy0 = t + 30, cy1 = t + (n.kind === 'input' ? NH - 10 : 62);
+    grp.appendChild(sv('rect',{class:'ncbox', x:cx0, y:cy0, width:cx1 - cx0, height:cy1 - cy0, rx:3}));
+    var hs = cur.H[n.id] || (n.kind === 'output' ? cur.out : MINI_XS), lo = Infinity, hi = -Infinity, k;
+    for(k = 0; k < hs.length; k++){ if(isFinite(hs[k])){ if(hs[k] < lo) lo = hs[k]; if(hs[k] > hi) hi = hs[k]; } }
+    if(isFinite(lo)){
+      if(hi - lo < 1e-6){ lo -= 0.5; hi += 0.5; }
+      var pad = (hi - lo)*0.1; lo -= pad; hi += pad;
+      var Y = function(v){ return cy1 - (v - lo)/(hi - lo)*(cy1 - cy0); };
+      if(lo < 0 && hi > 0) grp.appendChild(sv('line',{class:'nzero', x1:cx0, x2:cx1, y1:Y(0).toFixed(1), y2:Y(0).toFixed(1)}));
+      var pts = [];
+      for(k = 0; k < hs.length; k++) if(isFinite(hs[k])) pts.push((cx0 + (cx1 - cx0)*k/(hs.length - 1)).toFixed(1) + ',' + Y(hs[k]).toFixed(1));
+      grp.appendChild(sv('polyline',{class:'ncurve', points:pts.join(' ')}));
+    }
+    if(dead){
+      grp.appendChild(sv('rect',{class:'ndeadbg', x:l + NW/2 - 30, y:t + 37, width:60, height:18, rx:4}));
+      grp.appendChild(sv('text',{class:'ndead', x:l + NW/2, y:t + 50}, 'inactive'));
+    }
+    if(n.kind !== 'input'){
+      grp.appendChild(sv('text',{class:'nbias', x:l + 12, y:t + 79}, 'b = ' + (Math.abs(n.bias) >= 1000 ? fmtBig(n.bias) : fmt(n.bias, 2))));
+      if(dB && dB[n.id] !== undefined) grp.appendChild(sv('text',{class:'bslope' + staleCls, x:l + NW - 8, y:t + 79}, fmtSlope2(dB[n.id])));
+      grp.appendChild(sv('circle',{class:'port pin', cx:l, cy:p.y, r:PORT_R}));
+      grp.appendChild(sv('circle',{class:'phit pin', cx:l, cy:p.y, r:16, 'data-role':'inlet', 'data-id':n.id}));
+    }
+    if(n.kind !== 'output'){
+      grp.appendChild(sv('circle',{class:'port pout', cx:l + NW, cy:p.y, r:PORT_R}));
+      grp.appendChild(sv('circle',{class:'phit pout', cx:l + NW, cy:p.y, r:16, 'data-role':'outlet', 'data-id':n.id}));
+    }
+    gNodes.appendChild(grp);
+  });
+  renderTemp();
+}
+function renderTemp(){
+  empty(gTemp);
+  if(!drag || drag.mode !== 'connect') return;
+  var n = NP.getNode(S.g, drag.from || drag.to);
+  if(!n) return;
+  var c = toPx(n), x1 = c.x + NW/2, y1 = c.y, x2 = drag.x, y2 = drag.y;
+  /* dragging backwards from a left dot: the wire runs from the pointer into that dot */
+  if(!drag.from){ x1 = drag.x; y1 = drag.y; x2 = c.x - NW/2; y2 = c.y; }
+  var dx = Math.max(40, Math.abs(x2 - x1)*0.5);
+  gTemp.appendChild(sv('path',{class:'tmpwire', d:'M' + x1 + ' ' + y1 + ' C' + (x1 + dx) + ' ' + y1 + ' ' + (x2 - dx) + ' ' + y2 + ' ' + x2 + ' ' + y2}));
+}
+
+/* ---------------- patch interaction ---------------- */
+var drag = null;
+function svgPoint(e){ var r = svg.getBoundingClientRect(); return {x:e.clientX - r.left, y:e.clientY - r.top}; }
+function roleOf(target){
+  var t = target && target.closest ? target.closest('[data-role]') : null;
+  return t ? {role:t.getAttribute('data-role'), id:t.getAttribute('data-id')} : {role:'bg', id:null};
+}
+svg.addEventListener('pointerdown', function(e){
+  if(e.button !== 0) return;
+  var r = roleOf(e.target), p = svgPoint(e);
+  e.preventDefault();
+  if(r.role === 'outlet'){
+    drag = {mode:'connect', from:r.id, x0:p.x, y0:p.y, x:p.x, y:p.y, moved:false};
+    renderTemp();
+  } else if(r.role === 'inlet'){
+    drag = {mode:'connect', to:r.id, x0:p.x, y0:p.y, x:p.x, y:p.y, moved:false};
+    renderTemp();
+  } else if(r.role === 'node'){
+    var n = NP.getNode(S.g, r.id), c = toPx(n);
+    drag = {mode:'move', id:r.id, dx:p.x - c.x, dy:p.y - c.y, x0:p.x, y0:p.y, moved:false, snap:snapshot('Move ' + n.name), rec:false};
+    if(!S.sel || S.sel.id !== r.id) select(r.id);
+  } else if(r.role === 'nbox'){
+    var ed = NP.getEdge(S.g, r.id);
+    drag = {mode:'nbox', id:r.id, x0:p.x, y0:p.y, lastY:p.y, raw:ed.w, moved:false, snap:snapshot('Change w ' + edgeLabel(ed)), rec:false};
+  } else if(r.role === 'wire'){
+    select(r.id);
+  } else {
+    if(S.sel) select(null);
+  }
+});
+window.addEventListener('pointermove', function(e){
+  if(!drag) return;
+  var p = svgPoint(e);
+  if(Math.abs(p.x - drag.x0) + Math.abs(p.y - drag.y0) > 4) drag.moved = true;
+  if(drag.mode === 'move'){
+    if(!drag.moved) return;
+    var n = NP.getNode(S.g, drag.id);
+    if(!n) return;
+    var q = fromPx(p.x - drag.dx, p.y - drag.dy);
+    if(!drag.rec && (q.px !== n.px || q.py !== n.py)){ pushEntry(drag.snap); drag.rec = true; }
+    n.px = q.px; n.py = q.py;
+    requestRender();
+  } else if(drag.mode === 'connect'){
+    drag.x = p.x; drag.y = p.y;
+    renderTemp();
+  } else if(drag.mode === 'nbox'){
+    if(!drag.moved) return;
+    /* Max number box: up raises the value, 0.01 per pixel, Shift for 0.001 */
+    var fine = e.shiftKey;
+    drag.raw = clamp(drag.raw + (drag.lastY - p.y)*(fine ? 0.001 : 0.01), -5, 5);
+    drag.lastY = p.y;
+    var v = fine ? Math.round(drag.raw*1000)/1000 : Math.round(drag.raw*100)/100;
+    var ew = NP.getEdge(S.g, drag.id);
+    if(!ew || ew.w === v) return;
+    if(!drag.rec){ pushEntry(drag.snap); drag.rec = true; }
+    setWeight(drag.id, v);
+  }
+});
+window.addEventListener('pointerup', function(e){
+  if(!drag) return;
+  var d = drag, p = svgPoint(e);
+  drag = null;
+  if(d.mode === 'connect'){
+    empty(gTemp);
+    if(d.moved){
+      var target = nodeAt(p);
+      /* dropping back on the same box is a shaky click, not a request: cancel quietly */
+      if(target && d.from && target.id !== d.from) connect(d.from, target.id);
+      else if(target && d.to && target.id !== d.to) connect(target.id, d.to);
+    }
+  } else if(d.mode === 'nbox'){
+    if(!d.moved) select(d.id);
+  }
+});
+svg.addEventListener('dblclick', function(e){
+  var r = roleOf(e.target), p = svgPoint(e);
+  if(r.role !== 'bg') return;
+  if(nodeAt(p)) return;
+  var q = fromPx(p.x, p.y);
+  addNeuron({px:Math.round(q.px*1000)/1000, py:Math.round(q.py*1000)/1000});
+});
+
+/* ---------------- plot ---------------- */
+var YR = (function(){
+  var lo = Infinity, hi = -Infinity;
+  NP.YS.forEach(function(y){ if(y < lo) lo = y; if(y > hi) hi = y; });
+  var pad = (hi - lo)*0.15;
+  return [lo - pad, hi + pad];
+})();
+function drawPlot(){
+  var gg = prepFixed(el.plot);
+  if(!gg) return;
+  var ctx = gg.ctx, W = gg.W, H = gg.H, m = {l:56, r:16, t:12, b:40};
+  var xLo = -3, xHi = 3, yLo = YR[0], yHi = YR[1], pw = W - m.l - m.r, ph = H - m.t - m.b;
+  var PX = function(x){ return m.l + (x - xLo)/(xHi - xLo)*pw; };
+  var PY = function(y){ return m.t + ph - (y - yLo)/(yHi - yLo)*ph; };
+  ctx.fillStyle = C.surface; ctx.fillRect(0, 0, W, H);
+  ctx.font = '13px Inter, system-ui, sans-serif';
+  var xs = niceStep(xHi - xLo, 8), ys = niceStep(yHi - yLo, 6), v;
+  ctx.strokeStyle = C.grid; ctx.lineWidth = 1; ctx.fillStyle = C.tick; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for(v = Math.ceil(xLo/xs)*xs; v <= xHi + 1e-9; v += xs){
+    var px = Math.round(PX(v)) + 0.5;
+    ctx.beginPath(); ctx.moveTo(px, m.t); ctx.lineTo(px, m.t + ph); ctx.stroke();
+    ctx.fillText(fmt(v, decimalsOf(xs)), px, m.t + ph + 6);
+  }
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for(v = Math.ceil(yLo/ys)*ys; v <= yHi + 1e-9; v += ys){
+    var py = Math.round(PY(v)) + 0.5;
+    ctx.beginPath(); ctx.moveTo(m.l, py); ctx.lineTo(m.l + pw, py); ctx.stroke();
+    ctx.fillText(fmt(v, decimalsOf(ys)), m.l - 8, py);
+  }
+  ctx.strokeStyle = C.axis;
+  var zx = Math.round(PX(0)) + 0.5; ctx.beginPath(); ctx.moveTo(zx, m.t); ctx.lineTo(zx, m.t + ph); ctx.stroke();
+  if(yLo < 0 && yHi > 0){ var zy = Math.round(PY(0)) + 0.5; ctx.beginPath(); ctx.moveTo(m.l, zy); ctx.lineTo(m.l + pw, zy); ctx.stroke(); }
+  ctx.beginPath(); ctx.moveTo(m.l + 0.5, m.t); ctx.lineTo(m.l + 0.5, m.t + ph + 0.5); ctx.lineTo(m.l + pw, m.t + ph + 0.5); ctx.stroke();
+  ctx.fillStyle = C.tick; ctx.font = '600 14px Inter, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('x', m.l + pw/2, H - 6);
+  ctx.save(); ctx.translate(14, m.t + ph/2); ctx.rotate(-Math.PI/2); ctx.fillText('y', 0, 0); ctx.restore();
+
+  ctx.save(); ctx.beginPath(); ctx.rect(m.l, m.t, pw, ph); ctx.clip();
+  NP.DATA.forEach(function(p){
+    var x = PX(p[0]), y = PY(p[1]);
+    ctx.fillStyle = C.surface; ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = C.data; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI*2); ctx.fill();
+  });
+  var cur = NP.curves(S.g, PLOT_XS);
+  function line(vals, color, width, alpha){
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.globalAlpha = alpha; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath();
+    var started = false;
+    for(var i = 0; i < PLOT_XS.length; i++){
+      var y = vals[i];
+      if(!isFinite(y)){ started = false; continue; }
+      var yy = PY(y);
+      if(yy < -4000 || yy > 8000){ started = false; continue; }
+      if(!started){ ctx.moveTo(PX(PLOT_XS[i]), yy); started = true; } else ctx.lineTo(PX(PLOT_XS[i]), yy);
+    }
+    ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  if(S.showNeurons){
+    S.g.edges.forEach(function(e){
+      if(e.to !== 'out') return;
+      var hs = cur.H[e.from] || PLOT_XS, vals = new Float64Array(PLOT_XS.length);
+      for(var i = 0; i < vals.length; i++) vals[i] = e.w*hs[i];
+      line(vals, '#52514e', 2, 0.55);
+    });
+  }
+  line(cur.out, C.model, 4, 1);
+  ctx.restore();
+}
+function drawHist(){
+  var gg = prepFixed(el.hist);
+  if(!gg) return;
+  var ctx = gg.ctx, W = gg.W, H = gg.H, m = {l:48, r:16, t:6, b:18}, pw = W - m.l - m.r, ph = H - m.t - m.b;
+  var hist = S.history, n = hist.length, xMax = Math.max(1, n - 1), yLo = Infinity, yHi = -Infinity, i;
+  for(i = 0; i < n; i++){ var v = hist[i]; if(isFinite(v) && v > 0){ if(v < yLo) yLo = v; if(v > yHi) yHi = v; } }
+  if(!isFinite(yLo)){ yLo = 0.001; yHi = 1; }
+  yHi = Math.min(Math.max(yHi, yLo*10), DIVERGE);
+  var lLo = Math.log(yLo)/Math.LN10 - 0.1, lHi = Math.log(yHi)/Math.LN10 + 0.1;
+  var PX = function(t){ return m.l + t/xMax*pw; }, PY = function(v){ return m.t + ph - (Math.log(Math.max(v, 1e-12))/Math.LN10 - lLo)/(lHi - lLo)*ph; };
+  ctx.fillStyle = C.surface; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#fff'; ctx.fillRect(m.l, m.t, pw, ph);
+  ctx.font = '11px Inter, system-ui, sans-serif'; ctx.fillStyle = C.tick; ctx.strokeStyle = C.grid; ctx.lineWidth = 1;
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  var eStep = Math.max(1, Math.ceil((Math.floor(lHi) - Math.ceil(lLo) + 1)/3));
+  for(var e = Math.ceil(lLo); e <= Math.floor(lHi); e += eStep){ var py = Math.round(PY(Math.pow(10, e))) + 0.5; ctx.beginPath(); ctx.moveTo(m.l, py); ctx.lineTo(m.l + pw, py); ctx.stroke(); ctx.fillText(fmtLoss(Math.pow(10, e)), m.l - 5, py); }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  var xs = Math.max(1, Math.round(niceStep(xMax, 4)));
+  for(var t = 0; t <= xMax; t += xs){ ctx.fillText(String(Math.round(t)), PX(t), m.t + ph + 3); }
+  ctx.strokeStyle = C.axis; ctx.strokeRect(m.l + 0.5, m.t + 0.5, pw, ph);
+  ctx.save(); ctx.beginPath(); ctx.rect(m.l, m.t, pw, ph); ctx.clip();
+  ctx.strokeStyle = C.model; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.beginPath();
+  var stride = Math.max(1, Math.floor(n/Math.max(50, pw)));
+  for(i = 0; i < n; i += stride){
+    var val = isFinite(hist[i]) ? Math.min(hist[i], DIVERGE) : DIVERGE;
+    if(i === 0) ctx.moveTo(PX(i), PY(val)); else ctx.lineTo(PX(i), PY(val));
+  }
+  if((n - 1) % stride !== 0){ var lv = isFinite(hist[n - 1]) ? Math.min(hist[n - 1], DIVERGE) : DIVERGE; ctx.lineTo(PX(n - 1), PY(lv)); }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* ---------------- inspector ---------------- */
+var insp = {key:'', knobs:[], seg:null};
+function knobSpec(name, sub){ return {name:name, sub:sub, min:-5, max:5, step:0.01, big:0.1, init:0}; }
+function addKnob(box, kind, id, name, sub){
+  var spec = knobSpec(name, sub);
+  spec.onGesture = function(g){
+    var label = 'Change ' + name + ' ' + sub;
+    if(g === 'drag') record(label); else recordCoalesced('knob|' + kind + '|' + id, label);
+  };
+  var kn = makeKnob(spec, function(){
+    kn.loose = undefined;
+    if(kind === 'w') setWeight(id, kn.value); else setBias(id, kn.value);
+  }, true);
+  kn.setLoose = function(v){
+    kn.setExact(clamp(isFinite(v) ? v : 0, kn.spec.min, kn.spec.max), false);
+    kn.el.querySelector('.kval').textContent = fmtP(v, kn.spec.step);
+    kn.loose = v;
+  };
+  box.appendChild(kn.el);
+  insp.knobs.push({kind:kind, id:id, kn:kn});
+  return kn;
+}
+function edgeLabel(e){ return nodeName(e.from) + ' → ' + nodeName(e.to); }
+function buildInspector(){
+  var key = (S.sel ? S.sel.type + ':' + S.sel.id : 'none') + '|' + S.structVer;
+  if(key === insp.key) return false;
+  insp.key = key; insp.knobs = []; insp.seg = null; insp.deadEl = null;
+  var root = el.inspector;
+  empty(root);
+  var g = S.g;
+  if(!S.sel){
+    var nNeur = g.nodes.filter(function(n){ return n.kind === 'neuron'; }).length;
+    root.appendChild(h('div',{class:'ihead'},[h('span',{class:'iname', text:'Knobs'})]));
+    root.appendChild(h('div',{class:'itext', html:'Click a neuron or a wire to turn its knobs here.'}));
+    root.appendChild(h('div',{class:'itext', html:'This model: <b>' + nNeur + '</b> neuron' + (nNeur === 1 ? '' : 's') + ' plus ŷ, <b>' + g.edges.length + '</b> wire' + (g.edges.length === 1 ? '' : 's') + ', <b>' + NP.knobCount(g) + '</b> knob' + (NP.knobCount(g) === 1 ? '' : 's') + ' (one weight per wire, one bias per neuron).'}));
+    root.appendChild(h('div',{class:'itext', html:'Wire color: <span class="swatch" style="background:var(--pos)"></span>positive weight, <span class="swatch" style="background:var(--neg)"></span>negative weight. A thicker wire has a larger weight.'}));
+    root.appendChild(h('div',{class:'itext', html:'Drag a number box up or down to change that weight. Hold <kbd>Shift</kbd> for small changes.'}));
+    return true;
+  }
+  if(S.sel.type === 'edge'){
+    var e = NP.getEdge(g, S.sel.id);
+    root.appendChild(h('div',{class:'ihead'},[
+      h('span',{class:'iname', text:'Wire ' + edgeLabel(e)}),
+      h('button',{class:'btn ghost sm', type:'button', text:'Remove wire', onclick:removeSelection})
+    ]));
+    root.appendChild(h('div',{class:'itext', text:'The weight multiplies what ' + nodeName(e.from) + ' sends to ' + nodeName(e.to) + '.'}));
+    var kb = h('div',{class:'knobs'});
+    addKnob(kb, 'w', e.id, 'w', edgeLabel(e));
+    root.appendChild(kb);
+    return true;
+  }
+  var n = NP.getNode(g, S.sel.id);
+  if(n.kind === 'input'){
+    root.appendChild(h('div',{class:'ihead'},[h('span',{class:'iname', text:'x'}), h('span',{class:'ikind', text:'input'})]));
+    root.appendChild(h('div',{class:'itext', text:'x is the input. It has no knobs. Its outgoing wires:'}));
+    var kx = h('div',{class:'knobs'});
+    g.edges.forEach(function(ed){ if(ed.from === n.id) addKnob(kx, 'w', ed.id, 'w', edgeLabel(ed)); });
+    root.appendChild(kx);
+    return true;
+  }
+  root.appendChild(h('div',{class:'ihead'},[
+    h('span',{class:'iname', text:n.name}),
+    h('span',{class:'ikind', text:n.kind === 'output' ? 'output neuron' : 'neuron'}),
+    n.kind === 'output' ? null : h('button',{class:'btn ghost sm', type:'button', text:'Remove neuron', onclick:removeSelection})
+  ]));
+  var seg = h('div',{class:'seg'});
+  NP.ACT_KEYS.forEach(function(k){
+    var b = h('button',{type:'button', text:NP.ACTS[k].label, onclick:function(){ setAct(n.id, k); }});
+    b.dataset.act = k;
+    seg.appendChild(b);
+  });
+  insp.seg = seg;
+  root.appendChild(h('div',{class:'irow'},[h('span',{class:'gl', text:'Activation'}), seg]));
+  if(n.kind === 'neuron'){
+    var nid = n.id;
+    insp.deadEl = h('div',{class:'itext deadnote'});
+    root.appendChild(h('div',{class:'irow'},[
+      h('button',{class:'btn ghost sm', type:'button', id:'randNodeBtn', text:'Randomize this neuron', title:'Draw new random weights and bias for ' + n.name, onclick:function(){ randomizeNode(nid); }})
+    ]));
+    root.appendChild(insp.deadEl);
+  }
+  var box = h('div',{class:'knobs'});
+  addKnob(box, 'b', n.id, 'b', n.name);
+  var ins = g.edges.filter(function(ed){ return ed.to === n.id; }), outs = g.edges.filter(function(ed){ return ed.from === n.id; });
+  /* bias, then incoming, then outgoing weights in one grid; the labels (x → N1) say which is which */
+  ins.forEach(function(ed){ addKnob(box, 'w', ed.id, 'w', edgeLabel(ed)); });
+  if(n.kind !== 'output') outs.forEach(function(ed){ addKnob(box, 'w', ed.id, 'w', edgeLabel(ed)); });
+  root.appendChild(box);
+  if(!ins.length) root.appendChild(h('div',{class:'itext', text:'No incoming weights yet. Drag a wire into ' + n.name + '.'}));
+  if(n.kind !== 'output' && !outs.length) root.appendChild(h('div',{class:'itext', text:'No outgoing weights yet. Drag from the right dot of ' + n.name + '.'}));
+  return true;
+}
+var lastSync = 0;
+function syncInspector(force){
+  var now = Date.now();
+  var rebuilt = buildInspector();
+  if(!rebuilt && !force && S.running && now - lastSync < 120) return;
+  lastSync = now;
+  insp.knobs.forEach(function(k){
+    var v;
+    if(k.kind === 'w'){ var e = NP.getEdge(S.g, k.id); if(!e) return; v = e.w; }
+    else { var n = NP.getNode(S.g, k.id); if(!n) return; v = n.bias; }
+    if(!k.kn.el.classList.contains('drag') && k.kn.loose !== v && !(k.kn.loose === undefined && k.kn.value === v)) k.kn.setLoose(v);
+    if(S.grad){
+      var s = k.kind === 'w' ? S.grad.dW[k.id] : S.grad.dB[k.id];
+      k.kn.setSlope(s === undefined ? null : s, S.gradMax, S.stale);
+    } else k.kn.setSlope(null);
+  });
+  if(insp.seg && S.sel && S.sel.type === 'node'){
+    var nd = NP.getNode(S.g, S.sel.id);
+    if(nd) insp.seg.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.act === nd.act); });
+  }
+  if(insp.deadEl && S.sel){
+    var txt = deadList().indexOf(S.sel.id) >= 0 ? deadText(S.sel.id) : '';
+    if(insp.deadEl.textContent !== txt) insp.deadEl.textContent = txt;
+  }
+}
+
+/* ---------------- painting ---------------- */
+function paintButtons(){
+  el.stepBtn.disabled = !canStep();
+  el.measureBtn.disabled = S.running || S.diverged;
+  el.runBtn.textContent = S.running ? 'Pause' : 'Run';
+  el.runBtn.disabled = S.diverged && !S.running;
+  el.resetBtn.disabled = false;
+  paintHistButtons();
+}
+function paintScore(){
+  var L = currentLoss();
+  el.lossBig.textContent = fmtLoss(L);
+  el.knobCount.textContent = String(NP.knobCount(S.g));
+  el.stepCount.textContent = String(S.steps);
+  if(S.diverged){
+    el.warn.textContent = S.tooBig ? 'The loss is too large to train from. Bring the weights back or press Undo.'
+      : 'Diverged: the loss blew up. Press Undo (Ctrl+Z) to go back, then lower the learning rate.';
+    el.warn.classList.remove('hide');
+  }
+  else el.warn.classList.add('hide');
+  el.neuronsBtn.classList.toggle('active', S.showNeurons);
+  el.legNeurons.style.display = S.showNeurons ? '' : 'none';
+}
+function render(){
+  if(pending){ cancelAnimationFrame(pending); pending = 0; }
+  renderPatch();
+  noteDead();
+  drawPlot();
+  drawHist();
+  paintScore();
+  paintButtons();
+  syncInspector(false);
+}
+var pending = 0;
+function requestRender(){
+  if(pending || S.running) return;   /* while running, the next frame renders anyway */
+  pending = requestAnimationFrame(function(){ pending = 0; render(); });
+}
+
+/* ---------------- controls ---------------- */
+NP.PRESETS.forEach(function(p){
+  var b = h('button',{class:'ds', type:'button', text:p.label, onclick:function(){
+    record('Switch to ' + p.label);
+    loadPreset(p.key);
+    if(S.opt !== 'adam') setLr(NP.PRESET_LR[p.key] || 0.05);
+  }});
+  b.dataset.key = p.key;
+  el.presets.appendChild(b);
+});
+[1, 10, 100].forEach(function(nn){
+  var b = h('button',{type:'button', text:String(nn), onclick:function(){ setSpeed(nn); }});
+  b.dataset.n = nn;
+  el.speedSeg.appendChild(b);
+});
+function setSpeed(nn){
+  S.speed = nn;
+  el.speedSeg.querySelectorAll('button').forEach(function(x){ x.classList.toggle('on', +x.dataset.n === nn); });
+}
+setSpeed(10);
+el.addBtn.addEventListener('click', function(){ addNeuron(freeSpot()); });
+el.measureBtn.addEventListener('click', function(){ measure(); });
+el.stepBtn.addEventListener('click', function(){ takeStep(); });
+el.runBtn.addEventListener('click', toggleRun);
+el.resetBtn.addEventListener('click', reset);
+el.undoBtn.addEventListener('click', function(){ undo(); });
+el.redoBtn.addEventListener('click', function(){ redo(); });
+el.randBtn.addEventListener('click', function(){ randomizeAll(); });
+el.lrIn.addEventListener('input', function(){ setLr(lrFromT(+el.lrIn.value)); });
+el.neuronsBtn.addEventListener('click', function(){ S.showNeurons = !S.showNeurons; render(); });
+document.addEventListener('keydown', function(e){
+  var tag = e.target && e.target.tagName, key = (e.key || '').toLowerCase();
+  /* Undo and Redo work wherever the focus is, except while typing in a text field */
+  if((e.ctrlKey || e.metaKey) && !e.altKey && (key === 'z' || key === 'y' || e.code === 'KeyZ' || e.code === 'KeyY')){
+    var typing = tag === 'TEXTAREA' || (tag === 'INPUT' && e.target.type !== 'range' && e.target.type !== 'button' && e.target.type !== 'checkbox');
+    if(typing) return;
+    e.preventDefault();
+    if(key === 'y' || e.code === 'KeyY' || e.shiftKey) redo(); else undo();
+    return;
+  }
+  if(tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') { if(e.key !== ' ' || e.target.type !== 'range') return; }
+  if(e.key === ' ' || e.code === 'Space'){
+    e.preventDefault();
+    if(!e.repeat) toggleRun();
+  } else if(e.key === 'Delete' || e.key === 'Backspace'){
+    if(e.target && e.target.closest && e.target.closest('.knob')) return;
+    if(S.sel){ e.preventDefault(); removeSelection(); }
+  }
+});
+document.addEventListener('keyup', function(e){ if(e.key === ' ' || e.code === 'Space') e.preventDefault(); });
+window.addEventListener('resize', function(){ render(); });
+
+/* ---------------- start ---------------- */
+var startKey = PRESET_KEYS.indexOf(QP.preset) >= 0 ? QP.preset : 'line';
+loadPreset(startKey);
+setLr(S.opt === 'adam' ? ADAM_LR : (NP.PRESET_LR[startKey] || 0.05));
+if(QP.lr && isFinite(+QP.lr) && +QP.lr > 0) setLr(clamp(+QP.lr, 1e-5, 10));
+render();
+
+function stateObj(){
+  return {
+    preset:S.preset, opt:S.opt, lr:S.lr, speed:S.speed,
+    nodes:S.g.nodes.length, neurons:S.g.nodes.filter(function(n){ return n.kind === 'neuron'; }).length,
+    edges:S.g.edges.length, knobs:NP.knobCount(S.g), loss:currentLoss(), steps:S.steps, historyLength:S.history.length,
+    running:S.running, diverged:S.diverged, measured:!!S.grad && !S.stale, stale:S.stale,
+    stepDisabled:el.stepBtn.disabled, sel:S.sel ? S.sel.id : null, showNeurons:S.showNeurons, msg:el.status.textContent,
+    dead:NP.deadNeurons(S.g), seed:S.seed, undo:UH.undo.length, redo:UH.redo.length, warn:el.warn.classList.contains('hide') ? '' : el.warn.textContent,
+    edgeList:S.g.edges.map(function(e){ return {id:e.id, from:e.from, to:e.to, w:e.w}; }),
+    nodeList:S.g.nodes.map(function(n){ return {id:n.id, kind:n.kind, name:n.name, act:n.act, bias:n.bias, px:n.px, py:n.py}; })
+  };
+}
+return {
+  S:S,
+  hooks:{
+    state:stateObj,
+    loadPreset:function(key){
+      if(PRESET_KEYS.indexOf(key) < 0) return false;
+      record('Switch to ' + NP.PRESETS[PRESET_KEYS.indexOf(key)].label);
+      var ok = loadPreset(key); if(ok && S.opt !== 'adam') setLr(NP.PRESET_LR[key] || 0.05); return ok;
+    },
+    addNeuron:function(opts){ var id = addNeuron(opts || freeSpot()); render(); return id; },
+    connect:function(from, to){ var id = connect(from, to); render(); return id; },
+    select:function(id){ select(id); render(); },
+    setWeight:function(id, w){ if(NP.getEdge(S.g, id)) record('Change w ' + edgeLabel(NP.getEdge(S.g, id))); setWeight(id, w); render(); },
+    setBias:function(id, b){ if(NP.getNode(S.g, id)) record('Change b ' + nodeName(id)); setBias(id, b); render(); },
+    setAct:function(id, a){ setAct(id, a); render(); },
+    setLr:function(v){ setLr(v); },
+    measure:function(){ measure(); return stateObj(); },
+    takeStep:function(){ takeStep(); return stateObj(); },
+    train:function(n){ captureBase(); trainN(n || 1); render(); return stateObj(); },
+    randomize:function(id){ if(id) randomizeNode(id); else randomizeAll(); render(); return stateObj(); },
+    undo:function(){ var ok = undo(); return ok; },
+    redo:function(){ var ok = redo(); return ok; },
+    history:function(){ return {undo:UH.undo.length, redo:UH.redo.length}; },
+    run:startRun, pause:stopRun,
+    draw:function(){ render(); syncInspector(true); }
+  },
+  selfCheck:function(){
+    var L = currentLoss();
+    return {
+      nodes: svg.querySelectorAll('g.node').length === S.g.nodes.length,
+      wires: svg.querySelectorAll('g.wire').length === S.g.edges.length && svg.querySelectorAll('g.numbox').length === S.g.edges.length,
+      loss: S.diverged || isFinite(L),
+      plot: el.plot.width > 0 && el.hist.width > 0,
+      score: el.lossBig.textContent === fmtLoss(L)
+    };
+  }
+};
+})();
+</script>
+</body>
+</html>

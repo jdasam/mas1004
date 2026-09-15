@@ -85,6 +85,12 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,58fr) minma
 .legend i{display:inline-block;width:18px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
 .legend .dot{width:10px;height:10px;border-radius:50%}
 .legend .ds{margin-left:auto;padding:4px 12px;font-size:.9rem}
+.drow{display:flex;align-items:center;gap:6px 5px;flex-wrap:wrap;margin-bottom:8px}
+.drow .chips{gap:3px}
+.drow .ds{padding:3px 7px;font-size:.85rem}
+.drow .btn.sm{padding:3px 7px;font-size:.85rem;border-radius:9px}
+/* the tag keeps its width when empty, so the row does not wrap or shift when the data changes (up to Random #999) */
+.rtag{font:700 .85rem Inter,system-ui,sans-serif;color:var(--data);white-space:nowrap;min-width:6.4em;font-variant-numeric:tabular-nums}
 .note{border:1px solid var(--rule);border-radius:12px;padding:8px 14px;background:#fff;font-size:.98rem;line-height:1.45;margin-bottom:6px}
 .note.warn{border-left:4px solid var(--bad)}
 .note.hide{display:none}
@@ -213,6 +219,11 @@ kbd{font:600 .8em ui-monospace,Menlo,monospace;border:1px solid var(--rule2);bor
   </section>
   <div class="right">
     <section class="card" id="plotCard">
+      <div class="drow" id="dataRow">
+        <span class="gl">Data</span><div class="chips" id="dataChips"></div>
+        <button class="btn ghost sm" type="button" id="newRandBtn" title="Draw a new random function to fit">New random function</button>
+        <span class="rtag" id="randTag"></span>
+      </div>
       <div class="scorerow">
         <div class="score"><div class="lbl">Loss: mean squared error</div><div class="big" id="lossBig">0</div></div>
         <div class="stats"><div>Knobs: <b id="knobCount">0</b></div><div>Step <b id="stepCount">0</b></div></div>
@@ -221,7 +232,7 @@ kbd{font:600 .8em ui-monospace,Menlo,monospace;border:1px solid var(--rule2);bor
       <div class="note warn hide" id="warn"></div>
       <canvas id="plot"></canvas>
       <div class="legend" id="legend">
-        <span><i class="dot" style="background:var(--data)"></i>data</span>
+        <span><i class="dot" style="background:var(--data)"></i><span id="legData">data</span></span>
         <span><i style="background:var(--model);height:4px"></i>ŷ(x), the model</span>
         <span id="legNeurons" style="display:none"><i style="background:#52514e;opacity:.6"></i>w × h(x) for each input of ŷ</span>
         <button class="ds" type="button" id="neuronsBtn">Show neurons</button>
@@ -305,6 +316,90 @@ var DATA = genData();
 var N = DATA.length;
 var XS = DATA.map(function(p){ return p[0]; }), YS = DATA.map(function(p){ return p[1]; });
 var DXS = new Float64Array(XS), DYS = new Float64Array(YS);
+
+/* ---- more data to fit. NP.DATA above stays lecture 4's bumps; these are extra shapes. ---- */
+var DATASETS = [
+  { key:'bumps',  label:'Bumps' },
+  { key:'zigzag', label:'Zigzag' },
+  { key:'steps',  label:'Steps' },
+  { key:'wave',   label:'Wave' },
+  { key:'random', label:'Random' }
+];
+/* zigzag: straight pieces that bend at x = -1.5, 0, 1.5, where the 3 ReLU preset has its bends.
+   The preset's neurons open to the right, left, right, so its slopes obey
+   slope(-1.5..0) = slope(left of -1.5) + slope(0..1.5). These knots obey it: 3 ReLU can fit them exactly
+   (test/calibrate.js --datasets). A zigzag with four alternating pieces cannot be fit by that preset. */
+var ZIG_X = [-3, -1.5, 0, 1.5, 3], ZIG_Y = [2.5, 0.5, 1, 3.5, 1];
+function sigm(z){ return 1/(1 + Math.exp(-z)); }
+function bumpsTruth(x){ var b = basis8(x), y = 0; for(var j = 0; j < K8; j++) y += TRUTH8[j]*b[j]; return y; }
+function zigzagAt(x){
+  var k = 0;
+  while(k < ZIG_X.length - 2 && x > ZIG_X[k + 1]) k++;
+  var t = (x - ZIG_X[k])/(ZIG_X[k + 1] - ZIG_X[k]);
+  return ZIG_Y[k] + t*(ZIG_Y[k + 1] - ZIG_Y[k]);
+}
+/* steps: jumps at x = -1.5 and 1.5, where the 3 ReLU preset's neurons switch. With the activation changed
+   to step or tanh those neurons already sit on the jumps (3000 GD steps: step 0.028, tanh 0.021, ReLU 0.098).
+   With jumps at -1 and 1.2 step neurons could not move there (slope 0) and ended worse than ReLU. */
+function stepsAt(x){ return 1.5*sigm(10*(x + 1.5)) + 1.5*sigm(10*(x - 1.5)); }
+function waveAt(x){ return 1.5 + 1.5*Math.sin(3*x); }
+/* Random function numbers are integers 1..999; anything else means #1 */
+var SEED_MAX = 999;
+function seedOf(seed){ var s = Math.floor(+seed); return isFinite(s) && s >= 1 && s <= SEED_MAX ? s : 1; }
+/* a smooth random curve: 3 bumps + a sine + a slope, then scaled so it spans 2 to 4 inside [-1, 4] */
+function randomFunction(seed){
+  var r = rngOf('np|fn|' + seedOf(seed)), bumps = [], i;
+  for(i = 0; i < 3; i++){
+    var c = -2.5 + 5*r(), wd = 0.4 + 0.8*r(), sg = r() < 0.5 ? -1 : 1;
+    bumps.push([c, wd, sg*(0.8 + 1.2*r())]);
+  }
+  var sAmp = r(), sFreq = 1 + 2*r(), sPhase = 2*Math.PI*r(), slope = -0.4 + 0.8*r();
+  function raw(x){
+    var y = sAmp*Math.sin(sFreq*x + sPhase) + slope*x;
+    for(var j = 0; j < 3; j++){ var t = (x - bumps[j][0])/bumps[j][1]; y += bumps[j][2]*Math.exp(-0.5*t*t); }
+    return y;
+  }
+  var lo = Infinity, hi = -Infinity;
+  for(i = 0; i < 200; i++){ var v = raw(-3 + 6*i/199); if(v < lo) lo = v; if(v > hi) hi = v; }
+  var span = 2 + 2*r(), base = -1 + (5 - span)*r(), scale = hi - lo > 1e-9 ? span/(hi - lo) : 0;
+  return function(x){ return base + (raw(x) - lo)*scale; };
+}
+/* the curve without noise, or null for an unknown key */
+function dataFunction(key, seed){
+  if(key === 'bumps') return bumpsTruth;
+  if(key === 'zigzag') return zigzagAt;
+  if(key === 'steps') return stepsAt;
+  if(key === 'wave') return waveAt;
+  if(key === 'random') return randomFunction(seed);
+  return null;
+}
+/* 120 points [x, y] like NP.DATA. 'bumps' is a copy of NP.DATA. */
+function makeData(key, seed){
+  if(key === 'bumps') return DATA.map(function(p){ return [p[0], p[1]]; });
+  var f = dataFunction(key, seed);
+  if(!f) return null;
+  var r = rngOf('np|data|' + key + '|' + (key === 'random' ? seedOf(seed) : (seed || 0))), pts = [];
+  for(var i = 0; i < 120; i++){
+    var x = -3 + 6*(i + r())/120;
+    pts.push([r2(x) || 0, r2(f(x) + 0.08*gauss(r)) || 0]);
+  }
+  return pts;
+}
+/* the default data used when loss, gradient, trainSteps, deadNeurons and randomize get no data */
+var CUR = DATA, CXS = DXS, CYS = DYS, CN = N;
+function setData(points){
+  if(!points) points = DATA;
+  if(!Array.isArray(points) || !points.length || !points.every(function(p){ return p && isFinite(p[0]) && isFinite(p[1]); })) return false;
+  CUR = points;
+  if(points === DATA){ CXS = DXS; CYS = DYS; CN = N; }
+  else {
+    CN = points.length; CXS = new Float64Array(CN); CYS = new Float64Array(CN);
+    for(var i = 0; i < CN; i++){ CXS[i] = +points[i][0]; CYS[i] = +points[i][1]; }
+  }
+  CACHE.length = 0;   /* compiled graphs keep buffers sized for the data; start them fresh */
+  return true;
+}
+function getData(){ return CUR; }
 
 /* ---- activations. df(z, h) is the slope of h = f(z) ---- */
 var ACTS = {
@@ -532,7 +627,8 @@ function forwardBatch(c, xs, n){
   }
 }
 function dataArrays(data){
-  if(!data || data === DATA) return { xs:DXS, ys:DYS, n:N };
+  if(!data || data === CUR) return { xs:CXS, ys:CYS, n:CN };
+  if(data === DATA) return { xs:DXS, ys:DYS, n:N };
   var n = data.length, xs = new Float64Array(n), ys = new Float64Array(n);
   for(var i = 0; i < n; i++){ xs[i] = data[i][0]; ys[i] = data[i][1]; }
   return { xs:xs, ys:ys, n:n };
@@ -697,8 +793,8 @@ function randomize(g, seed, nodeId){
     if(nd.kind === 'input' || (target && nd.id !== target)) continue;
     if(nd.kind === 'output'){
       var m = 0;
-      for(j = 0; j < N; j++) m += YS[j];
-      nd.bias = r2(m/N);
+      for(j = 0; j < CN; j++) m += CYS[j];
+      nd.bias = r2(m/CN);
       continue;
     }
     var ins = [];
@@ -797,6 +893,8 @@ var PRESET_LR = { line:0.1, relu1:0.1, relu3:0.05, linear3:0.05, layers2:0.1, em
 return {
   DATA_VERSION:DATA_VERSION, DELTA:DELTA, DIVERGE:DIVERGE,
   DATA:DATA, N:N, XS:XS, YS:YS, rngOf:rngOf,
+  DATASETS:DATASETS, makeData:makeData, dataFunction:dataFunction, randomFunction:randomFunction,
+  setData:setData, getData:getData, SEED_MAX:SEED_MAX, seedOf:seedOf,
   ACTS:ACTS, ACT_KEYS:ACT_KEYS,
   createGraph:createGraph, addNeuron:addNeuron, removeNode:removeNode,
   canConnect:canConnect, connect:connect, removeEdge:removeEdge,
@@ -1053,8 +1151,10 @@ var S = {
   g:null, preset:'line', lr:0.1, opt:QP.opt === 'adam' ? 'adam' : 'gd', adam:null,
   grad:null, gradMax:0, stale:true, steps:0, history:[], running:false, speed:10,
   diverged:false, sel:null, msel:[], showNeurons:false, structVer:0,
-  seed:1, base:null, baseSig:'', presetSig:'', tooBig:false, runEntry:null
+  seed:1, base:null, baseSig:'', presetSig:'', tooBig:false, runEntry:null,
+  dataKey:'bumps', dataSeed:1   /* dataSeed: the function the Random chip draws (Random #1, #2, ...) */
 };
+var DATA_KEYS = NP.DATASETS.map(function(d){ return d.key; });
 var NEW_BIAS = 0.5;   /* a new neuron's bias: 0 would put every new ReLU's kink at x = 0 */
 var el = {
   presets:document.getElementById('presets'), addBtn:document.getElementById('addBtn'),
@@ -1067,7 +1167,9 @@ var el = {
   lossBig:document.getElementById('lossBig'), knobCount:document.getElementById('knobCount'), stepCount:document.getElementById('stepCount'),
   hist:document.getElementById('hist'), plot:document.getElementById('plot'), warn:document.getElementById('warn'),
   neuronsBtn:document.getElementById('neuronsBtn'), legNeurons:document.getElementById('legNeurons'),
-  inspector:document.getElementById('inspector')
+  inspector:document.getElementById('inspector'),
+  dataChips:document.getElementById('dataChips'), newRandBtn:document.getElementById('newRandBtn'),
+  randTag:document.getElementById('randTag'), legData:document.getElementById('legData')
 };
 if(S.opt === 'adam') el.ruleText.textContent = 'update rule: Adam';
 
@@ -1088,7 +1190,7 @@ function setMsg(text, bad){
 var HIST_MAX = 200, UH = {undo:[], redo:[], coalesce:null};
 function snapshot(label){
   return {g:NP.clone(S.g), preset:S.preset, steps:S.steps, hist:S.history, histLen:S.history.length,
-          sel:S.sel ? S.sel.id : null, msel:S.msel.slice(), label:label};
+          sel:S.sel ? S.sel.id : null, msel:S.msel.slice(), dataKey:S.dataKey, dataSeed:S.dataSeed, label:label};
 }
 function paintHistButtons(){
   el.undoBtn.disabled = !UH.undo.length;
@@ -1123,6 +1225,7 @@ function paintPresetChips(){
 }
 function restoreEntry(en){
   var keep = S.sel ? S.sel.id : null, keepN = S.msel.slice();
+  if(en.dataKey && (en.dataKey !== S.dataKey || en.dataSeed !== S.dataSeed)) applyData(en.dataKey, en.dataSeed);
   S.g = NP.clone(en.g); S.preset = en.preset; S.steps = en.steps;
   S.history = en.hist.slice(0, en.histLen);
   if(!S.history.length) S.history = [currentLoss()];
@@ -1490,6 +1593,56 @@ function loadPreset(key){
   render();
   return true;
 }
+/* ---------------- data ---------------- */
+var seedOf = NP.seedOf;   /* integers 1..NP.SEED_MAX, anything else is 1 */
+function dataLabel(key, seed){
+  if(key === 'random') return 'Random #' + seed;
+  var i = DATA_KEYS.indexOf(key);
+  return i >= 0 ? NP.DATASETS[i].label : key;
+}
+var dataCache = {};
+function pointsFor(key, seed){
+  if(key === 'bumps') return NP.DATA;
+  /* the fixed shapes always use noise seed 0; the seed only picks the Random function */
+  var s = key === 'random' ? seed : 0, k = key + '|' + s;
+  if(!dataCache[k]) dataCache[k] = NP.makeData(key, s);
+  return dataCache[k];
+}
+function paintData(){
+  el.dataChips.querySelectorAll('.ds').forEach(function(b){ b.classList.toggle('active', b.dataset.key === S.dataKey); });
+  el.randTag.textContent = S.dataKey === 'random' ? 'Random #' + S.dataSeed : '';
+  el.legData.textContent = 'data: ' + dataLabel(S.dataKey, S.dataSeed);
+}
+/* switches the points the loss is measured on; no history entry, no other state */
+function applyData(key, seed){
+  S.dataKey = key; S.dataSeed = seed;
+  NP.setData(pointsFor(key, seed));
+  YR = yRange(NP.getData());
+  deadCache.t = 0;
+  paintData();
+}
+/* the Data chips: the network stays, slopes go stale, Adam and the loss curve start over, Run keeps going */
+function changeData(key, seed){
+  if(DATA_KEYS.indexOf(key) < 0) return false;
+  seed = seed === undefined || seed === null ? S.dataSeed : seedOf(seed);
+  /* same data: nothing changes, not even the Random number (that would skip the Undo history) */
+  if(key === S.dataKey && (key !== 'random' || seed === S.dataSeed)) return false;
+  var en = record('Data: ' + dataLabel(key, seed)), wasDiverged = S.diverged;
+  /* an undo during Run comes back to this moment, not to before Run */
+  if(S.running) S.runEntry = en;
+  applyData(key, seed);
+  S.adam = NP.makeAdam();
+  if(S.grad) S.stale = true;
+  var L = currentLoss();
+  S.history = [L];
+  /* a network that already diverged keeps its advice (lower the learning rate) */
+  S.diverged = isBad(L); S.tooBig = S.diverged && (wasDiverged ? S.tooBig : true);
+  setMsg('Data: ' + dataLabel(key, seed) + '. The network stays as it was.');
+  render();
+  return true;
+}
+function newRandom(){ return changeData('random', S.dataSeed + 1); }
+
 function reset(){
   var sel = S.sel, keepN = S.msel.slice();
   record('Reset');
@@ -1811,12 +1964,16 @@ svg.addEventListener('dblclick', function(e){
 });
 
 /* ---------------- plot ---------------- */
-var YR = (function(){
+/* the y range of the plot follows the data shown: its min and max with 15% room */
+function yRange(pts){
   var lo = Infinity, hi = -Infinity;
-  NP.YS.forEach(function(y){ if(y < lo) lo = y; if(y > hi) hi = y; });
+  pts.forEach(function(p){ if(p[1] < lo) lo = p[1]; if(p[1] > hi) hi = p[1]; });
+  if(!isFinite(lo)){ lo = -1; hi = 4; }
+  if(hi - lo < 1e-6){ lo -= 1; hi += 1; }
   var pad = (hi - lo)*0.15;
   return [lo - pad, hi + pad];
-})();
+}
+var YR = yRange(NP.getData());
 function drawPlot(){
   var gg = prepFixed(el.plot);
   if(!gg) return;
@@ -1848,7 +2005,7 @@ function drawPlot(){
   ctx.save(); ctx.translate(14, m.t + ph/2); ctx.rotate(-Math.PI/2); ctx.fillText('y', 0, 0); ctx.restore();
 
   ctx.save(); ctx.beginPath(); ctx.rect(m.l, m.t, pw, ph); ctx.clip();
-  NP.DATA.forEach(function(p){
+  NP.getData().forEach(function(p){
     var x = PX(p[0]), y = PY(p[1]);
     ctx.fillStyle = C.surface; ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle = C.data; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI*2); ctx.fill();
@@ -2110,6 +2267,12 @@ NP.PRESETS.forEach(function(p){
   b.dataset.key = p.key;
   el.presets.appendChild(b);
 });
+NP.DATASETS.forEach(function(d){
+  var b = h('button',{class:'ds', type:'button', text:d.label, onclick:function(){ changeData(d.key); }});
+  b.dataset.key = d.key;
+  el.dataChips.appendChild(b);
+});
+el.newRandBtn.addEventListener('click', function(){ newRandom(); });
 [1, 10, 100].forEach(function(nn){
   var b = h('button',{type:'button', text:String(nn), onclick:function(){ setSpeed(nn); }});
   b.dataset.n = nn;
@@ -2163,6 +2326,7 @@ window.addEventListener('resize', function(){ render(); });
 
 /* ---------------- start ---------------- */
 var startKey = PRESET_KEYS.indexOf(QP.preset) >= 0 ? QP.preset : 'line';
+applyData(DATA_KEYS.indexOf(QP.data) >= 0 ? QP.data : 'bumps', QP.seed ? seedOf(QP.seed) : 1);
 loadPreset(startKey);
 setLr(S.opt === 'adam' ? ADAM_LR : (NP.PRESET_LR[startKey] || 0.05));
 if(QP.lr && isFinite(+QP.lr) && +QP.lr > 0) setLr(clamp(+QP.lr, 1e-5, 10));
@@ -2175,7 +2339,7 @@ function stateObj(){
     edges:S.g.edges.length, knobs:NP.knobCount(S.g), loss:currentLoss(), steps:S.steps, historyLength:S.history.length,
     running:S.running, diverged:S.diverged, measured:!!S.grad && !S.stale, stale:S.stale,
     stepDisabled:el.stepBtn.disabled, sel:S.sel ? S.sel.id : null, selection:selectionIds(), showNeurons:S.showNeurons, msg:el.status.textContent,
-    dead:NP.deadNeurons(S.g), seed:S.seed, undo:UH.undo.length, redo:UH.redo.length, warn:el.warn.classList.contains('hide') ? '' : el.warn.textContent,
+    dead:NP.deadNeurons(S.g), seed:S.seed, dataKey:S.dataKey, dataSeed:S.dataSeed, undo:UH.undo.length, redo:UH.redo.length, warn:el.warn.classList.contains('hide') ? '' : el.warn.textContent,
     edgeList:S.g.edges.map(function(e){ return {id:e.id, from:e.from, to:e.to, w:e.w}; }),
     nodeList:S.g.nodes.map(function(n){ return {id:n.id, kind:n.kind, name:n.name, act:n.act, bias:n.bias, px:n.px, py:n.py}; })
   };
@@ -2210,6 +2374,9 @@ return {
     undo:function(){ var ok = undo(); return ok; },
     redo:function(){ var ok = redo(); return ok; },
     history:function(){ return {undo:UH.undo.length, redo:UH.redo.length}; },
+    /* setData(key) uses the current random seed for 'random'; setData('random', n) picks Random #n */
+    setData:function(key, seed){ var ok = changeData(key, seed); render(); return ok; },
+    data:function(){ return {key:S.dataKey, seed:S.dataSeed}; },
     run:startRun, pause:stopRun,
     draw:function(){ render(); syncInspector(true); }
   },
@@ -2220,7 +2387,8 @@ return {
       wires: svg.querySelectorAll('g.wire').length === S.g.edges.length && svg.querySelectorAll('g.numbox').length === S.g.edges.length,
       loss: S.diverged || isFinite(L),
       plot: el.plot.width > 0 && el.hist.width > 0,
-      score: el.lossBig.textContent === fmtLoss(L)
+      score: el.lossBig.textContent === fmtLoss(L),
+      data: el.legData.textContent === 'data: ' + dataLabel(S.dataKey, S.dataSeed) && NP.getData() === pointsFor(S.dataKey, S.dataSeed)
     };
   }
 };

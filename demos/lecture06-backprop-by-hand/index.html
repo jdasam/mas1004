@@ -58,30 +58,31 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 430px;
 .legend b{font-weight:600}
 .legend .val{color:var(--ink)} .legend .slope{color:var(--accent)}
 .right{display:flex;flex-direction:column;gap:12px;min-height:0;min-width:0}
-.card h3{font-size:.95rem;color:var(--sub);font-weight:600;margin-bottom:6px}
+.card h3{font-size:.95rem;color:var(--sub);font-weight:600;margin-bottom:4px}
 #plotCard{flex:none}
-#plot{display:block;width:100%;height:200px}
+#plot{display:block;width:100%;height:170px}
 .prow{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;margin-top:6px;font-size:.95rem;color:var(--sub)}
 .nb{display:inline-block;min-width:64px;padding:3px 8px;border:1.8px solid var(--rule2);border-radius:7px;background:#fff;
     font:600 1rem ui-monospace,SFMono-Regular,Menlo,monospace;text-align:right;cursor:ns-resize;user-select:none;font-variant-numeric:tabular-nums;color:var(--ink)}
 .nb.drag{border-color:var(--ink)}
 .nb input{width:64px;font:inherit;text-align:right;border:none;outline:none;background:transparent;padding:0}
 #captionCard{flex:none}
-.caption{font:500 1.02rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;min-height:3.1em;font-variant-numeric:tabular-nums}
+.caption{font:500 1.02rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;min-height:2.6em;font-variant-numeric:tabular-nums}
 .caption.slope{color:var(--accent)}
 .caption.muted{color:var(--sub);font-family:Inter,system-ui,sans-serif}
 #rulesCard{flex:none}
-table.rules{border-collapse:collapse;width:100%;font-size:.95rem}
-table.rules td{padding:4px 6px;border-top:1px solid var(--rule);vertical-align:top}
+table.rules{border-collapse:collapse;width:100%;font-size:.9rem}
+table.rules td{padding:3px 6px;border-top:1px solid var(--rule);vertical-align:top}
 table.rules td:first-child{font:600 1rem ui-monospace,Menlo,monospace;white-space:nowrap;width:5.5em}
 table.rules tr.on td{color:var(--accent);font-weight:600}
 #nudgeCard{flex:1;min-height:0;overflow:auto}
-table.nudge{border-collapse:collapse;width:100%;font-size:.95rem;font-variant-numeric:tabular-nums}
-table.nudge th{font-size:.85rem;color:var(--sub);font-weight:600;text-align:right;padding:2px 6px;border-bottom:1px solid var(--rule2)}
+.nudgeSplit{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+table.nudge{border-collapse:collapse;width:100%;font-size:.8rem;line-height:1.05;font-variant-numeric:tabular-nums}
+table.nudge th{font-size:.76rem;color:var(--sub);font-weight:600;text-align:right;padding:1px 6px;border-bottom:1px solid var(--rule2)}
 table.nudge th:first-child,table.nudge td:first-child{text-align:left;font-family:ui-monospace,Menlo,monospace}
-table.nudge td{padding:3px 6px;text-align:right;border-top:1px solid var(--rule);font-family:ui-monospace,Menlo,monospace}
+table.nudge td{padding:0 6px;text-align:right;border-top:1px solid var(--rule);font-family:ui-monospace,Menlo,monospace}
 table.nudge td.bp{color:var(--accent);font-weight:600}
-.evals{font-size:.92rem;color:var(--sub);margin-top:8px;line-height:1.45}
+.evals{font-size:.86rem;color:var(--sub);margin:0 0 4px;line-height:1.3}
 .evals b{color:var(--ink);font-weight:600}
 .stats{font-size:1.05rem;color:var(--sub);white-space:nowrap}
 .stats b{color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
@@ -115,7 +116,7 @@ table.nudge td.bp{color:var(--accent);font-weight:600}
   <div class="row">
     <div class="brand">Backprop by Hand<span>MAS1004 &middot; Data &amp; AI &middot; Lecture 6</span></div>
     <div class="grp"><span class="gl">Start from</span><div class="chips" id="presets"></div></div>
-    <div class="stats">Step <b id="stepCount">0</b> &nbsp; loss <b id="lossNow">0</b></div>
+    <div class="stats">Step <b id="stepCount">0</b> &nbsp; loss <b id="lossNow">?</b></div>
   </div>
   <div class="row" id="ctrlbar">
     <div class="btns">
@@ -159,8 +160,8 @@ table.nudge td.bp{color:var(--accent);font-weight:600}
     </section>
     <section class="card" id="nudgeCard">
       <h3>Every knob's slope: nudging (lecture 4) against backprop</h3>
-      <table class="nudge" id="nudgeTable"></table>
       <div class="evals" id="evals"></div>
+      <table class="nudge" id="nudgeTable"></table>
     </section>
   </div>
 </main>
@@ -461,7 +462,7 @@ var BPUI = (function(){
 'use strict';
 function $(id){ return document.getElementById(id); }
 var el = { presets:$('presets'), graph:$('graph'), wrap:$('graphWrap'), knobEdit:$('knobEdit'), caption:$('caption'), rules:$('rules'),
-           nudgeTable:$('nudgeTable'), evals:$('evals'), stepCount:$('stepCount'), lossNow:$('lossNow'),
+           nudgeTable:$('nudgeTable'), nudgeCard:$('nudgeCard'), evals:$('evals'), stepCount:$('stepCount'), lossNow:$('lossNow'),
            fwdBtn:$('fwdBtn'), fwdAllBtn:$('fwdAllBtn'), bwdBtn:$('bwdBtn'), bwdAllBtn:$('bwdAllBtn'),
            nudgeBtn:$('nudgeBtn'), stepBtn:$('stepBtn'), resetBtn:$('resetBtn'), lrIn:$('lrIn'), lrVal:$('lrVal'), plot:$('plot') };
 var S = { key:'relu1', g:null, x:2, y:3, vals:{}, grads:{}, fwd:0, bwd:0, steps:0, lr:0.02, nudged:null, last:{kind:'', id:null}, pulses:[] };
@@ -542,7 +543,7 @@ function captionText(){
   var L = S.last;
   if(L.kind === 'fwd') return {text:BP.explainForward(S.g, L.id, S.vals), cls:''};
   if(L.kind === 'bwd') return {text:BP.explainBackward(S.g, L.id, S.vals, S.grads), cls:'slope'};
-  if(L.kind === 'step') return {text:'Step ' + S.steps + ': every knob moved by −' + BP.fmt(S.lr) + ' × its slope. Loss ' + BP.fmt(L.before) + ' → ' + BP.fmt(L.after) + '. Press Backward to measure again.', cls:'muted'};
+  if(L.kind === 'step') return {text:'Step ' + S.steps + ': every knob moved by −' + fmt3(S.lr) + ' × its slope. Loss ' + fmtLoss(L.before) + ' → ' + fmtLoss(L.after) + '. Press Backward to measure again.', cls:'muted'};
   if(L.kind === 'stale') return {text:(L.id ? 'Knob ' + S.g.byId[L.id].name + ' changed' : 'The point changed') + ': the values are updated and the slopes are gone. Run Backward again.', cls:'muted'};
   return {text:'Press Forward to fill the first cell. Work it out first, then check.', cls:'muted'};
 }
@@ -556,7 +557,7 @@ function renderButtons(){
   el.fwdBtn.disabled = fwdDone(); el.fwdAllBtn.disabled = fwdDone();
   el.bwdBtn.disabled = !fwdDone() || bwdDone(); el.bwdAllBtn.disabled = !fwdDone() || bwdDone();
   el.stepBtn.disabled = !bwdDone();
-  el.stepCount.textContent = S.steps; el.lossNow.textContent = BP.fmt(lossNow());
+  el.stepCount.textContent = S.steps; el.lossNow.textContent = fwdDone() ? fmtLoss(lossNow()) : '?';
 }
 el.fwdBtn.addEventListener('click', forwardStep); el.fwdAllBtn.addEventListener('click', forwardAll);
 el.bwdBtn.addEventListener('click', backwardStep); el.bwdAllBtn.addEventListener('click', backwardAll);
@@ -564,8 +565,8 @@ el.stepBtn.addEventListener('click', takeStep); el.resetBtn.addEventListener('cl
 /* learning rate slider: log scale 0.001 … 0.5 */
 function lrFromSlider(v){ return Math.pow(10, -3 + 2.699*v/1000); }
 function sliderFromLr(lr){ return Math.round(1000*(Math.log10(lr) + 3)/2.699); }
-el.lrIn.addEventListener('input', function(){ S.lr = +lrFromSlider(+el.lrIn.value).toPrecision(2); el.lrVal.textContent = BP.fmt(S.lr); });
-function setLr(lr){ S.lr = lr; el.lrIn.value = sliderFromLr(lr); el.lrVal.textContent = BP.fmt(lr); }
+el.lrIn.addEventListener('input', function(){ S.lr = +lrFromSlider(+el.lrIn.value).toPrecision(2); el.lrVal.textContent = fmt3(S.lr); });
+function setLr(lr){ S.lr = lr; el.lrIn.value = sliderFromLr(lr); el.lrVal.textContent = fmt3(lr); }
 
 /* ---- the SVG graph ---- */
 var COLW = 120, ROWH = 162, X0 = 70, Y0 = 96, BW = 72, BH = 44;
@@ -574,7 +575,9 @@ function pos(n){
   var y = Y0 + n.row*ROWH;
   if(n.kind === 'given') y = Y0 + (n.row - 1)*ROWH + ROWH*0.75;
   if(n.kind === 'knob') y = Y0 + n.row*ROWH - 66;
-  return {x:X0 + n.col*COLW, y:y};
+  var x = X0 + n.col*COLW;
+  if(n.kind === 'given') x -= 26;
+  return {x:x, y:y};
 }
 function symbolOf(n){ return {mul:'×', add:'+', relu:'ReLU', sub:'− y', sq:'²'}[n.op]; }
 function buildGraphSvg(){
@@ -594,7 +597,7 @@ function buildGraphSvg(){
     n.inputs.forEach(function(iid){
       var m = g.byId[iid], Q = pos(m), d;
       if(m.kind === 'knob') d = 'M' + Q.x + ' ' + (Q.y + 12) + ' L' + (P.x + 24) + ' ' + (P.y - BH/2);
-      else if(m.kind === 'given') d = 'M' + Q.x + ' ' + (Q.y - 14) + ' L' + P.x + ' ' + (P.y + BH/2);
+      else if(m.kind === 'given') d = 'M' + Q.x + ' ' + (Q.y - 14) + ' L' + Q.x + ' ' + (P.y + BH/2);
       else if(m.kind === 'input') d = 'M' + (Q.x + 24) + ' ' + Q.y + ' L' + (P.x - BW/2) + ' ' + P.y;
       else d = 'M' + (Q.x + BW/2) + ' ' + Q.y + ' L' + (P.x - BW/2) + ' ' + P.y;
       gEdges.appendChild(sv('path', {class:'edge' + (m.kind === 'knob' ? ' knob' : ''), d:d, 'marker-end':'url(#arr)', 'data-edge':iid + '>' + n.id}));
@@ -671,6 +674,7 @@ function numBox(node, opts){
     if(v !== opts.get()){ opts.set(v); show(); }
   });
   node.addEventListener('pointerup', function(){ if(!drag) return; var moved = drag.moved; drag = null; node.classList.remove('drag'); if(!moved) edit(); });
+  node.addEventListener('pointercancel', function(){ drag = null; node.classList.remove('drag'); });
   function edit(){
     editing = true;
     var inp = document.createElement('input'); inp.type = 'text'; inp.value = BP.fmt(opts.get()).replace('−', '-');
@@ -708,6 +712,11 @@ el.graph.addEventListener('pointerup', function(){
   if(!kdrag) return;
   var d = kdrag; kdrag = null; svgEls[d.id].box.classList.remove('drag');
   if(!d.moved) editKnob(d.id);
+});
+el.graph.addEventListener('pointercancel', function(){
+  if(!kdrag) return;
+  svgEls[kdrag.id].box.classList.remove('drag');
+  kdrag = null;
 });
 function editKnob(id){
   var r = svgEls[id].box.getBoundingClientRect(), w = el.wrap.getBoundingClientRect(), inp = el.knobEdit;
@@ -753,8 +762,11 @@ function renderPlot(){
   c.strokeStyle = '#b3001b'; c.lineWidth = 2; c.setLineDash([4, 3]); c.beginPath(); c.moveTo(X0, Y0); c.lineTo(X0, Y1); c.stroke(); c.setLineDash([]);
   c.fillStyle = '#eb6834'; c.beginPath(); c.arc(X0, Y1, 4, 0, 2*Math.PI); c.fill();
   c.fillStyle = '#2a78d6'; c.strokeStyle = '#fff'; c.lineWidth = 2; c.beginPath(); c.arc(X0, Y0, 7, 0, 2*Math.PI); c.fill(); c.stroke();
-  c.fillStyle = '#b3001b'; c.font = '600 12px ui-monospace, Menlo, monospace'; c.textAlign = 'left'; c.textBaseline = 'middle';
-  c.fillText('e = ' + BP.fmt(yh - S.y), X0 + 10, (Y0 + Y1)/2);
+  if(fwdDone()){
+    c.fillStyle = '#b3001b'; c.font = '600 12px ui-monospace, Menlo, monospace'; c.textBaseline = 'middle';
+    if(X0 > PW*0.66){ c.textAlign = 'right'; c.fillText('e = ' + BP.fmt(yh - S.y), X0 - 10, (Y0 + Y1)/2); }
+    else { c.textAlign = 'left'; c.fillText('e = ' + BP.fmt(yh - S.y), X0 + 10, (Y0 + Y1)/2); }
+  }
 }
 el.plot.addEventListener('click', function(e){
   var r = el.plot.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, best = null, bd = 14;
@@ -764,18 +776,40 @@ el.plot.addEventListener('click', function(e){
 window.addEventListener('resize', function(){ sizePlot(); render(); });
 
 /* ---- the nudge table ---- */
+/* three decimals so a near-miss like 6.001 stays visible; BP.fmt's two decimals would show it as 6 */
+function fmt3(v){
+  var s = v.toFixed(3);
+  s = s.replace(/0+$/, '').replace(/\.$/, '');
+  if(s === '-0') s = '0';
+  return s.replace('-', '−');
+}
+function fmtLoss(v){ return Math.abs(v) >= 0.01 ? fmt3(v) : (+v.toPrecision(2)).toString().replace('-', '−'); }
 function nudge(){ S.nudged = BP.nudge(S.g, S.x, S.y); render(); }
 el.nudgeBtn.addEventListener('click', nudge);
-function renderNudge(){
-  var t = el.nudgeTable; t.innerHTML = '';
-  var head = t.insertRow(); ['knob', 'backprop', 'nudge (Δ = 0.001)'].forEach(function(s){ var th = document.createElement('th'); th.textContent = s; head.appendChild(th); });
-  BP.knobList(S.g).forEach(function(k){
-    var tr = t.insertRow();
+function fillNudgeRows(table, rows){
+  table.innerHTML = '';
+  var head = table.insertRow(); ['knob', 'backprop', 'nudge (Δ = 0.001)'].forEach(function(s){ var th = document.createElement('th'); th.textContent = s; head.appendChild(th); });
+  rows.forEach(function(k){
+    var tr = table.insertRow();
     tr.insertCell().textContent = k.name;
-    var bp = tr.insertCell(); bp.className = 'bp'; bp.textContent = bwdDone() ? BP.fmt(S.grads[k.id]) : '?';
-    tr.insertCell().textContent = S.nudged ? BP.fmt(S.nudged.slopes[k.id]) : '?';
+    var bp = tr.insertCell(); bp.className = 'bp'; bp.textContent = bwdDone() ? fmt3(S.grads[k.id]) : '?';
+    tr.insertCell().textContent = S.nudged ? fmt3(S.nudged.slopes[k.id]) : '?';
   });
-  var n = S.g.knobs.length, big = BP.knobsOfLayers([1, 4, 4, 1]);
+}
+function renderNudge(){
+  var knobs = BP.knobList(S.g), n = knobs.length, split = n > 6, half = Math.ceil(n/2);
+  var t1 = el.nudgeTable, host = el.nudgeCard, wrap = host.querySelector('.nudgeSplit');
+  if(split){
+    if(!wrap){ wrap = document.createElement('div'); wrap.className = 'nudgeSplit'; host.insertBefore(wrap, t1); wrap.appendChild(t1); }
+    var t2 = wrap.querySelector('table.nudge:not(#nudgeTable)');
+    if(!t2){ t2 = document.createElement('table'); t2.className = 'nudge'; wrap.appendChild(t2); }
+    fillNudgeRows(t1, knobs.slice(0, half));
+    fillNudgeRows(t2, knobs.slice(half));
+  } else {
+    if(wrap){ host.insertBefore(t1, wrap); host.removeChild(wrap); }
+    fillNudgeRows(t1, knobs);
+  }
+  var big = BP.knobsOfLayers([1, 4, 4, 1]);
   el.evals.innerHTML = 'Loss computations for all ' + n + ' slopes: nudging <b>' + (n + 1) + '</b> (' + n + ' knobs + 1), backprop <b>1 forward + 1 backward</b>.<br>' +
     'Neuron Patch’s 2 layers preset has ' + big + ' knobs: nudging would cost <b>' + (big + 1) + '</b> loss computations per step, backprop still one pass each way.';
 }

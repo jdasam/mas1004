@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backprop by Hand · MAS1004</title>
+<style>
+:root{
+  --surface:#fcfcfb; --panel:#ffffff; --ink:#0b0b0b; --sub:#52514e; --muted:#8a8985;
+  --rule:#dedcd6; --rule2:#c4c2bb; --accent:#b3001b; --soft:#f3f2ee;
+  --data:#2a78d6; --model:#eb6834; --ok:#0ca30c; --bad:#d03b3b; --pos:#d03b3b; --neg:#2a78d6;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--surface); color:var(--ink);
+  font:400 18px/1.45 Inter,Pretendard,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased; height:100vh; display:flex; flex-direction:column;
+}
+button,input,select{font-family:inherit;font-size:inherit}
+h1,h2,h3{margin:0;font-weight:600}
+
+#topbar{flex:none;padding:8px 20px 8px;background:var(--surface);border-bottom:1px solid var(--rule);display:flex;flex-direction:column;gap:8px}
+.row{display:flex;align-items:center;gap:10px 22px;flex-wrap:wrap}
+.brand{font-size:1.2rem;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+.brand span{display:block;font-size:.78rem;font-weight:500;color:var(--sub);letter-spacing:.01em}
+.grp{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gl{font-size:.9rem;color:var(--sub);font-weight:600;white-space:nowrap}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.ds{
+  padding:6px 14px;border-radius:999px;border:1px solid var(--rule2);background:#fff;color:var(--sub);
+  font-size:.95rem;font-weight:600;cursor:pointer;
+}
+.ds:hover{border-color:var(--ink);color:var(--ink)}
+.ds.active{border-color:var(--data);color:var(--data);background:#eef4fc}
+.btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{
+  padding:8px 15px;border-radius:10px;border:1px solid var(--ink);background:var(--ink);color:#fff;
+  font-weight:600;font-size:1rem;cursor:pointer;transition:.12s;white-space:nowrap;
+}
+.btn:hover{background:#333}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.ghost{background:#fff;color:var(--ink)}
+.btn.ghost:hover{background:#f2f1ee}
+.btn.ghost:disabled:hover{background:#fff}
+.btn.auto{border-color:var(--accent);background:var(--accent);min-width:84px}
+.btn.auto:hover{background:#8f0016}
+.lr input[type=range]{width:170px;accent-color:var(--ink)}
+.lr .val{font:600 1.02rem ui-monospace,Menlo,monospace;min-width:6ch;text-align:right;font-variant-numeric:tabular-nums}
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:14px;padding:10px 14px}
+
+main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 430px;gap:14px;padding:12px 20px 14px}
+#graphCard{display:flex;flex-direction:column;min-height:0;padding:10px 14px}
+#graphWrap{position:relative;flex:1;min-height:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:#fff}
+#graph{position:absolute;left:0;top:0;width:100%;height:100%;display:block;user-select:none;touch-action:none}
+#knobEdit{position:absolute;display:none;width:64px;padding:2px 4px;border:1.8px solid var(--ink);border-radius:6px;font:600 14px ui-monospace,Menlo,monospace;text-align:right;background:#fff;z-index:3}
+.legend{display:flex;gap:6px 18px;flex-wrap:wrap;font-size:.9rem;color:var(--sub);margin-top:6px}
+.legend b{font-weight:600}
+.legend .val{color:var(--ink)} .legend .slope{color:var(--accent)}
+.right{display:flex;flex-direction:column;gap:12px;min-height:0;min-width:0}
+.card h3{font-size:.95rem;color:var(--sub);font-weight:600;margin-bottom:6px}
+#plotCard{flex:none}
+#plot{display:block;width:100%;height:200px}
+.prow{display:flex;align-items:center;gap:8px 14px;flex-wrap:wrap;margin-top:6px;font-size:.95rem;color:var(--sub)}
+.nb{display:inline-block;min-width:64px;padding:3px 8px;border:1.8px solid var(--rule2);border-radius:7px;background:#fff;
+    font:600 1rem ui-monospace,SFMono-Regular,Menlo,monospace;text-align:right;cursor:ns-resize;user-select:none;font-variant-numeric:tabular-nums;color:var(--ink)}
+.nb.drag{border-color:var(--ink)}
+.nb input{width:64px;font:inherit;text-align:right;border:none;outline:none;background:transparent;padding:0}
+#captionCard{flex:none}
+.caption{font:500 1.02rem/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;min-height:3.1em;font-variant-numeric:tabular-nums}
+.caption.slope{color:var(--accent)}
+.caption.muted{color:var(--sub);font-family:Inter,system-ui,sans-serif}
+#rulesCard{flex:none}
+table.rules{border-collapse:collapse;width:100%;font-size:.95rem}
+table.rules td{padding:4px 6px;border-top:1px solid var(--rule);vertical-align:top}
+table.rules td:first-child{font:600 1rem ui-monospace,Menlo,monospace;white-space:nowrap;width:5.5em}
+table.rules tr.on td{color:var(--accent);font-weight:600}
+#nudgeCard{flex:1;min-height:0;overflow:auto}
+table.nudge{border-collapse:collapse;width:100%;font-size:.95rem;font-variant-numeric:tabular-nums}
+table.nudge th{font-size:.85rem;color:var(--sub);font-weight:600;text-align:right;padding:2px 6px;border-bottom:1px solid var(--rule2)}
+table.nudge th:first-child,table.nudge td:first-child{text-align:left;font-family:ui-monospace,Menlo,monospace}
+table.nudge td{padding:3px 6px;text-align:right;border-top:1px solid var(--rule);font-family:ui-monospace,Menlo,monospace}
+table.nudge td.bp{color:var(--accent);font-weight:600}
+.evals{font-size:.92rem;color:var(--sub);margin-top:8px;line-height:1.45}
+.evals b{color:var(--ink);font-weight:600}
+.stats{font-size:1.05rem;color:var(--sub);white-space:nowrap}
+.stats b{color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
+
+/* svg */
+.edge{fill:none;stroke:#8a8985;stroke-width:1.6}
+.edge.knob{stroke:#c4c2bb}
+.nbody{fill:#fff;stroke:#c4c2bb;stroke-width:1.6}
+.node.next .nbody{stroke:#0b0b0b;stroke-dasharray:6 4}
+.node.done .nbody{stroke:#0b0b0b}
+.node.input .nbody{fill:#f3f2ee}
+.node.given .nbody{fill:#f3f2ee}
+.nsym{font:700 20px Inter,system-ui,sans-serif;fill:#0b0b0b;text-anchor:middle;pointer-events:none}
+.nsym.small{font-size:15px}
+.nname{font:600 13px Inter,system-ui,sans-serif;fill:#52514e;text-anchor:middle;pointer-events:none}
+.nval{font:600 15px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#0b0b0b;text-anchor:middle;pointer-events:none}
+.nval.unknown{fill:#8a8985}
+.nslope{font:600 14px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#b3001b;text-anchor:middle;pointer-events:none}
+.nslope.unknown{fill:#c4c2bb}
+.kbox{fill:#fff;stroke:#eb6834;stroke-width:1.8;cursor:ns-resize}
+.kbox.drag{stroke:#0b0b0b;stroke-width:2.6}
+.ktext{font:600 14px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#0b0b0b;text-anchor:middle;pointer-events:none}
+.klabel{font:600 14px Inter,system-ui,sans-serif;fill:#0b0b0b;text-anchor:middle;pointer-events:none}
+.kslope{font:600 13px ui-monospace,SFMono-Regular,Menlo,monospace;fill:#b3001b;text-anchor:start;pointer-events:none}
+.kslope.unknown{fill:#c4c2bb}
+.pulse{fill:#b3001b}
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="row">
+    <div class="brand">Backprop by Hand<span>MAS1004 &middot; Data &amp; AI &middot; Lecture 6</span></div>
+    <div class="grp"><span class="gl">Start from</span><div class="chips" id="presets"></div></div>
+    <div class="stats">Step <b id="stepCount">0</b> &nbsp; loss <b id="lossNow">0</b></div>
+  </div>
+  <div class="row" id="ctrlbar">
+    <div class="btns">
+      <button class="btn" type="button" id="fwdBtn">Forward ▸</button>
+      <button class="btn ghost" type="button" id="fwdAllBtn">Forward all</button>
+      <button class="btn" type="button" id="bwdBtn" disabled>◂ Backward</button>
+      <button class="btn ghost" type="button" id="bwdAllBtn" disabled>Backward all</button>
+    </div>
+    <div class="btns">
+      <button class="btn ghost" type="button" id="nudgeBtn">Nudge each knob</button>
+      <button class="btn auto" type="button" id="stepBtn" disabled>Take a step</button>
+    </div>
+    <div class="grp lr"><span class="gl">Learning rate</span><input type="range" id="lrIn" min="0" max="1000" step="1"><span class="val" id="lrVal"></span></div>
+    <button class="btn ghost" type="button" id="resetBtn">Reset</button>
+  </div>
+</header>
+<main id="main">
+  <section class="card" id="graphCard">
+    <div id="graphWrap"><svg id="graph" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"></svg><input id="knobEdit" type="text"></div>
+    <div class="legend">
+      <span><b class="val">black</b>: the value (forward)</span>
+      <span><b class="slope">red</b>: the slope of the loss with respect to that value (backward)</span>
+      <span>Drag a knob box up or down, or click it to type</span>
+    </div>
+  </section>
+  <div class="right">
+    <section class="card" id="plotCard">
+      <h3>One data point</h3>
+      <canvas id="plot"></canvas>
+      <div class="prow"><span>x</span><span class="nb" id="xBox"></span><span>y</span><span class="nb" id="yBox"></span><span>Click a data point to pick it</span></div>
+    </section>
+    <section class="card" id="captionCard"><h3>This cell</h3><div class="caption muted" id="caption">Press Forward to fill the first cell. Work it out first, then check.</div></section>
+    <section class="card" id="rulesCard">
+      <h3>Backward rules: what each operation hands to its inputs</h3>
+      <table class="rules" id="rules">
+        <tr data-rule="mul"><td>×</td><td>the slope times the other input</td></tr>
+        <tr data-rule="add"><td>+ , − y</td><td>the slope unchanged</td></tr>
+        <tr data-rule="relu"><td>ReLU</td><td>unchanged if the input was &gt; 0 (open), else 0 (closed)</td></tr>
+        <tr data-rule="sq"><td>²</td><td>2 × e times the slope</td></tr>
+      </table>
+    </section>
+    <section class="card" id="nudgeCard">
+      <h3>Every knob's slope: nudging (lecture 4) against backprop</h3>
+      <table class="nudge" id="nudgeTable"></table>
+      <div class="evals" id="evals"></div>
+    </section>
+  </div>
+</main>
+<script id="bp-core">
+/* =========================================================================
+   Core: the lecture 4 data, a small computation graph for one data point,
+   forward and backward passes (also partial, one cell at a time), the
+   explanation of each cell, the nudge method, a gradient step. No DOM.
+   ========================================================================= */
+var BP = (function(){
+'use strict';
+var DATA_VERSION = 1;   /* keep 1: the seeds must give the Neuron Patch points */
+var DELTA = 0.001;
+
+/* ---- random numbers: copied from the lecture 4 and 5 demos so the seeds give the same numbers ---- */
+function xmur3(str){
+  var h = 1779033703 ^ str.length;
+  for(var i = 0; i < str.length; i++){
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = h << 13 | h >>> 19;
+  }
+  return function(){
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return (h ^= h >>> 16) >>> 0;
+  };
+}
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function rngOf(key){ var h = xmur3('rs|v' + DATA_VERSION + '|' + key); h(); return mulberry32(h()); }
+function gauss(r){
+  var u = 0, v = 0;
+  while(u === 0) u = r();
+  while(v === 0) v = r();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+function r2(v){ return Math.round(v*100)/100; }
+function clamp(v, lo, hi){ return v < lo ? lo : v > hi ? hi : v; }
+
+/* ---- eight overlapping bumps: the same data as lectures 4 and 5 ---- */
+var K8 = 8, SIGMA = 1.1, TRUTH_SEED = 19;
+var CENTERS = [];
+for(var ci = 0; ci < K8; ci++) CENTERS.push(r2(-3 + 6*ci/(K8 - 1)));
+function bumpAt(x, c){ var t = (x - c)/SIGMA; return Math.exp(-0.5*t*t); }
+function basis8(x){
+  var b = new Array(K8);
+  for(var j = 0; j < K8; j++) b[j] = bumpAt(x, CENTERS[j]);
+  return b;
+}
+function truthWeights(){
+  var r = rngOf('bump-truth|' + TRUTH_SEED), w = [];
+  for(var j = 0; j < K8; j++){
+    var s = r() < 0.5 ? -1 : 1;
+    w.push(r2(s*(0.6 + 1.9*r())));
+  }
+  return w;
+}
+var TRUTH8 = truthWeights();
+function genData(){
+  var r = rngOf('bump-data|' + TRUTH_SEED), pts = [];
+  for(var i = 0; i < 120; i++){
+    var x = -3 + 6*(i + r())/120, b = basis8(x), y = 0;
+    for(var j = 0; j < K8; j++) y += TRUTH8[j]*b[j];
+    pts.push([r2(x), r2(y + 0.08*gauss(r))]);
+  }
+  return pts;
+}
+var DATA = genData();
+
+/* ---- formatting ---- */
+function fmt(v){
+  var s = String(Math.round(v*100)/100);
+  if(s === '-0') s = '0';
+  return s.replace('-', '−');
+}
+function fmtP(v){ return v < 0 ? '(' + fmt(v) + ')' : fmt(v); }
+
+/* ---- graph ---- */
+var PRESETS = [
+  { key:'line',  label:'1 neuron' },
+  { key:'relu1', label:'1 ReLU' },
+  { key:'relu3', label:'3 ReLU' }
+];
+var SUB = ['₀', '₁', '₂', '₃'];
+function graph(key, label){ return { key:key, label:label, nodes:[], byId:{}, ops:[], knobs:[], cols:0, rows:0 }; }
+function add(g, n){
+  g.nodes.push(n); g.byId[n.id] = n;
+  if(n.kind === 'op') g.ops.push(n.id);
+  if(n.kind === 'knob') g.knobs.push(n.id);
+  g.cols = Math.max(g.cols, n.col + 1); g.rows = Math.max(g.rows, Math.floor(n.row) + 1);
+  return n;
+}
+function input(g, col, row){ return add(g, {id:'x', kind:'input', name:'x', inputs:[], col:col, row:row}); }
+function knob(g, id, name, value, col, row){ return add(g, {id:id, kind:'knob', name:name, value:value, inputs:[], col:col, row:row}); }
+function op(g, id, opk, name, inputs, col, row){ return add(g, {id:id, kind:'op', op:opk, name:name, inputs:inputs, col:col, row:row}); }
+/* the tail every preset shares: ŷ − y, then the square. y sits one row below e. */
+function tail(g, yhatId, col, row){
+  add(g, {id:'y', kind:'given', name:'y', inputs:[], col:col, row:row + 1});
+  op(g, 'e', 'sub', 'e', [yhatId, 'y'], col, row);
+  op(g, 'loss', 'sq', 'loss', ['e'], col + 1, row);
+}
+/* inputs of × are [value, knob]; the explanation prints the knob first */
+function buildGraph(key){
+  var g, j;
+  if(key === 'line'){
+    g = graph(key, '1 neuron');
+    input(g, 0, 0);
+    knob(g, 'w', 'w', -0.5, 1, 0); knob(g, 'b', 'b', 0, 2, 0);
+    op(g, 'mul', 'mul', 'wx', ['x', 'w'], 1, 0);
+    op(g, 'yhat', 'add', 'ŷ', ['mul', 'b'], 2, 0);
+    tail(g, 'yhat', 3, 0);
+  } else if(key === 'relu1'){
+    g = graph(key, '1 ReLU');
+    input(g, 0, 0);
+    knob(g, 'w1', 'w₁', 1, 1, 0); knob(g, 'b1', 'b₁', 0, 2, 0); knob(g, 'w2', 'w₂', -0.5, 4, 0); knob(g, 'b2', 'b₂', 1, 5, 0);
+    op(g, 'mul1', 'mul', 'w₁x', ['x', 'w1'], 1, 0);
+    op(g, 'z1', 'add', 'z₁', ['mul1', 'b1'], 2, 0);
+    op(g, 'h1', 'relu', 'h₁', ['z1'], 3, 0);
+    op(g, 'mul2', 'mul', 'w₂h₁', ['h1', 'w2'], 4, 0);
+    op(g, 'yhat', 'add', 'ŷ', ['mul2', 'b2'], 5, 0);
+    tail(g, 'yhat', 6, 0);
+  } else if(key === 'relu3'){
+    g = graph(key, '3 ReLU');
+    var win = [1, -1, 1], bin = [1.5, 0, -1.5], vout = [0.8, 0.8, -0.8], outs = [];
+    input(g, 0, 1);
+    for(j = 1; j <= 3; j++){
+      var s = SUB[j], r = j - 1;
+      knob(g, 'w' + j, 'w' + s, win[r], 1, r); knob(g, 'b' + j, 'b' + s, bin[r], 2, r); knob(g, 'v' + j, 'v' + s, vout[r], 4, r);
+      op(g, 'mul' + j, 'mul', 'w' + s + 'x', ['x', 'w' + j], 1, r);
+      op(g, 'z' + j, 'add', 'z' + s, ['mul' + j, 'b' + j], 2, r);
+      op(g, 'h' + j, 'relu', 'h' + s, ['z' + j], 3, r);
+      op(g, 'out' + j, 'mul', 'v' + s + 'h' + s, ['h' + j, 'v' + j], 4, r);
+      outs.push('out' + j);
+    }
+    knob(g, 'c', 'c', 0.5, 5, 1);
+    op(g, 'yhat', 'add', 'ŷ', outs.concat(['c']), 5, 1);
+    tail(g, 'yhat', 6, 1);
+  } else {
+    return null;
+  }
+  return g;
+}
+function getKnob(g, id){ return g.byId[id].value; }
+function setKnob(g, id, v){ g.byId[id].value = v; }
+function knobList(g){ return g.knobs.map(function(id){ var n = g.byId[id]; return {id:id, name:n.name, value:n.value}; }); }
+
+/* ---- forward ---- */
+function opValue(n, vals){
+  var a = n.inputs.map(function(id){ return vals[id]; });
+  if(n.op === 'mul') return a[0]*a[1];
+  if(n.op === 'add'){ var s = 0; for(var i = 0; i < a.length; i++) s += a[i]; return s; }
+  if(n.op === 'relu') return a[0] > 0 ? a[0] : 0;
+  if(n.op === 'sub') return a[0] - a[1];
+  if(n.op === 'sq') return a[0]*a[0];
+  throw new Error('unknown op ' + n.op);
+}
+function partialForward(g, x, y, k){
+  var vals = {x:x, y:y}, i;   /* y is a given: the − y node reads it from vals */
+  for(i = 0; i < g.knobs.length; i++) vals[g.knobs[i]] = g.byId[g.knobs[i]].value;
+  for(i = 0; i < Math.min(k, g.ops.length); i++){
+    var n = g.byId[g.ops[i]];
+    vals[n.id] = opValue(n, vals);
+  }
+  return vals;
+}
+function forward(g, x, y){ return partialForward(g, x, y, g.ops.length); }
+function predict(g, x){ return forward(g, x, 0).yhat; }   /* ŷ does not depend on y */
+function loss(g, x, y){ return forward(g, x, y).loss; }
+
+/* ---- backward: each node hands a slope to each of its inputs ---- */
+/* local slopes, aligned with n.inputs */
+function localSlopes(n, vals){
+  var a = n.inputs.map(function(id){ return vals[id]; });
+  if(n.op === 'mul') return [a[1], a[0]];
+  if(n.op === 'add') return a.map(function(){ return 1; });
+  if(n.op === 'relu') return [a[0] > 0 ? 1 : 0];
+  if(n.op === 'sub') return [1, -1];
+  if(n.op === 'sq') return [2*a[0]];
+  throw new Error('unknown op ' + n.op);
+}
+function backwardOrder(g){ return g.ops.slice().reverse(); }
+/* the value y must be in vals for the sub node; it is a given, so it gets no slope */
+function partialBackward(g, vals, y, k){
+  var grads = {}, order = backwardOrder(g), v = {};
+  Object.keys(vals).forEach(function(id){ v[id] = vals[id]; });
+  v.y = y;
+  if(k <= 0) return grads;
+  grads.loss = 1;
+  for(var i = 0; i < Math.min(k - 1, order.length); i++){
+    var n = g.byId[order[i]], gout = grads[n.id] || 0, ls = localSlopes(n, v);
+    for(var j = 0; j < n.inputs.length; j++){
+      var inp = g.byId[n.inputs[j]];
+      if(inp.kind === 'input' || inp.kind === 'given') continue;
+      grads[inp.id] = (grads[inp.id] || 0) + gout*ls[j];
+    }
+  }
+  return grads;
+}
+function backward(g, vals, y){ return partialBackward(g, vals, y, g.ops.length + 1); }
+
+/* ---- the nudge method of lecture 4: push each knob by Δ, measure the loss again ---- */
+function nudge(g, x, y, delta){
+  delta = delta || DELTA;
+  var L0 = loss(g, x, y), slopes = {};
+  for(var i = 0; i < g.knobs.length; i++){
+    var id = g.knobs[i], v = g.byId[id].value;
+    g.byId[id].value = v + delta;
+    slopes[id] = (loss(g, x, y) - L0)/delta;
+    g.byId[id].value = v;
+  }
+  return { slopes:slopes, evals:g.knobs.length + 1, loss:L0 };
+}
+function stepKnobs(g, grads, lr){
+  var out = {};
+  for(var i = 0; i < g.knobs.length; i++){
+    var id = g.knobs[i];
+    g.byId[id].value = g.byId[id].value - lr*(grads[id] || 0);
+    out[id] = g.byId[id].value;
+  }
+  return out;
+}
+/* knobs of a dense network with these layer sizes: a weight on every wire, a bias on every neuron after the input */
+function knobsOfLayers(sizes){
+  var n = 0;
+  for(var i = 0; i + 1 < sizes.length; i++) n += sizes[i]*sizes[i + 1] + sizes[i + 1];
+  return n;
+}
+
+/* ---- explanations ---- */
+function nameOf(g, id){ return g.byId[id].name; }
+/* for × the knob comes first in the sentence */
+function mulPair(g, n){ return n.inputs[1] && g.byId[n.inputs[1]].kind === 'knob' ? [n.inputs[1], n.inputs[0]] : n.inputs.slice(); }
+function explainForward(g, id, vals){
+  var n = g.byId[id], v = vals[id];
+  if(n.op === 'mul'){
+    var pr = mulPair(g, n);
+    return n.name + ' = ' + nameOf(g, pr[0]) + ' × ' + nameOf(g, pr[1]) + ' = ' + fmtP(vals[pr[0]]) + ' × ' + fmtP(vals[pr[1]]) + ' = ' + fmt(v);
+  }
+  if(n.op === 'add'){
+    return n.name + ' = ' + n.inputs.map(function(i){ return nameOf(g, i); }).join(' + ') + ' = ' +
+           n.inputs.map(function(i){ return fmtP(vals[i]); }).join(' + ') + ' = ' + fmt(v);
+  }
+  if(n.op === 'relu') return n.name + ' = ReLU(' + nameOf(g, n.inputs[0]) + ') = ReLU(' + fmt(vals[n.inputs[0]]) + ') = ' + fmt(v);
+  if(n.op === 'sub') return n.name + ' = ' + nameOf(g, n.inputs[0]) + ' − ' + nameOf(g, n.inputs[1]) + ' = ' + fmt(vals[n.inputs[0]]) + ' − ' + fmt(vals[n.inputs[1]]) + ' = ' + fmt(v);
+  if(n.op === 'sq') return n.name + ' = ' + nameOf(g, n.inputs[0]) + '² = ' + fmtP(vals[n.inputs[0]]) + '² = ' + fmt(v);
+  return '';
+}
+function ruleOf(g, id){
+  var n = g.byId[id];
+  if(!n || n.kind !== 'op') return null;
+  return n.op === 'sub' ? 'add' : n.op;
+}
+function explainBackward(g, id, vals, grads){
+  if(id === null) return 'Start at the end: the slope of the loss with respect to itself is 1.';
+  var n = g.byId[id], gout = grads[id];
+  if(n.op === 'sq'){
+    var e = vals[n.inputs[0]];
+    return '²: ' + nameOf(g, n.inputs[0]) + ' gets 2 × ' + nameOf(g, n.inputs[0]) + ' × (slope of ' + n.name + ') = 2 × ' + fmtP(e) + ' × ' + fmtP(gout) + ' = ' + fmt(2*e*gout);
+  }
+  if(n.op === 'sub') return '− y: ' + nameOf(g, n.inputs[0]) + ' gets the slope unchanged, ' + fmt(gout);
+  if(n.op === 'add') return '+: every input gets the slope unchanged: ' + n.inputs.map(function(i){ return nameOf(g, i) + ' gets ' + fmt(gout); }).join(', ');
+  if(n.op === 'mul'){
+    var pr = mulPair(g, n), other = {}; other[pr[0]] = pr[1]; other[pr[1]] = pr[0];
+    var keep = pr.filter(function(i){ var k = g.byId[i].kind; return k !== 'input' && k !== 'given'; });
+    if(keep.length === 1){
+      var i0 = keep[0], ov = vals[other[i0]];
+      return '×: ' + nameOf(g, i0) + ' gets the slope times the other input: ' + fmtP(ov) + ' × ' + fmtP(gout) + ' = ' + fmt(ov*gout) + ' (x is data: it needs no slope)';
+    }
+    return '×: each input gets the slope times the other input: ' + pr.map(function(i){
+      return nameOf(g, i) + ' gets ' + fmtP(vals[other[i]]) + ' × ' + fmtP(gout) + ' = ' + fmt(vals[other[i]]*gout);
+    }).join(', ');
+  }
+  if(n.op === 'relu'){
+    var z = n.inputs[0], zv = vals[z];
+    return zv > 0 ? 'ReLU: ' + nameOf(g, z) + ' = ' + fmt(zv) + ' > 0, the gate is open, so ' + nameOf(g, z) + ' gets ' + fmt(gout) + ' unchanged'
+                  : 'ReLU: ' + nameOf(g, z) + ' = ' + fmt(zv) + ' ≤ 0, the gate is closed, so ' + nameOf(g, z) + ' gets 0';
+  }
+  return '';
+}
+
+return {
+  DATA:DATA, DELTA:DELTA, PRESETS:PRESETS, buildGraph:buildGraph, getKnob:getKnob, setKnob:setKnob, knobList:knobList,
+  forward:forward, partialForward:partialForward, backward:backward, partialBackward:partialBackward, backwardOrder:backwardOrder,
+  loss:loss, predict:predict, nudge:nudge, stepKnobs:stepKnobs, knobsOfLayers:knobsOfLayers,
+  explainForward:explainForward, explainBackward:explainBackward, ruleOf:ruleOf,
+  fmt:fmt, fmtP:fmtP, rngOf:rngOf, clamp:clamp
+};
+})();
+</script>
+<script id="bp-ui">
+var BPUI = (function(){
+'use strict';
+function $(id){ return document.getElementById(id); }
+var el = { presets:$('presets'), graph:$('graph'), wrap:$('graphWrap'), knobEdit:$('knobEdit'), caption:$('caption'), rules:$('rules'),
+           nudgeTable:$('nudgeTable'), evals:$('evals'), stepCount:$('stepCount'), lossNow:$('lossNow'),
+           fwdBtn:$('fwdBtn'), fwdAllBtn:$('fwdAllBtn'), bwdBtn:$('bwdBtn'), bwdAllBtn:$('bwdAllBtn'),
+           nudgeBtn:$('nudgeBtn'), stepBtn:$('stepBtn'), resetBtn:$('resetBtn'), lrIn:$('lrIn'), lrVal:$('lrVal'), plot:$('plot') };
+var S = { key:'relu1', g:null, x:2, y:3, vals:{}, grads:{}, fwd:0, bwd:0, steps:0, lr:0.02, nudged:null, last:{kind:'', id:null}, pulses:[] };
+var NS = 'http://www.w3.org/2000/svg';
+function sv(tag, attrs, text){
+  var n = document.createElementNS(NS, tag);
+  for(var k in attrs) if(attrs[k] !== undefined && attrs[k] !== null) n.setAttribute(k, attrs[k]);
+  if(text !== undefined) n.textContent = text;
+  return n;
+}
+function nOps(){ return S.g.ops.length; }
+function fwdDone(){ return S.fwd >= nOps(); }
+function bwdDone(){ return S.bwd >= nOps() + 1; }
+function recompute(){
+  S.vals = BP.forward(S.g, S.x, S.y);
+  S.grads = BP.partialBackward(S.g, S.vals, S.y, S.bwd);
+  if(S.nudged) S.nudged = BP.nudge(S.g, S.x, S.y);   /* keep the nudge column live so it is never stale */
+}
+function lossNow(){ return S.vals.loss; }
+
+/* ---- presets ---- */
+BP.PRESETS.forEach(function(p){
+  var b = document.createElement('button'); b.type = 'button'; b.className = 'ds'; b.textContent = p.label; b.dataset.key = p.key;
+  b.addEventListener('click', function(){ loadPreset(p.key); });
+  el.presets.appendChild(b);
+});
+function loadPreset(key){
+  var g = BP.buildGraph(key);
+  if(!g) return;
+  S.key = key; S.g = g; S.fwd = 0; S.bwd = 0; S.steps = 0; S.nudged = null; S.last = {kind:'', id:null}; S.pulses = [];
+  Array.prototype.forEach.call(el.presets.children, function(b){ b.classList.toggle('active', b.dataset.key === key); });
+  recompute(); buildGraphSvg(); render();
+}
+function reset(){ loadPreset(S.key); setPoint(2, 3); S.last = {kind:'', id:null}; render(); }
+
+/* ---- the reveal ---- */
+function forwardStep(){
+  if(fwdDone()) return;
+  S.fwd++; S.last = {kind:'fwd', id:S.g.ops[S.fwd - 1]}; render();
+}
+function forwardAll(){ while(!fwdDone()){ S.fwd++; } S.last = {kind:'fwd', id:S.g.ops[S.fwd - 1]}; render(); }
+function backwardStep(){
+  if(!fwdDone() || bwdDone()) return;
+  S.bwd++;
+  var id = S.bwd === 1 ? null : BP.backwardOrder(S.g)[S.bwd - 2];
+  S.grads = BP.partialBackward(S.g, S.vals, S.y, S.bwd);
+  S.last = {kind:'bwd', id:id};
+  if(id) startPulses(id);
+  render();
+}
+function backwardAll(){
+  if(!fwdDone()) return;
+  S.bwd = nOps() + 1; S.grads = BP.backward(S.g, S.vals, S.y);
+  S.last = {kind:'bwd', id:BP.backwardOrder(S.g)[nOps() - 1]}; render();
+}
+function takeStep(){
+  if(!bwdDone()) return;
+  var before = lossNow();
+  BP.stepKnobs(S.g, S.grads, S.lr);
+  S.steps++; S.fwd = nOps(); S.bwd = 0; recompute();
+  S.last = {kind:'step', before:before, after:lossNow()};
+  render();
+}
+function onKnobChange(id, v){
+  BP.setKnob(S.g, id, v);
+  S.bwd = 0; recompute();
+  S.last = {kind:'stale', id:id};
+  render();
+}
+function setPoint(x, y){
+  S.x = BP.clamp(+x, -3, 3); S.y = Math.round(BP.clamp(+y, -2, 5)*100)/100;
+  S.bwd = 0; recompute(); S.last = {kind:'stale', id:null}; render();
+  xBox.refresh(); yBox.refresh();
+}
+
+/* ---- caption and rules ---- */
+function captionText(){
+  var L = S.last;
+  if(L.kind === 'fwd') return {text:BP.explainForward(S.g, L.id, S.vals), cls:''};
+  if(L.kind === 'bwd') return {text:BP.explainBackward(S.g, L.id, S.vals, S.grads), cls:'slope'};
+  if(L.kind === 'step') return {text:'Step ' + S.steps + ': every knob moved by −' + BP.fmt(S.lr) + ' × its slope. Loss ' + BP.fmt(L.before) + ' → ' + BP.fmt(L.after) + '. Press Backward to measure again.', cls:'muted'};
+  if(L.kind === 'stale') return {text:(L.id ? 'Knob ' + S.g.byId[L.id].name + ' changed' : 'The point changed') + ': the values are updated and the slopes are gone. Run Backward again.', cls:'muted'};
+  return {text:'Press Forward to fill the first cell. Work it out first, then check.', cls:'muted'};
+}
+function renderCaption(){
+  var c = captionText();
+  el.caption.textContent = c.text; el.caption.className = 'caption ' + c.cls;
+  var rule = S.last.kind === 'bwd' && S.last.id ? BP.ruleOf(S.g, S.last.id) : null;
+  Array.prototype.forEach.call(el.rules.rows, function(tr){ tr.classList.toggle('on', tr.dataset.rule === rule); });
+}
+function renderButtons(){
+  el.fwdBtn.disabled = fwdDone(); el.fwdAllBtn.disabled = fwdDone();
+  el.bwdBtn.disabled = !fwdDone() || bwdDone(); el.bwdAllBtn.disabled = !fwdDone() || bwdDone();
+  el.stepBtn.disabled = !bwdDone();
+  el.stepCount.textContent = S.steps; el.lossNow.textContent = BP.fmt(lossNow());
+}
+el.fwdBtn.addEventListener('click', forwardStep); el.fwdAllBtn.addEventListener('click', forwardAll);
+el.bwdBtn.addEventListener('click', backwardStep); el.bwdAllBtn.addEventListener('click', backwardAll);
+el.stepBtn.addEventListener('click', takeStep); el.resetBtn.addEventListener('click', reset);
+/* learning rate slider: log scale 0.001 … 0.5 */
+function lrFromSlider(v){ return Math.pow(10, -3 + 2.699*v/1000); }
+function sliderFromLr(lr){ return Math.round(1000*(Math.log10(lr) + 3)/2.699); }
+el.lrIn.addEventListener('input', function(){ S.lr = +lrFromSlider(+el.lrIn.value).toPrecision(2); el.lrVal.textContent = BP.fmt(S.lr); });
+function setLr(lr){ S.lr = lr; el.lrIn.value = sliderFromLr(lr); el.lrVal.textContent = BP.fmt(lr); }
+
+/* ---- the SVG graph ---- */
+var COLW = 120, ROWH = 162, X0 = 70, Y0 = 96, BW = 72, BH = 44;
+var svgEls = {};   /* id -> {val, slope, body, box, ktext, kslope} */
+function pos(n){
+  var y = Y0 + n.row*ROWH;
+  if(n.kind === 'given') y = Y0 + (n.row - 1)*ROWH + ROWH*0.75;
+  if(n.kind === 'knob') y = Y0 + n.row*ROWH - 66;
+  return {x:X0 + n.col*COLW, y:y};
+}
+function symbolOf(n){ return {mul:'×', add:'+', relu:'ReLU', sub:'− y', sq:'²'}[n.op]; }
+function buildGraphSvg(){
+  var g = S.g, svg = el.graph;
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  svgEls = {};
+  var W = X0 + g.cols*COLW + 10, H = Y0 + (g.rows - 1)*ROWH + ROWH*0.75 + 60;
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  var defs = sv('defs'); var mk = sv('marker', {id:'arr', viewBox:'0 0 10 10', refX:'9', refY:'5', markerWidth:'7', markerHeight:'7', orient:'auto-start-reverse'});
+  mk.appendChild(sv('path', {d:'M0 0 L10 5 L0 10 z', fill:'#8a8985'})); defs.appendChild(mk); svg.appendChild(defs);
+  var gEdges = sv('g'), gNodes = sv('g'), gPulse = sv('g', {id:'pulses'});
+  svg.appendChild(gEdges); svg.appendChild(gNodes); svg.appendChild(gPulse);
+  /* edges: from each input's right (or knob's bottom, or given's top) to the op's left (or top) */
+  g.nodes.forEach(function(n){
+    if(n.kind !== 'op') return;
+    var P = pos(n);
+    n.inputs.forEach(function(iid){
+      var m = g.byId[iid], Q = pos(m), d;
+      if(m.kind === 'knob') d = 'M' + Q.x + ' ' + (Q.y + 12) + ' L' + (P.x + 24) + ' ' + (P.y - BH/2);
+      else if(m.kind === 'given') d = 'M' + Q.x + ' ' + (Q.y - 14) + ' L' + P.x + ' ' + (P.y + BH/2);
+      else if(m.kind === 'input') d = 'M' + (Q.x + 24) + ' ' + Q.y + ' L' + (P.x - BW/2) + ' ' + P.y;
+      else d = 'M' + (Q.x + BW/2) + ' ' + Q.y + ' L' + (P.x - BW/2) + ' ' + P.y;
+      gEdges.appendChild(sv('path', {class:'edge' + (m.kind === 'knob' ? ' knob' : ''), d:d, 'marker-end':'url(#arr)', 'data-edge':iid + '>' + n.id}));
+    });
+  });
+  g.nodes.forEach(function(n){
+    var P = pos(n), grp, e = {};
+    if(n.kind === 'input'){
+      grp = sv('g', {class:'node input', 'data-node':n.id});
+      grp.appendChild(sv('circle', {class:'nbody', cx:P.x, cy:P.y, r:24}));
+      grp.appendChild(sv('text', {class:'nsym', x:P.x, y:P.y + 7}, 'x'));
+      e.val = sv('text', {class:'nval', x:P.x, y:P.y + 44}); grp.appendChild(e.val);
+    } else if(n.kind === 'given'){
+      grp = sv('g', {class:'node given', 'data-node':n.id});
+      grp.appendChild(sv('rect', {class:'nbody', x:P.x - 28, y:P.y - 14, width:56, height:28, rx:8}));
+      e.val = sv('text', {class:'nval', x:P.x + 6, y:P.y + 5}); grp.appendChild(e.val);
+      grp.appendChild(sv('text', {class:'nname', x:P.x - 16, y:P.y + 5}, 'y ='));
+    } else if(n.kind === 'knob'){
+      grp = sv('g', {class:'knob', 'data-knob':n.id});
+      e.box = sv('rect', {class:'kbox', x:P.x - 30, y:P.y - 12, width:60, height:24, rx:6, 'data-knob':n.id}); grp.appendChild(e.box);
+      e.ktext = sv('text', {class:'ktext', x:P.x, y:P.y + 5}); grp.appendChild(e.ktext);
+      grp.appendChild(sv('text', {class:'klabel', x:P.x, y:P.y - 12 - 6}, n.name));
+      e.kslope = sv('text', {class:'kslope', x:P.x + 36, y:P.y + 5}); grp.appendChild(e.kslope);
+    } else {
+      grp = sv('g', {class:'node op', 'data-node':n.id});
+      e.body = sv('rect', {class:'nbody', x:P.x - BW/2, y:P.y - BH/2, width:BW, height:BH, rx:10}); grp.appendChild(e.body);
+      var sym = symbolOf(n);
+      grp.appendChild(sv('text', {class:'nsym' + (sym.length > 1 ? ' small' : ''), x:P.x, y:P.y + 7}, sym));
+      grp.appendChild(sv('text', {class:'nname', x:P.x, y:P.y - BH/2 - 6}, n.name));
+      e.val = sv('text', {class:'nval', x:P.x, y:P.y + BH/2 + 18}); grp.appendChild(e.val);
+      e.slope = sv('text', {class:'nslope', x:P.x, y:P.y + BH/2 + 36}); grp.appendChild(e.slope);
+    }
+    gNodes.appendChild(grp); svgEls[n.id] = e; e.grp = grp;
+  });
+}
+function renderGraph(){
+  var g = S.g, revealed = {}, nextId = fwdDone() ? null : g.ops[S.fwd];
+  for(var i = 0; i < S.fwd; i++) revealed[g.ops[i]] = true;
+  var bwdNext = !fwdDone() || bwdDone() ? null : (S.bwd === 0 ? 'loss' : BP.backwardOrder(g)[S.bwd - 1]);
+  g.nodes.forEach(function(n){
+    var e = svgEls[n.id];
+    if(n.kind === 'input'){ e.val.textContent = BP.fmt(S.x); return; }
+    if(n.kind === 'given'){ e.val.textContent = BP.fmt(S.y); return; }
+    if(n.kind === 'knob'){
+      e.ktext.textContent = BP.fmt(n.value);
+      var has = S.grads[n.id] !== undefined;
+      e.kslope.textContent = has ? BP.fmt(S.grads[n.id]) : '?';
+      e.kslope.classList.toggle('unknown', !has);
+      return;
+    }
+    var shown = revealed[n.id];
+    e.val.textContent = shown ? BP.fmt(S.vals[n.id]) : '?';
+    e.val.classList.toggle('unknown', !shown);
+    var hasG = S.grads[n.id] !== undefined;
+    e.slope.textContent = hasG ? BP.fmt(S.grads[n.id]) : '?';
+    e.slope.classList.toggle('unknown', !hasG);
+    e.grp.classList.toggle('next', n.id === nextId || n.id === bwdNext);
+    e.grp.classList.toggle('done', shown && n.id !== nextId && n.id !== bwdNext);
+  });
+}
+function render(){ renderGraph(); renderButtons(); renderCaption(); renderNudge(); renderPlot(); }
+
+/* ---- HTML number box (x, y): drag 0.1 per 5 px, Shift 0.01, click to type ---- */
+function numBox(node, opts){
+  var drag = null, editing = false;
+  function show(){ if(!editing) node.textContent = BP.fmt(opts.get()); }
+  node.addEventListener('pointerdown', function(e){ if(editing) return; drag = {y0:e.clientY, raw:opts.get(), moved:false}; node.setPointerCapture(e.pointerId); e.preventDefault(); });
+  node.addEventListener('pointermove', function(e){
+    if(!drag) return;
+    var dy = drag.y0 - e.clientY; if(Math.abs(dy) > 3) drag.moved = true; if(!drag.moved) return;
+    node.classList.add('drag');
+    var fine = e.shiftKey, step = fine ? 0.01 : 0.1, v = drag.raw + dy*(fine ? 0.002 : 0.02);
+    v = BP.clamp(Math.round(Math.round(v/step)*step*100)/100, opts.min, opts.max);
+    if(v !== opts.get()){ opts.set(v); show(); }
+  });
+  node.addEventListener('pointerup', function(){ if(!drag) return; var moved = drag.moved; drag = null; node.classList.remove('drag'); if(!moved) edit(); });
+  function edit(){
+    editing = true;
+    var inp = document.createElement('input'); inp.type = 'text'; inp.value = BP.fmt(opts.get()).replace('−', '-');
+    node.textContent = ''; node.appendChild(inp); inp.focus(); inp.select();
+    function done(commit){
+      if(!editing) return; editing = false;
+      if(commit){ var v = parseFloat(inp.value.replace('−', '-')); if(isFinite(v)) opts.set(BP.clamp(Math.round(v*100)/100, opts.min, opts.max)); }
+      node.textContent = BP.fmt(opts.get());
+    }
+    inp.addEventListener('keydown', function(e){ if(e.key === 'Enter') done(true); if(e.key === 'Escape') done(false); });
+    inp.addEventListener('blur', function(){ done(true); });
+  }
+  show(); return {refresh:show};
+}
+var xBox = numBox($('xBox'), {min:-3, max:3, get:function(){ return S.x; }, set:function(v){ setPoint(v, S.y); }});
+var yBox = numBox($('yBox'), {min:-2, max:5, get:function(){ return S.y; }, set:function(v){ setPoint(S.x, v); }});
+
+/* ---- SVG knob boxes: same gestures on the rects; typing uses the #knobEdit overlay ---- */
+var kdrag = null, kedit = null;
+el.graph.addEventListener('pointerdown', function(e){
+  var id = e.target.getAttribute && e.target.getAttribute('data-knob');
+  if(!id || kedit) return;
+  kdrag = {id:id, y0:e.clientY, raw:BP.getKnob(S.g, id), moved:false};
+  e.target.setPointerCapture(e.pointerId); e.preventDefault();
+});
+el.graph.addEventListener('pointermove', function(e){
+  if(!kdrag) return;
+  var dy = kdrag.y0 - e.clientY; if(Math.abs(dy) > 3) kdrag.moved = true; if(!kdrag.moved) return;
+  svgEls[kdrag.id].box.classList.add('drag');
+  var fine = e.shiftKey, step = fine ? 0.01 : 0.1, v = kdrag.raw + dy*(fine ? 0.002 : 0.02);
+  v = BP.clamp(Math.round(Math.round(v/step)*step*100)/100, -5, 5);
+  if(v !== BP.getKnob(S.g, kdrag.id)) onKnobChange(kdrag.id, v);
+});
+el.graph.addEventListener('pointerup', function(){
+  if(!kdrag) return;
+  var d = kdrag; kdrag = null; svgEls[d.id].box.classList.remove('drag');
+  if(!d.moved) editKnob(d.id);
+});
+function editKnob(id){
+  var r = svgEls[id].box.getBoundingClientRect(), w = el.wrap.getBoundingClientRect(), inp = el.knobEdit;
+  kedit = id;
+  inp.style.display = 'block'; inp.style.left = (r.left - w.left) + 'px'; inp.style.top = (r.top - w.top) + 'px';
+  inp.style.width = r.width + 'px'; inp.style.height = r.height + 'px';
+  inp.value = BP.fmt(BP.getKnob(S.g, id)).replace('−', '-'); inp.focus(); inp.select();
+}
+function doneKnob(commit){
+  if(!kedit) return;
+  var id = kedit; kedit = null; el.knobEdit.style.display = 'none';
+  if(commit){ var v = parseFloat(el.knobEdit.value.replace('−', '-')); if(isFinite(v)) onKnobChange(id, BP.clamp(Math.round(v*100)/100, -5, 5)); }
+}
+el.knobEdit.addEventListener('keydown', function(e){ if(e.key === 'Enter') doneKnob(true); if(e.key === 'Escape') doneKnob(false); });
+el.knobEdit.addEventListener('blur', function(){ doneKnob(true); });
+
+/* ---- the data plot: 120 points, the curve ŷ(x), the picked point and its error ---- */
+var pctx = el.plot.getContext('2d'), PW = 0, PH = 0, PDPR = 1;
+var YR = (function(){ var lo = Infinity, hi = -Infinity; BP.DATA.forEach(function(p){ lo = Math.min(lo, p[1]); hi = Math.max(hi, p[1]); }); var pad = (hi - lo)*0.15; return [lo - pad, hi + pad]; })();
+var PM = {l:34, r:10, t:8, b:22};
+function pxX(x){ return PM.l + (x + 3)/6*(PW - PM.l - PM.r); }
+function pxY(y){ return PM.t + (YR[1] - y)/(YR[1] - YR[0])*(PH - PM.t - PM.b); }
+function sizePlot(){
+  var r = el.plot.getBoundingClientRect(); PDPR = window.devicePixelRatio || 1;
+  PW = Math.max(10, Math.round(r.width)); PH = Math.max(10, Math.round(r.height));
+  el.plot.width = Math.round(PW*PDPR); el.plot.height = Math.round(PH*PDPR);
+}
+function renderPlot(){
+  if(!PW) sizePlot();
+  var c = pctx; c.setTransform(PDPR, 0, 0, PDPR, 0, 0); c.clearRect(0, 0, PW, PH);
+  c.strokeStyle = '#dedcd6'; c.lineWidth = 1;
+  [-3, -2, -1, 0, 1, 2, 3].forEach(function(x){ c.beginPath(); c.moveTo(pxX(x), PM.t); c.lineTo(pxX(x), PH - PM.b); c.stroke(); });
+  c.fillStyle = '#8a8985'; c.font = '500 11px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'top';
+  [-3, -2, -1, 0, 1, 2, 3].forEach(function(x){ c.fillText(String(x).replace('-', '−'), pxX(x), PH - PM.b + 4); });
+  c.textAlign = 'right'; c.textBaseline = 'middle';
+  for(var yy = Math.ceil(YR[0]); yy <= Math.floor(YR[1]); yy++){ c.fillText(String(yy).replace('-', '−'), PM.l - 5, pxY(yy)); }
+  c.fillStyle = 'rgba(42,120,214,.55)';
+  BP.DATA.forEach(function(p){ c.beginPath(); c.arc(pxX(p[0]), pxY(p[1]), 2.6, 0, 2*Math.PI); c.fill(); });
+  c.strokeStyle = '#eb6834'; c.lineWidth = 2.2; c.beginPath();
+  for(var i = 0; i <= 120; i++){ var x = -3 + 6*i/120, y = BP.predict(S.g, x), X = pxX(x), Y = Math.min(PH + 50, Math.max(-50, pxY(y))); if(i) c.lineTo(X, Y); else c.moveTo(X, Y); }
+  c.stroke();
+  var yh = S.vals.yhat, X0 = pxX(S.x), Y0 = pxY(S.y), Y1 = Math.min(PH + 50, Math.max(-50, pxY(yh)));
+  c.strokeStyle = '#b3001b'; c.lineWidth = 2; c.setLineDash([4, 3]); c.beginPath(); c.moveTo(X0, Y0); c.lineTo(X0, Y1); c.stroke(); c.setLineDash([]);
+  c.fillStyle = '#eb6834'; c.beginPath(); c.arc(X0, Y1, 4, 0, 2*Math.PI); c.fill();
+  c.fillStyle = '#2a78d6'; c.strokeStyle = '#fff'; c.lineWidth = 2; c.beginPath(); c.arc(X0, Y0, 7, 0, 2*Math.PI); c.fill(); c.stroke();
+  c.fillStyle = '#b3001b'; c.font = '600 12px ui-monospace, Menlo, monospace'; c.textAlign = 'left'; c.textBaseline = 'middle';
+  c.fillText('e = ' + BP.fmt(yh - S.y), X0 + 10, (Y0 + Y1)/2);
+}
+el.plot.addEventListener('click', function(e){
+  var r = el.plot.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, best = null, bd = 14;
+  BP.DATA.forEach(function(p){ var d = Math.hypot(pxX(p[0]) - mx, pxY(p[1]) - my); if(d < bd){ bd = d; best = p; } });
+  if(best) setPoint(best[0], best[1]);
+});
+window.addEventListener('resize', function(){ sizePlot(); render(); });
+
+/* ---- the nudge table ---- */
+function nudge(){ S.nudged = BP.nudge(S.g, S.x, S.y); render(); }
+el.nudgeBtn.addEventListener('click', nudge);
+function renderNudge(){
+  var t = el.nudgeTable; t.innerHTML = '';
+  var head = t.insertRow(); ['knob', 'backprop', 'nudge (Δ = 0.001)'].forEach(function(s){ var th = document.createElement('th'); th.textContent = s; head.appendChild(th); });
+  BP.knobList(S.g).forEach(function(k){
+    var tr = t.insertRow();
+    tr.insertCell().textContent = k.name;
+    var bp = tr.insertCell(); bp.className = 'bp'; bp.textContent = bwdDone() ? BP.fmt(S.grads[k.id]) : '?';
+    tr.insertCell().textContent = S.nudged ? BP.fmt(S.nudged.slopes[k.id]) : '?';
+  });
+  var n = S.g.knobs.length, big = BP.knobsOfLayers([1, 4, 4, 1]);
+  el.evals.innerHTML = 'Loss computations for all ' + n + ' slopes: nudging <b>' + (n + 1) + '</b> (' + n + ' knobs + 1), backprop <b>1 forward + 1 backward</b>.<br>' +
+    'Neuron Patch’s 2 layers preset has ' + big + ' knobs: nudging would cost <b>' + (big + 1) + '</b> loss computations per step, backprop still one pass each way.';
+}
+
+/* a red dot runs from the node to each input it hands a slope to */
+function startPulses(id){
+  var n = S.g.byId[id], P = pos(n), now = performance.now();
+  n.inputs.forEach(function(iid){
+    var m = S.g.byId[iid];
+    if(m.kind === 'input' || m.kind === 'given') return;
+    var Q = pos(m);
+    var from = m.kind === 'knob' ? [P.x + 24, P.y - BH/2] : [P.x - BW/2, P.y];
+    var to = m.kind === 'knob' ? [Q.x, Q.y + 12] : [Q.x + BW/2, Q.y];
+    S.pulses.push({from:from, to:to, t0:now});
+  });
+  if(!pulseRaf) pulseRaf = requestAnimationFrame(pulseTick);
+}
+var pulseRaf = 0;
+function pulseTick(now){
+  pulseRaf = 0;
+  var layer = el.graph.querySelector('#pulses');
+  if(!layer) return;
+  while(layer.firstChild) layer.removeChild(layer.firstChild);
+  S.pulses = S.pulses.filter(function(p){ return now - p.t0 < 300; });
+  S.pulses.forEach(function(p){
+    var t = (now - p.t0)/300, x = p.from[0] + t*(p.to[0] - p.from[0]), y = p.from[1] + t*(p.to[1] - p.from[1]);
+    layer.appendChild(sv('circle', {class:'pulse', cx:x, cy:y, r:5}));
+  });
+  if(S.pulses.length) pulseRaf = requestAnimationFrame(pulseTick);
+}
+function state(){
+  return { preset:S.key, x:S.x, y:S.y, fwd:S.fwd, bwd:S.bwd, ops:nOps(), knobs:S.g.knobs.length, vals:S.vals, grads:S.grads,
+           loss:lossNow(), steps:S.steps, lr:S.lr, nudged:S.nudged ? S.nudged.slopes : null, evals:S.nudged ? S.nudged.evals : null,
+           caption:captionText().text, knobValues:BP.knobList(S.g) };
+}
+function readUrl(){
+  var q = new URLSearchParams(location.search || location.hash.replace(/^#/, '?'));
+  if(q.get('preset') && BP.buildGraph(q.get('preset'))) S.key = q.get('preset');
+  loadPreset(S.key);
+  var x = parseFloat(q.get('x')), y = parseFloat(q.get('y'));
+  if(isFinite(x) || isFinite(y)) setPoint(isFinite(x) ? x : S.x, isFinite(y) ? y : S.y);
+  var lr = parseFloat(q.get('lr')); if(isFinite(lr) && lr > 0) setLr(lr);
+}
+sizePlot();
+setLr(0.02); readUrl();
+return { S:S, render:render, hooks:{
+  loadPreset:loadPreset, forwardStep:forwardStep, forwardAll:forwardAll, backwardStep:backwardStep, backwardAll:backwardAll,
+  takeStep:takeStep, setKnob:onKnobChange, setPoint:setPoint, reset:reset, draw:render, state:state,
+  nudge:nudge
+} };
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One Layer in 2D · MAS1004</title>
+<style>
+:root{
+  --surface:#fcfcfb; --panel:#ffffff; --ink:#0b0b0b; --sub:#52514e; --muted:#8a8985;
+  --rule:#dedcd6; --rule2:#c4c2bb; --accent:#b3001b; --soft:#f3f2ee;
+  --data:#2a78d6; --model:#eb6834; --ok:#0ca30c; --bad:#d03b3b; --pos:#d03b3b; --neg:#2a78d6;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--surface); color:var(--ink);
+  font:400 18px/1.45 Inter,Pretendard,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased; height:100vh; display:flex; flex-direction:column;
+}
+button,input,select{font-family:inherit;font-size:inherit}
+h1,h2,h3{margin:0;font-weight:600}
+
+#topbar{flex:none;padding:8px 20px 8px;background:var(--surface);border-bottom:1px solid var(--rule);display:flex;flex-direction:column;gap:8px}
+.row{display:flex;align-items:center;gap:10px 22px;flex-wrap:wrap}
+.brand{font-size:1.2rem;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+.brand span{display:block;font-size:.78rem;font-weight:500;color:var(--sub);letter-spacing:.01em}
+.grp{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gl{font-size:.9rem;color:var(--sub);font-weight:600;white-space:nowrap}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.ds{
+  padding:6px 14px;border-radius:999px;border:1px solid var(--rule2);background:#fff;color:var(--sub);
+  font-size:.95rem;font-weight:600;cursor:pointer;
+}
+.ds:hover{border-color:var(--ink);color:var(--ink)}
+.ds.active{border-color:var(--data);color:var(--data);background:#eef4fc}
+.btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{
+  padding:8px 15px;border-radius:10px;border:1px solid var(--ink);background:var(--ink);color:#fff;
+  font-weight:600;font-size:1rem;cursor:pointer;transition:.12s;white-space:nowrap;
+}
+.btn:hover{background:#333}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.ghost{background:#fff;color:var(--ink)}
+.btn.ghost:hover{background:#f2f1ee}
+.btn.ghost:disabled:hover{background:#fff}
+.btn.auto{border-color:var(--accent);background:var(--accent);min-width:84px}
+.btn.auto:hover{background:#8f0016}
+.btn.sm{padding:5px 11px;font-size:.9rem}
+
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:14px;padding:10px 14px}
+
+main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 440px;gap:14px;padding:12px 20px 14px}
+#planeCard{display:flex;flex-direction:column;min-height:0;padding:10px}
+#planeWrap{position:relative;flex:1;min-height:0;border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:#fff}
+#plane{position:absolute;left:0;top:0;width:100%;height:100%;display:block;user-select:none;touch-action:none;cursor:default}
+.right{display:flex;flex-direction:column;gap:12px;min-height:0;min-width:0}
+#wCard{flex:none}
+#calcCard{flex:1;min-height:0;overflow:auto}
+.card h3{font-size:.95rem;color:var(--sub);font-weight:600;margin-bottom:8px}
+
+/* pipeline chips: p → × W → + b → act( ) */
+.pipe{display:flex;align-items:center;gap:8px;font-size:1.05rem;font-weight:600}
+.pipe .arrow{color:var(--muted)}
+.pipe .chip{padding:6px 14px;border-radius:10px;border:1px solid var(--rule2);background:#fff;color:var(--sub);font-weight:600;cursor:pointer;font:inherit}
+.pipe .chip.on{border-color:var(--ink);color:var(--ink)}
+.pipe .chip.fixed{cursor:default}
+.pipe .chip.playing{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+/* the W panel: a 2×2 of number boxes with row colours matching the arrows */
+.mgrid{display:grid;grid-template-columns:auto auto auto;gap:6px 10px;align-items:center;margin-bottom:10px}
+.mgrid .colhead{font-size:.85rem;color:var(--sub);font-weight:600;text-align:center}
+.mgrid .rowhead{font:600 .9rem ui-monospace,Menlo,monospace;white-space:nowrap}
+.mgrid .rowhead.r1{color:var(--model)} .mgrid .rowhead.r2{color:var(--data)}
+.nb{display:inline-block;min-width:72px;padding:4px 8px;border:1.8px solid var(--rule2);border-radius:7px;background:#fff;
+    font:600 1.05rem ui-monospace,SFMono-Regular,Menlo,monospace;text-align:right;cursor:ns-resize;user-select:none;font-variant-numeric:tabular-nums}
+.nb.r1{border-color:var(--model)} .nb.r2{border-color:var(--data)}
+.nb.drag{border-color:var(--ink);box-shadow:0 0 0 2px rgba(0,0,0,.08)}
+.nb input{width:72px;font:inherit;text-align:right;border:none;outline:none;background:transparent;padding:0}
+.dim{opacity:.4;pointer-events:none}
+.brow{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.brow .rowhead{font:600 .9rem ui-monospace,Menlo,monospace}
+.seg{display:inline-flex;border:1px solid var(--rule2);border-radius:9px;overflow:hidden;background:#fff}
+.seg button{padding:6px 11px;border:none;background:#fff;color:var(--sub);font-weight:600;cursor:pointer;font-size:.95rem}
+.seg button+button{border-left:1px solid var(--rule2)}
+.seg button.on{background:var(--ink);color:#fff}
+
+/* calc panel: lecture 5 style, monospace, one line per step */
+.calc{font:500 .95rem/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;font-variant-numeric:tabular-nums}
+.calc .pt{font:600 1rem Inter,system-ui,sans-serif;color:var(--sub);margin-bottom:4px;white-space:normal}
+.legend{display:flex;gap:6px 18px;flex-wrap:wrap;font-size:.9rem;color:var(--sub);margin-top:6px}
+.legend i{display:inline-block;width:18px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="row">
+    <div class="brand">One Layer in 2D<span>MAS1004 &middot; Data &amp; AI &middot; Lecture 6</span></div>
+    <div class="pipe" id="pipe">
+      <span>p</span><span class="arrow">→</span>
+      <button class="chip on fixed" type="button" id="chipW">× W</button><span class="arrow">→</span>
+      <button class="chip" type="button" id="chipB">+ b</button><span class="arrow">→</span>
+      <button class="chip" type="button" id="chipAct">act( )</button>
+    </div>
+    <button class="btn" type="button" id="playBtn">▶ Play</button>
+    <div class="grp"><span class="gl">Presets</span><div class="chips" id="presets"></div></div>
+  </div>
+</header>
+<main id="main">
+  <section class="card" id="planeCard">
+    <div id="planeWrap"><canvas id="plane"></canvas></div>
+    <div class="legend">
+      <span><i style="background:var(--model)"></i>where (1, 0) lands: row 1 of W</span>
+      <span><i style="background:var(--data)"></i>where (0, 1) lands: row 2 of W</span>
+      <span><i style="background:var(--accent)"></i>the letter F</span>
+      <span>Drag the hollow point to move p</span>
+    </div>
+  </section>
+  <div class="right">
+    <section class="card" id="wCard">
+      <h3>W: two neurons, one column each</h3>
+      <div class="mgrid" id="wGrid">
+        <span></span><span class="colhead">N1</span><span class="colhead">N2</span>
+        <span class="rowhead r1">(1, 0) →</span><span class="nb r1" id="w11"></span><span class="nb r1" id="w12"></span>
+        <span class="rowhead r2">(0, 1) →</span><span class="nb r2" id="w21"></span><span class="nb r2" id="w22"></span>
+      </div>
+      <div class="brow" id="bRow"><span class="rowhead">b</span><span class="nb" id="b1"></span><span class="nb" id="b2"></span></div>
+      <div class="brow" id="actRow"><span class="rowhead">act</span><div class="seg" id="actSeg"></div></div>
+    </section>
+    <section class="card" id="calcCard">
+      <h3>The point p through the layer</h3>
+      <div class="calc" id="calc"></div>
+    </section>
+  </div>
+</main>
+<script id="ol-core">
+/* =========================================================================
+   Core: presets, a seeded random matrix, the staged transform of a point,
+   grid and shape sampling, and the text of the calc panel. No DOM access.
+   ========================================================================= */
+var OL = (function(){
+'use strict';
+
+/* ---- random numbers: the same generator as the lecture 4 and 5 demos ---- */
+function xmur3(str){
+  var h = 1779033703 ^ str.length;
+  for(var i = 0; i < str.length; i++){
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = h << 13 | h >>> 19;
+  }
+  return function(){
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return (h ^= h >>> 16) >>> 0;
+  };
+}
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function rngOf(key){ var h = xmur3('ol|v1|' + key); h(); return mulberry32(h()); }
+function gauss(r){
+  var u = 0, v = 0;
+  while(u === 0) u = r();
+  while(v === 0) v = r();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+function clamp(v, lo, hi){ return v < lo ? lo : v > hi ? hi : v; }
+
+/* ---- activations, applied to each coordinate ---- */
+var ACTS = {
+  linear: { key:'linear', label:'Linear', f:function(z){ return z; } },
+  relu:   { key:'relu',   label:'ReLU',   f:function(z){ return z > 0 ? z : 0; } },
+  tanh:   { key:'tanh',   label:'tanh',   f:function(z){ return Math.tanh(z); } }
+};
+var ACT_KEYS = ['linear', 'relu', 'tanh'];
+function applyAct(q, act){ var f = (ACTS[act] || ACTS.linear).f; return [f(q[0]), f(q[1])]; }
+
+/* ---- presets: rows are where (1, 0) and (0, 1) land ---- */
+var PRESETS = [
+  { key:'identity', label:'Identity',   W:[[1, 0], [0, 1]] },
+  { key:'rotate30', label:'Rotate 30°', W:[[0.87, 0.5], [-0.5, 0.87]] },
+  { key:'rotate90', label:'Rotate 90°', W:[[0, 1], [-1, 0]] },
+  { key:'stretch',  label:'Stretch',    W:[[2, 0], [0, 1]] },
+  { key:'squeeze',  label:'Squeeze',    W:[[0.5, 0], [0, 0.5]] },
+  { key:'shear',    label:'Shear',      W:[[1, 0], [1, 1]] },
+  { key:'flip',     label:'Flip',       W:[[1, 0], [0, -1]] }
+];
+function copyW(W){ return [[W[0][0], W[0][1]], [W[1][0], W[1][1]]]; }
+function presetW(key){
+  for(var i = 0; i < PRESETS.length; i++) if(PRESETS[i].key === key) return copyW(PRESETS[i].W);
+  return null;
+}
+function det(W){ return W[0][0]*W[1][1] - W[0][1]*W[1][0]; }
+/* the n-th random matrix: entries N(0, 0.8) rounded to 0.1, redrawn while the matrix is nearly singular */
+function randomW(n){
+  var r = rngOf('random|' + n), W, tries = 0;
+  do {
+    W = [[0, 0], [0, 0]];
+    for(var i = 0; i < 2; i++) for(var j = 0; j < 2; j++) W[i][j] = clamp(Math.round(0.8*gauss(r)*10)/10, -3, 3);
+    tries++;
+  } while(Math.abs(det(W)) < 0.3 && tries < 1000);
+  return W;
+}
+
+/* ---- the transform ---- */
+function mulRow(p, W){
+  return [p[0]*W[0][0] + p[1]*W[1][0], p[0]*W[0][1] + p[1]*W[1][1]];
+}
+function stageT(stage){
+  return stage === 'act' ? {tW:1, tb:1, tact:1} : stage === 'b' ? {tW:1, tb:1, tact:0} : {tW:1, tb:0, tact:0};
+}
+/* f(p; W, b, act, tW, tb, tact): each stage is a straight blend from "not applied" to "applied" */
+function transform(p, c){
+  var pw = mulRow(p, c.W);
+  var qx = p[0] + c.tW*(pw[0] - p[0]), qy = p[1] + c.tW*(pw[1] - p[1]);
+  qx += c.tb*c.b[0]; qy += c.tb*c.b[1];
+  var a = applyAct([qx, qy], c.act);
+  return [(1 - c.tact)*qx + c.tact*a[0], (1 - c.tact)*qy + c.tact*a[1]];
+}
+function lerpW(A, B, t){
+  var W = [[0, 0], [0, 0]];
+  for(var i = 0; i < 2; i++) for(var j = 0; j < 2; j++) W[i][j] = A[i][j] + t*(B[i][j] - A[i][j]);
+  return W;
+}
+
+/* ---- things to draw: sampled so that the activation can bend them ---- */
+function samplePolyline(a, b, step){
+  var dx = b[0] - a[0], dy = b[1] - a[1], len = Math.sqrt(dx*dx + dy*dy);
+  var n = Math.max(1, Math.round(len/step)), pts = [];
+  for(var i = 0; i <= n; i++){ var t = i/n; pts.push([a[0] + t*dx, a[1] + t*dy]); }
+  return pts;
+}
+function gridLines(range, step){
+  var lines = [], k;
+  for(k = -range; k <= range; k++) lines.push(samplePolyline([k, -range], [k, range], step));
+  for(k = -range; k <= range; k++) lines.push(samplePolyline([-range, k], [range, k], step));
+  return lines;
+}
+var SHAPE_F = [
+  [[0.5, -1], [0.5, 1.5]],
+  [[0.5, 1.5], [1.8, 1.5]],
+  [[0.5, 0.5], [1.4, 0.5]]
+];
+var SHAPE_F_CORNERS = [[0.5, -1], [0.5, 1.5], [1.8, 1.5], [0.5, 0.5], [1.4, 0.5], [0.5, 0.5]];
+/* the sixth corner repeats the middle bar's start so the six dots sit on every stroke end;
+   drawing code may dedupe by position */
+
+/* ---- text ---- */
+function fmt(v){
+  var s = (Math.round(v*100)/100).toFixed(2);
+  if(s === '-0.00') s = '0.00';
+  return s.replace('-', '−');
+}
+function paren(v){ return v < 0 ? '(' + fmt(v) + ')' : fmt(v); }
+function vec(v){ return '[' + fmt(v[0]) + ' ' + fmt(v[1]) + ']'; }
+/* the calc panel: line by line, only as far as the stage goes */
+function calcLines(p, W, b, act, stage){
+  var h = mulRow(p, W), lines = [];
+  lines.push(vec(p) + ' × [[' + fmt(W[0][0]) + ' ' + fmt(W[0][1]) + '] [' + fmt(W[1][0]) + ' ' + fmt(W[1][1]) + ']]');
+  lines.push('= [' + fmt(p[0]) + '×' + paren(W[0][0]) + ' + ' + fmt(p[1]) + '×' + paren(W[1][0]) +
+             '   ' + fmt(p[0]) + '×' + paren(W[0][1]) + ' + ' + fmt(p[1]) + '×' + paren(W[1][1]) + ']');
+  lines.push('= ' + vec(h));
+  if(stage === 'b' || stage === 'act'){
+    var hb = [h[0] + b[0], h[1] + b[1]];
+    lines.push('+ ' + vec(b) + ' = ' + vec(hb));
+    if(stage === 'act') lines.push(ACTS[act].label + ' → ' + vec(applyAct(hb, act)));
+  }
+  return lines;
+}
+
+return {
+  ACTS:ACTS, ACT_KEYS:ACT_KEYS, PRESETS:PRESETS, presetW:presetW, copyW:copyW, randomW:randomW, det:det,
+  mulRow:mulRow, applyAct:applyAct, stageT:stageT, transform:transform, lerpW:lerpW,
+  samplePolyline:samplePolyline, gridLines:gridLines, SHAPE_F:SHAPE_F, SHAPE_F_CORNERS:SHAPE_F_CORNERS,
+  fmt:fmt, calcLines:calcLines, clamp:clamp, rngOf:rngOf, gauss:gauss
+};
+})();
+</script>
+<script id="ol-ui">
+/* =========================================================================
+   UI: number boxes, chips, presets, calc panel, canvas drawing, point drag.
+   Task 2: static state (Wshown just follows W). Task 3 adds play/seek/tween.
+   ========================================================================= */
+var OLUI = (function(){
+'use strict';
+var S = {
+  W:OL.presetW('identity'), Wshown:OL.presetW('identity'), b:[0, 0], act:'relu', stage:'w', p:[2, 1],
+  t:{tW:1, tb:0, tact:0}, playing:false, randomCount:0, preset:'identity'
+};
+function $(id){ return document.getElementById(id); }
+var el = { plane:$('plane'), wrap:$('planeWrap'), calc:$('calc'), presets:$('presets'), actSeg:$('actSeg'),
+           chipB:$('chipB'), chipAct:$('chipAct'), chipW:$('chipW'), bRow:$('bRow'), actRow:$('actRow'), playBtn:$('playBtn') };
+
+/* ---- number box: drag up/down (0.1 per 5 px, Shift 0.01), click to type ---- */
+function numBox(node, opts){
+  var val = opts.get(), drag = null, editing = false;
+  function show(){ if(!editing) node.textContent = OL.fmt(opts.get()); }
+  node.addEventListener('pointerdown', function(e){
+    if(editing) return;
+    drag = {y0:e.clientY, raw:opts.get(), moved:false};
+    node.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  node.addEventListener('pointermove', function(e){
+    if(!drag) return;
+    var dy = drag.y0 - e.clientY;
+    if(Math.abs(dy) > 3) drag.moved = true;
+    if(!drag.moved) return;
+    node.classList.add('drag');
+    var fine = e.shiftKey, step = fine ? 0.01 : 0.1;
+    var v = drag.raw + dy*(fine ? 0.002 : 0.02);
+    v = Math.round(v/step)*step;
+    v = OL.clamp(Math.round(v*100)/100, opts.min, opts.max);
+    if(v !== opts.get()){ opts.set(v); show(); }
+  });
+  node.addEventListener('pointerup', function(e){
+    if(!drag) return;
+    var moved = drag.moved; drag = null; node.classList.remove('drag');
+    if(!moved) edit();
+  });
+  function edit(){
+    editing = true;
+    var inp = document.createElement('input');
+    inp.type = 'text'; inp.value = OL.fmt(opts.get()).replace('−', '-');
+    node.textContent = ''; node.appendChild(inp); inp.focus(); inp.select();
+    function done(commit){
+      if(!editing) return;
+      editing = false;
+      if(commit){
+        var v = parseFloat(inp.value.replace('−', '-'));
+        if(isFinite(v)) opts.set(OL.clamp(Math.round(v*100)/100, opts.min, opts.max));
+      }
+      node.textContent = OL.fmt(opts.get());
+    }
+    inp.addEventListener('keydown', function(e){ if(e.key === 'Enter') done(true); if(e.key === 'Escape') done(false); });
+    inp.addEventListener('blur', function(){ done(true); });
+  }
+  show();
+  return { refresh:show };
+}
+var boxes = {};
+function wBox(id, i, j){
+  boxes[id] = numBox($(id), { min:-3, max:3,
+    get:function(){ return S.W[i][j]; },
+    set:function(v){ S.W[i][j] = v; startTween(0.25); S.preset = ''; markPresets(); } });
+}
+wBox('w11', 0, 0); wBox('w12', 0, 1); wBox('w21', 1, 0); wBox('w22', 1, 1);
+boxes.b1 = numBox($('b1'), { min:-3, max:3, get:function(){ return S.b[0]; }, set:function(v){ S.b[0] = v; requestRender(); } });
+boxes.b2 = numBox($('b2'), { min:-3, max:3, get:function(){ return S.b[1]; }, set:function(v){ S.b[1] = v; requestRender(); } });
+function refreshBoxes(){ Object.keys(boxes).forEach(function(k){ boxes[k].refresh(); }); }
+
+/* ---- presets, activation, stage chips ---- */
+OL.PRESETS.forEach(function(p){
+  var b = document.createElement('button'); b.type = 'button'; b.className = 'ds'; b.textContent = p.label; b.dataset.key = p.key;
+  b.addEventListener('click', function(){ loadPreset(p.key); });
+  el.presets.appendChild(b);
+});
+function drawRandom(){ S.randomCount++; setW(OL.randomW(S.randomCount), 'random'); }
+var randBtn = document.createElement('button'); randBtn.type = 'button'; randBtn.className = 'ds'; randBtn.textContent = 'Random'; randBtn.dataset.key = 'random';
+randBtn.addEventListener('click', drawRandom);
+el.presets.appendChild(randBtn);
+function markPresets(){
+  Array.prototype.forEach.call(el.presets.children, function(b){ b.classList.toggle('active', b.dataset.key === S.preset); });
+}
+function loadPreset(key){
+  if(key === 'random'){ drawRandom(); return; }
+  var W = OL.presetW(key); if(W) setW(W, key);
+}
+function setW(W, presetKey){ S.W = OL.copyW(W); startTween(presetKey ? 0.8 : 0.25); S.preset = presetKey || ''; markPresets(); refreshBoxes(); }
+
+OL.ACT_KEYS.forEach(function(k){
+  var b = document.createElement('button'); b.type = 'button'; b.textContent = OL.ACTS[k].label; b.dataset.key = k;
+  b.addEventListener('click', function(){ setAct(k); });
+  el.actSeg.appendChild(b);
+});
+function setAct(k){ if(!OL.ACTS[k]) return; S.act = k; requestRender(); }
+function setStage(stage){
+  if(stage !== 'w' && stage !== 'b' && stage !== 'act') return;
+  if(anim.play){ anim.play = null; S.playing = false; }
+  S.stage = stage; S.t = OL.stageT(stage); requestRender();
+}
+el.chipB.addEventListener('click', function(){ setStage(S.stage === 'w' ? 'b' : 'w'); });
+el.chipAct.addEventListener('click', function(){ setStage(S.stage === 'act' ? 'b' : 'act'); });
+function syncChrome(){
+  var onB = S.stage !== 'w', onAct = S.stage === 'act';
+  el.chipB.classList.toggle('on', onB); el.chipAct.classList.toggle('on', onAct);
+  el.bRow.classList.toggle('dim', !onB); el.actRow.classList.toggle('dim', !onAct);
+  Array.prototype.forEach.call(el.actSeg.children, function(b){ b.classList.toggle('on', b.dataset.key === S.act); });
+  el.chipAct.textContent = OL.ACTS[S.act].label + '( )';
+}
+
+/* ---- calc panel ---- */
+function renderCalc(){
+  var lines = OL.calcLines(S.p, S.W, S.b, S.act, S.stage);
+  el.calc.innerHTML = '';
+  var head = document.createElement('div'); head.className = 'pt';
+  head.textContent = 'p = (' + OL.fmt(S.p[0]) + ', ' + OL.fmt(S.p[1]) + ')';
+  el.calc.appendChild(head);
+  lines.forEach(function(s){
+    var gap = s.indexOf('   ');
+    if(gap === -1){
+      var d = document.createElement('div'); d.textContent = s; el.calc.appendChild(d);
+    } else {
+      var d1 = document.createElement('div'); d1.textContent = s.slice(0, gap); el.calc.appendChild(d1);
+      var d2 = document.createElement('div'); d2.textContent = '   ' + s.slice(gap + 3); el.calc.appendChild(d2);
+    }
+  });
+}
+
+/* ---- canvas ---- */
+var ctx = el.plane.getContext('2d'), CW = 0, CH = 0, DPR = 1, SCALE = 1, OX = 0, OY = 0;
+var RANGE = 3.5;
+function resize(){
+  var r = el.wrap.getBoundingClientRect();
+  DPR = window.devicePixelRatio || 1;
+  CW = Math.max(10, Math.round(r.width)); CH = Math.max(10, Math.round(r.height));
+  el.plane.width = Math.round(CW*DPR); el.plane.height = Math.round(CH*DPR);
+  SCALE = Math.min(CW, CH)/(2*RANGE); OX = CW/2; OY = CH/2;
+  requestRender();
+}
+function px(p){ return [OX + p[0]*SCALE, OY - p[1]*SCALE]; }
+function fromPx(x, y){ return [(x - OX)/SCALE, (OY - y)/SCALE]; }
+function cfg(){ return {W:S.Wshown, b:S.b, act:S.act, tW:S.t.tW, tb:S.t.tb, tact:S.t.tact}; }
+function T(p){ return OL.transform(p, cfg()); }
+function poly(pts, mapFn){
+  ctx.beginPath();
+  for(var i = 0; i < pts.length; i++){ var q = px(mapFn ? mapFn(pts[i]) : pts[i]); if(i) ctx.lineTo(q[0], q[1]); else ctx.moveTo(q[0], q[1]); }
+}
+var GRID = OL.gridLines(6, 0.1);
+var UNIT = [].concat(OL.samplePolyline([0, 0], [1, 0], 0.1), OL.samplePolyline([1, 0], [1, 1], 0.1),
+                     OL.samplePolyline([1, 1], [0, 1], 0.1), OL.samplePolyline([0, 1], [0, 0], 0.1));
+var FSTROKES = OL.SHAPE_F.map(function(s){ return OL.samplePolyline(s[0], s[1], 0.1); });
+function arrow(a, b, color, label){
+  var A = px(a), B = px(b), dx = B[0] - A[0], dy = B[1] - A[1], L = Math.sqrt(dx*dx + dy*dy);
+  if(L < 1) return;
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+  var ux = dx/L, uy = dy/L;
+  ctx.beginPath(); ctx.moveTo(B[0], B[1]); ctx.lineTo(B[0] - 12*ux + 6*uy, B[1] - 12*uy - 6*ux);
+  ctx.lineTo(B[0] - 12*ux - 6*uy, B[1] - 12*uy + 6*ux); ctx.closePath(); ctx.fill();
+  ctx.font = '600 13px ui-monospace, Menlo, monospace'; ctx.textBaseline = 'middle';
+  ctx.textAlign = ux >= 0 ? 'left' : 'right';
+  ctx.fillText(label, B[0] + 10*ux, B[1] + 10*uy - 8);
+}
+function render(){
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, CW, CH);
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, CW, CH);
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  /* original grid, dotted */
+  ctx.save(); ctx.setLineDash([2, 5]); ctx.strokeStyle = '#dedcd6'; ctx.lineWidth = 1;
+  GRID.forEach(function(l){ poly([l[0], l[l.length - 1]]); ctx.stroke(); });
+  ctx.restore();
+  /* the unit square's image */
+  ctx.fillStyle = 'rgba(235,104,52,.10)'; poly(UNIT, T); ctx.closePath(); ctx.fill();
+  /* moved grid */
+  ctx.strokeStyle = '#b9b7b0'; ctx.lineWidth = 1.2;
+  GRID.forEach(function(l){ poly(l, T); ctx.stroke(); });
+  /* axes of the current space: bold when ReLU is folding, tanh box when tanh is squashing */
+  var folding = S.stage === 'act' && S.t.tact > 0 && S.act === 'relu';
+  var squashing = S.stage === 'act' && S.t.tact > 0 && S.act === 'tanh';
+  ctx.strokeStyle = folding ? '#0b0b0b' : '#8a8985'; ctx.lineWidth = folding ? 2.2 : 1.2;
+  var vis0 = fromPx(0, 0), vis1 = fromPx(CW, CH);
+  var xmin = Math.min(vis0[0], vis1[0]), xmax = Math.max(vis0[0], vis1[0]);
+  var ymin = Math.min(vis0[1], vis1[1]), ymax = Math.max(vis0[1], vis1[1]);
+  poly([[xmin, 0], [xmax, 0]]); ctx.stroke(); poly([[0, ymin], [0, ymax]]); ctx.stroke();
+  if(squashing){ ctx.save(); ctx.setLineDash([6, 4]); ctx.strokeStyle = '#0b0b0b'; ctx.lineWidth = 1.6; poly([[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]]); ctx.stroke(); ctx.restore(); }
+  /* tick labels */
+  ctx.fillStyle = '#8a8985'; ctx.font = '500 12px Inter, system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for(var k = -3; k <= 3; k++){ if(k){ var q = px([k, 0]); ctx.fillText(String(k).replace('-', '−'), q[0], q[1] + 4); } }
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for(k = -3; k <= 3; k++){ if(k){ q = px([0, k]); ctx.fillText(String(k).replace('-', '−'), q[0] - 5, q[1]); } }
+  /* the letter F */
+  ctx.strokeStyle = '#b3001b'; ctx.lineWidth = 2.4;
+  FSTROKES.forEach(function(s){ poly(s, T); ctx.stroke(); });
+  ctx.fillStyle = '#b3001b';
+  OL.SHAPE_F_CORNERS.forEach(function(c){ var q = px(T(c)); ctx.beginPath(); ctx.arc(q[0], q[1], 4, 0, 2*Math.PI); ctx.fill(); });
+  /* basis arrows from the origin's image */
+  var o = T([0, 0]), e1 = T([1, 0]), e2 = T([0, 1]);
+  arrow(o, e1, '#eb6834', '(' + OL.fmt(e1[0] - o[0]) + ', ' + OL.fmt(e1[1] - o[1]) + ')');
+  arrow(o, e2, '#2a78d6', '(' + OL.fmt(e2[0] - o[0]) + ', ' + OL.fmt(e2[1] - o[1]) + ')');
+  /* the point p: hollow where it was, filled where it went */
+  var P = px(S.p), Q = px(T(S.p));
+  ctx.strokeStyle = '#6b3fb5'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(P[0], P[1]); ctx.lineTo(Q[0], Q[1]); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.arc(P[0], P[1], 7, 0, 2*Math.PI); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#6b3fb5'; ctx.beginPath(); ctx.arc(Q[0], Q[1], 7, 0, 2*Math.PI); ctx.fill();
+  ctx.fillStyle = '#6b3fb5'; ctx.font = '600 13px Inter, system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+  ctx.fillText('p', P[0] + 9, P[1] - 6);
+  syncChrome(); playingChip(); renderCalc();
+}
+var pending = 0;
+function requestRender(){ if(pending) return; pending = requestAnimationFrame(function(){ pending = 0; render(); }); }
+
+/* ---- drag the hollow point p ---- */
+var pdrag = null;
+el.plane.addEventListener('pointerdown', function(e){
+  var r = el.plane.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, P = px(S.p);
+  if(Math.hypot(x - P[0], y - P[1]) <= 14){ pdrag = true; el.plane.setPointerCapture(e.pointerId); }
+});
+el.plane.addEventListener('pointermove', function(e){
+  var r = el.plane.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  if(pdrag){
+    var q = fromPx(x, y);
+    S.p = [OL.clamp(Math.round(q[0]*10)/10, -3, 3), OL.clamp(Math.round(q[1]*10)/10, -3, 3)];
+    requestRender();
+  } else {
+    var P = px(S.p); el.plane.style.cursor = Math.hypot(x - P[0], y - P[1]) <= 14 ? 'grab' : 'default';
+  }
+});
+el.plane.addEventListener('pointerup', function(){ pdrag = null; });
+function setPoint(x, y){ S.p = [OL.clamp(+x, -3, 3), OL.clamp(+y, -3, 3)]; requestRender(); }
+
+/* ---- URL options: ?preset=shear&w=1,0,1,1&b=0.3,-0.1&stage=act&act=relu&p=2,1 ---- */
+function readUrl(){
+  var q = new URLSearchParams(location.search || location.hash.replace(/^#/, '?'));
+  if(q.get('preset') && OL.presetW(q.get('preset'))) loadPreset(q.get('preset'));
+  if(q.get('w')){ var w = q.get('w').split(',').map(Number); if(w.length === 4 && w.every(isFinite)) setW([[w[0], w[1]], [w[2], w[3]]], ''); }
+  if(q.get('b')){ var b = q.get('b').split(',').map(Number); if(b.length === 2 && b.every(isFinite)){ S.b = b; refreshBoxes(); } }
+  if(q.get('act')) setAct(q.get('act'));
+  if(q.get('stage')) setStage(q.get('stage'));
+  if(q.get('p')){ var p = q.get('p').split(',').map(Number); if(p.length === 2 && p.every(isFinite)) setPoint(p[0], p[1]); }
+}
+function state(){
+  return { W:OL.copyW(S.W), Wshown:OL.copyW(S.Wshown), b:S.b.slice(), act:S.act, stage:S.stage, p:S.p.slice(),
+           t:{tW:S.t.tW, tb:S.t.tb, tact:S.t.tact}, playing:S.playing, preset:S.preset,
+           calc:OL.calcLines(S.p, S.W, S.b, S.act, S.stage) };
+}
+/* ---- animation: Wshown eases toward W; Play replays the enabled stages from the untouched grid ---- */
+var anim = { raf:0, from:null, to:null, t0:0, dur:0, play:null };
+function smooth(t){ t = OL.clamp(t, 0, 1); return t*t*(3 - 2*t); }
+function startTween(dur){
+  anim.from = OL.copyW(S.Wshown); anim.to = OL.copyW(S.W); anim.t0 = performance.now(); anim.dur = dur;
+  if(!anim.raf) anim.raf = requestAnimationFrame(tick);
+}
+/* Play: a list of [stageKey, seconds] for the enabled stages, run one after another */
+function play(){
+  var steps = [['tW', 1.2]];
+  if(S.stage !== 'w') steps.push(['tb', 0.6]);
+  if(S.stage === 'act') steps.push(['tact', 0.8]);
+  S.t = {tW:0, tb:0, tact:0}; S.playing = true;
+  anim.play = { steps:steps, i:0, t0:performance.now() };
+  if(!anim.raf) anim.raf = requestAnimationFrame(tick);
+}
+function tick(now){
+  anim.raf = 0;
+  var busy = false;
+  if(anim.from){
+    var u = anim.dur > 0 ? (now - anim.t0)/(anim.dur*1000) : 1;
+    S.Wshown = OL.lerpW(anim.from, anim.to, smooth(u));
+    if(u >= 1){ S.Wshown = OL.copyW(anim.to); anim.from = null; } else busy = true;
+  }
+  if(anim.play){
+    var pl = anim.play, st = pl.steps[pl.i], v = (now - pl.t0)/(st[1]*1000);
+    S.t[st[0]] = smooth(v);
+    if(v >= 1){
+      S.t[st[0]] = 1; pl.i++; pl.t0 = now;
+      if(pl.i >= pl.steps.length){ anim.play = null; S.playing = false; S.t = OL.stageT(S.stage); }
+      else busy = true;
+    } else busy = true;
+  }
+  render();
+  if(busy) anim.raf = requestAnimationFrame(tick);
+}
+function playingChip(){
+  var key = anim.play ? anim.play.steps[anim.play.i][0] : null;
+  el.chipW.classList.toggle('playing', key === 'tW');
+  el.chipB.classList.toggle('playing', key === 'tb');
+  el.chipAct.classList.toggle('playing', key === 'tact');
+}
+el.playBtn.addEventListener('click', play);
+window.addEventListener('keydown', function(e){
+  if(e.code !== 'Space' && e.key !== ' ') return;
+  var t = document.activeElement, tag = t && t.tagName;
+  if(tag === 'INPUT' || tag === 'TEXTAREA' || (t && t.isContentEditable)) return;
+  e.preventDefault(); play();
+});
+
+window.addEventListener('resize', resize);
+resize(); readUrl(); markPresets(); render();
+return { S:S, render:render, hooks:{
+  setW:function(W){ setW(W, ''); S.Wshown = OL.copyW(S.W); anim.from = null; render(); },
+  setB:function(b){ S.b = [+b[0], +b[1]]; refreshBoxes(); render(); },
+  setAct:setAct, setStage:setStage, loadPreset:function(k){ loadPreset(k); S.Wshown = OL.copyW(S.W); anim.from = null; render(); },
+  setPoint:setPoint, play:play,
+  seek:function(tW, tb, tact){ anim.play = null; S.playing = false; S.t = {tW:+tW, tb:+tb, tact:+tact}; S.Wshown = OL.copyW(S.W); anim.from = null; render(); },
+  draw:render, state:state
+} };
+})();
+</script>
+</body>
+</html>

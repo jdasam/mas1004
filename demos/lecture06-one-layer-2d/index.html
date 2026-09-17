@@ -109,8 +109,8 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 440px;
   <section class="card" id="planeCard">
     <div id="planeWrap"><canvas id="plane"></canvas></div>
     <div class="legend">
-      <span><i style="background:var(--model)"></i>where (1, 0) lands: row 1 of W</span>
-      <span><i style="background:var(--data)"></i>where (0, 1) lands: row 2 of W</span>
+      <span><i style="background:var(--model)"></i>where (1, 0) lands (row 1 of W while only × W is on)</span>
+      <span><i style="background:var(--data)"></i>where (0, 1) lands (row 2 of W while only × W is on)</span>
       <span><i style="background:var(--accent)"></i>the letter F</span>
       <span>Drag the hollow point to move p</span>
     </div>
@@ -322,6 +322,9 @@ function numBox(node, opts){
     var moved = drag.moved; drag = null; node.classList.remove('drag');
     if(!moved) edit();
   });
+  node.addEventListener('pointercancel', function(e){
+    drag = null; node.classList.remove('drag');
+  });
   function edit(){
     editing = true;
     var inp = document.createElement('input');
@@ -436,7 +439,12 @@ var UNIT = [].concat(OL.samplePolyline([0, 0], [1, 0], 0.1), OL.samplePolyline([
 var FSTROKES = OL.SHAPE_F.map(function(s){ return OL.samplePolyline(s[0], s[1], 0.1); });
 function arrow(a, b, color, label){
   var A = px(a), B = px(b), dx = B[0] - A[0], dy = B[1] - A[1], L = Math.sqrt(dx*dx + dy*dy);
-  if(L < 1) return;
+  if(L < 1){
+    ctx.fillStyle = color; ctx.beginPath(); ctx.arc(A[0], A[1], 4, 0, 2*Math.PI); ctx.fill();
+    ctx.font = '600 13px ui-monospace, Menlo, monospace'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+    ctx.fillText(label, A[0] + 8, A[1] - 8);
+    return;
+  }
   ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
   var ux = dx/L, uy = dy/L;
@@ -481,8 +489,8 @@ function render(){
   OL.SHAPE_F_CORNERS.forEach(function(c){ var q = px(T(c)); ctx.beginPath(); ctx.arc(q[0], q[1], 4, 0, 2*Math.PI); ctx.fill(); });
   /* basis arrows from the origin's image */
   var o = T([0, 0]), e1 = T([1, 0]), e2 = T([0, 1]);
-  arrow(o, e1, '#eb6834', '(' + OL.fmt(e1[0] - o[0]) + ', ' + OL.fmt(e1[1] - o[1]) + ')');
-  arrow(o, e2, '#2a78d6', '(' + OL.fmt(e2[0] - o[0]) + ', ' + OL.fmt(e2[1] - o[1]) + ')');
+  arrow(o, e1, '#eb6834', '(' + OL.fmt(e1[0]) + ', ' + OL.fmt(e1[1]) + ')');
+  arrow(o, e2, '#2a78d6', '(' + OL.fmt(e2[0]) + ', ' + OL.fmt(e2[1]) + ')');
   /* the point p: hollow where it was, filled where it went */
   var P = px(S.p), Q = px(T(S.p));
   ctx.strokeStyle = '#6b3fb5'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(P[0], P[1]); ctx.lineTo(Q[0], Q[1]); ctx.stroke();
@@ -512,14 +520,15 @@ el.plane.addEventListener('pointermove', function(e){
   }
 });
 el.plane.addEventListener('pointerup', function(){ pdrag = null; });
+el.plane.addEventListener('pointercancel', function(){ pdrag = null; });
 function setPoint(x, y){ S.p = [OL.clamp(+x, -3, 3), OL.clamp(+y, -3, 3)]; requestRender(); }
 
 /* ---- URL options: ?preset=shear&w=1,0,1,1&b=0.3,-0.1&stage=act&act=relu&p=2,1 ---- */
 function readUrl(){
   var q = new URLSearchParams(location.search || location.hash.replace(/^#/, '?'));
   if(q.get('preset') && OL.presetW(q.get('preset'))) loadPreset(q.get('preset'));
-  if(q.get('w')){ var w = q.get('w').split(',').map(Number); if(w.length === 4 && w.every(isFinite)) setW([[w[0], w[1]], [w[2], w[3]]], ''); }
-  if(q.get('b')){ var b = q.get('b').split(',').map(Number); if(b.length === 2 && b.every(isFinite)){ S.b = b; refreshBoxes(); } }
+  if(q.get('w')){ var w = q.get('w').split(',').map(Number); if(w.length === 4 && w.every(isFinite)){ w = w.map(function(v){ return OL.clamp(v, -3, 3); }); setW([[w[0], w[1]], [w[2], w[3]]], ''); } }
+  if(q.get('b')){ var b = q.get('b').split(',').map(Number); if(b.length === 2 && b.every(isFinite)){ b = b.map(function(v){ return OL.clamp(v, -3, 3); }); S.b = b; refreshBoxes(); } }
   if(q.get('act')) setAct(q.get('act'));
   if(q.get('stage')) setStage(q.get('stage'));
   if(q.get('p')){ var p = q.get('p').split(',').map(Number); if(p.length === 2 && p.every(isFinite)) setPoint(p[0], p[1]); }
@@ -580,7 +589,7 @@ window.addEventListener('keydown', function(e){
 });
 
 window.addEventListener('resize', resize);
-resize(); readUrl(); markPresets(); render();
+resize(); readUrl(); markPresets(); S.Wshown = OL.copyW(S.W); anim.from = null; render();
 return { S:S, render:render, hooks:{
   setW:function(W){ setW(W, ''); S.Wshown = OL.copyW(S.W); anim.from = null; render(); },
   setB:function(b){ S.b = [+b[0], +b[1]]; refreshBoxes(); render(); },

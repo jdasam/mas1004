@@ -22,7 +22,7 @@ MAS1004 6차시 수업용 인터랙티브 웹 데모. 5차시 Neuron Patch의 �
 | 2 | 1 ReLU | z₁ = 2, h₁ = 2, ŷ = 0, loss = 9. Backward: e −6, ŷ −6, w₂ −12, b₂ −6, h₁ 3, z₁ 3, w₁ 6, b₁ 3. 학생이 다음 칸을 먼저 말하게 한다 |
 | 3 | 3 ReLU | z₂ = −2라 N2의 ReLU가 닫혀 z₂, w₂, b₂의 slope가 0이다(죽은 뉴런). loss = 0.01, slope가 작다 |
 | 4 | 아무 프리셋 | Nudge each knob: 노브마다 Δ = 0.001만큼 밀어 잰 slope가 backprop 열과 거의 같다. 손실 계산 횟수는 노브 수 + 1 대 forward 1번 + backward 1번 |
-| 5 | 아무 프리셋 | Take a step: 모든 노브를 w ← w − lr × slope로 옮기고 값이 다시 채워진다. 손실이 내려간다. Backward all과 Take a step을 반복한다 |
+| 5 | 아무 프리셋 | Take a step: 모든 노브를 w ← w − lr × slope로 옮긴다. 값과 slope 칸은 모두 ?로 돌아가므로 Forward를 다시 눌러 새 값을 계산하고(손실이 내려간 것을 본다) Backward로 새 slope를 잰다. Forward all, Backward all, Take a step을 반복한다 |
 
 - 노브 상자를 위아래로 끌면 0.1 단위(Shift로 0.01), 누르면 입력. 노브나 점을 바꾸면 값은 바로 다시 계산되고 slope는 모두 지워진다(4차시 규칙).
 - 플롯의 데이터 점을 누르면 그 점이 고른 점이 된다. x, y 상자로 직접 입력할 수도 있다. 기본 점 (2, 3)은 데이터의 x = 2 근처 점(y ≈ 3.1)과 가깝다.

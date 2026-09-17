@@ -522,8 +522,9 @@ function takeStep(){
   if(!bwdDone()) return;
   var before = lossNow();
   BP.stepKnobs(S.g, S.grads, S.lr);
-  S.steps++; S.fwd = nOps(); S.bwd = 0; recompute();
-  S.last = {kind:'step', before:before, after:lossNow()};
+  /* the knobs move, but the new values are not shown: the student runs Forward again to see them */
+  S.steps++; S.fwd = 0; S.bwd = 0; recompute();
+  S.last = {kind:'step', before:before};
   render();
 }
 function onKnobChange(id, v){
@@ -543,7 +544,7 @@ function captionText(){
   var L = S.last;
   if(L.kind === 'fwd') return {text:BP.explainForward(S.g, L.id, S.vals), cls:''};
   if(L.kind === 'bwd') return {text:BP.explainBackward(S.g, L.id, S.vals, S.grads), cls:'slope'};
-  if(L.kind === 'step') return {text:'Step ' + S.steps + ': every knob moved by −' + fmt3(S.lr) + ' × its slope. Loss ' + fmtLoss(L.before) + ' → ' + fmtLoss(L.after) + '. Press Backward to measure again.', cls:'muted'};
+  if(L.kind === 'step') return {text:'Step ' + S.steps + ': every knob moved by −' + fmt3(S.lr) + ' × its slope. The loss was ' + fmtLoss(L.before) + '. Run Forward again to compute the new values, then Backward to measure the new slopes.', cls:'muted'};
   if(L.kind === 'stale') return {text:(L.id ? 'Knob ' + S.g.byId[L.id].name + ' changed' : 'The point changed') + ': the values are updated and the slopes are gone. Run Backward again.', cls:'muted'};
   return {text:'Press Forward to fill the first cell. Work it out first, then check.', cls:'muted'};
 }

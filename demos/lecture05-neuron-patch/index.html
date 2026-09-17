@@ -2149,10 +2149,7 @@ function buildInspector(){
   var n = NP.getNode(g, S.sel.id);
   if(n.kind === 'input'){
     root.appendChild(h('div',{class:'ihead'},[h('span',{class:'iname', text:'x'}), h('span',{class:'ikind', text:'input'})]));
-    root.appendChild(h('div',{class:'itext', text:'x is the input. It has no knobs. Its outgoing wires:'}));
-    var kx = h('div',{class:'knobs'});
-    g.edges.forEach(function(ed){ if(ed.from === n.id) addKnob(kx, 'w', ed.id, 'w', edgeLabel(ed)); });
-    root.appendChild(kx);
+    root.appendChild(h('div',{class:'itext', text:'x is the input. It has no knobs. Click a neuron to see its own weights and bias, or a wire to see that weight.'}));
     return true;
   }
   root.appendChild(h('div',{class:'ihead'},[
@@ -2179,12 +2176,12 @@ function buildInspector(){
   var box = h('div',{class:'knobs'});
   addKnob(box, 'b', n.id, 'b', n.name);
   var ins = g.edges.filter(function(ed){ return ed.to === n.id; }), outs = g.edges.filter(function(ed){ return ed.from === n.id; });
-  /* bias, then incoming, then outgoing weights in one grid; the labels (x → N1) say which is which */
+  /* only the neuron's own parameters: its bias and the weights on the wires coming into it.
+     The outgoing weights belong to the next neuron (click that neuron, or the wire, to see them). */
   ins.forEach(function(ed){ addKnob(box, 'w', ed.id, 'w', edgeLabel(ed)); });
-  if(n.kind !== 'output') outs.forEach(function(ed){ addKnob(box, 'w', ed.id, 'w', edgeLabel(ed)); });
   root.appendChild(box);
   if(!ins.length) root.appendChild(h('div',{class:'itext', text:'No incoming weights yet. Drag a wire into ' + n.name + '.'}));
-  if(n.kind !== 'output' && !outs.length) root.appendChild(h('div',{class:'itext', text:'No outgoing weights yet. Drag from the right dot of ' + n.name + '.'}));
+  if(n.kind !== 'output' && !outs.length) root.appendChild(h('div',{class:'itext', text:'No outgoing wire yet. Drag from the right dot of ' + n.name + '.'}));
   return true;
 }
 var lastSync = 0;

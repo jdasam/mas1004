@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CNN Kernel · MAS1004</title>
+<style>
+:root{
+  --surface:#fcfcfb; --panel:#ffffff; --ink:#0b0b0b; --sub:#52514e; --muted:#8a8985;
+  --rule:#dedcd6; --rule2:#c4c2bb; --accent:#b3001b; --soft:#f3f2ee;
+  --pos:#d03b3b; --neg:#2a78d6;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--surface); color:var(--ink);
+  font:400 17px/1.45 Inter,Pretendard,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased; height:100vh; display:flex; flex-direction:column; min-height:620px;
+}
+button,input{font-family:inherit;font-size:inherit}
+h3{margin:0;font-weight:600}
+
+#topbar{flex:none;padding:8px 20px;border-bottom:1px solid var(--rule);display:flex;flex-direction:column;gap:8px}
+.row{display:flex;align-items:center;gap:10px 22px;flex-wrap:wrap}
+.brand{font-size:1.2rem;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+.brand span{display:block;font-size:.78rem;font-weight:500;color:var(--sub);letter-spacing:.01em}
+.grp{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gl{font-size:.9rem;color:var(--sub);font-weight:600;white-space:nowrap}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.ds{padding:5px 13px;border-radius:999px;border:1px solid var(--rule2);background:#fff;color:var(--sub);font-size:.92rem;font-weight:600;cursor:pointer}
+.ds:hover{border-color:var(--ink);color:var(--ink)}
+.ds.active{border-color:var(--neg);color:var(--neg);background:#eef4fc}
+.btn{padding:7px 14px;border-radius:10px;border:1px solid var(--ink);background:var(--ink);color:#fff;font-weight:600;font-size:.98rem;cursor:pointer;white-space:nowrap}
+.btn:hover{background:#333}
+.btn.ghost{background:#fff;color:var(--ink)}
+.btn.ghost:hover{background:#f2f1ee}
+.btn.auto{border-color:var(--accent);background:var(--accent);min-width:104px}
+.btn.auto:hover{background:#8f0016}
+.seg{display:inline-flex;border:1px solid var(--rule2);border-radius:9px;overflow:hidden;background:#fff}
+.seg button{padding:5px 11px;border:none;background:#fff;color:var(--sub);font-weight:600;cursor:pointer;font-size:.92rem}
+.seg button+button{border-left:1px solid var(--rule2)}
+.seg button.on{background:var(--ink);color:#fff}
+
+main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 450px minmax(0,1fr);gap:14px;padding:12px 20px 14px}
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:14px;padding:10px 14px;min-width:0}
+.card h3{font-size:.98rem;color:var(--sub);margin-bottom:6px}
+.imgcard{display:flex;flex-direction:column;min-height:0}
+.wrap{position:relative;flex:1;min-height:0}
+.wrap canvas{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:block;user-select:none;touch-action:none}
+#inCv{cursor:crosshair}
+#outCv{cursor:pointer}
+.legend{display:flex;gap:4px 16px;flex-wrap:wrap;align-items:center;font-size:.86rem;color:var(--sub);margin-top:6px}
+.cbar{display:inline-block;width:150px;height:11px;border-radius:2px;border:1px solid var(--rule2);vertical-align:middle;margin:0 6px}
+.mid{display:flex;flex-direction:column;gap:12px;min-height:0;min-width:0}
+#calcCard{flex:1;min-height:0;overflow:auto}
+
+.kgrid{display:grid;grid-template-columns:repeat(3,96px);gap:8px;justify-content:center;margin:6px 0 8px}
+.nb{display:flex;align-items:center;justify-content:center;height:62px;border:1.8px solid var(--rule2);border-radius:9px;
+    font:600 1.3rem ui-monospace,SFMono-Regular,Menlo,monospace;cursor:ns-resize;user-select:none;font-variant-numeric:tabular-nums}
+.nb.drag{border-color:var(--ink);box-shadow:0 0 0 2px rgba(0,0,0,.1)}
+.nb input{width:80px;font:inherit;text-align:center;border:none;outline:none;background:transparent;padding:0;color:inherit}
+.hint{font-size:.84rem;color:var(--sub);text-align:center}
+
+.calcrow{display:flex;align-items:center;gap:8px;justify-content:center;margin:4px 0}
+.op{font-size:1.3rem;color:var(--sub);font-weight:600}
+.mini{display:grid;grid-template-columns:repeat(3,52px);gap:2px}
+.mini div{height:30px;display:flex;align-items:center;justify-content:center;font:500 .86rem ui-monospace,SFMono-Regular,Menlo,monospace;
+          border-radius:3px;font-variant-numeric:tabular-nums;border:1px solid var(--rule)}
+.mlabel{font-size:.8rem;color:var(--sub);text-align:center;margin-top:3px;font-weight:600}
+.sumline{font:600 1.05rem ui-monospace,SFMono-Regular,Menlo,monospace;text-align:center;margin-top:8px;font-variant-numeric:tabular-nums}
+.where{font-size:.9rem;color:var(--sub);text-align:center;margin-bottom:4px}
+@media(max-height:820px){
+  .nb{height:44px;font-size:1.1rem} .kgrid{gap:6px;margin:2px 0 4px} .mini div{height:24px}
+  .card{padding:8px 12px} main{gap:10px;padding:8px 16px 10px}
+}
+</style>
+</head>
+<body>
+<header id="topbar">
+  <div class="row">
+    <div class="brand">Sliding a Kernel<span>MAS1004 &middot; Data &amp; AI &middot; Convolution</span></div>
+    <div class="grp"><span class="gl">Image</span><div class="chips" id="imgChips"></div></div>
+    <div class="grp"><span class="gl">Kernel</span><div class="chips" id="kerChips"></div></div>
+  </div>
+  <div class="row">
+    <div class="grp">
+      <button class="btn auto" type="button" id="playBtn">▶ Slide</button>
+      <button class="btn ghost" type="button" id="stepBtn">Step</button>
+      <button class="btn ghost" type="button" id="allBtn">Show all</button>
+    </div>
+    <div class="grp"><span class="gl">Speed</span><div class="seg" id="speedSeg"></div></div>
+    <div class="grp"><span class="gl">Output</span><div class="seg" id="actSeg"></div></div>
+  </div>
+</header>
+<main>
+  <section class="card imgcard">
+    <h3>Input image, 28 × 28 pixels (0 = white, 1 = black)</h3>
+    <div class="wrap" id="inWrap"><canvas id="inCv"></canvas></div>
+    <div class="legend"><span>Drag on the image to draw. Shift-drag or right-drag to erase.</span></div>
+  </section>
+  <div class="mid">
+    <section class="card" id="kCard">
+      <h3>Kernel, 3 × 3 = 9 weights</h3>
+      <div class="kgrid" id="kgrid"></div>
+      <div class="hint">Drag a number up or down. Double-click to type.</div>
+    </section>
+    <section class="card" id="calcCard">
+      <h3>One output pixel</h3>
+      <div id="calc"></div>
+    </section>
+  </div>
+  <section class="card imgcard">
+    <h3 id="outTitle">Output, 26 × 26 pixels</h3>
+    <div class="wrap" id="outWrap"><canvas id="outCv"></canvas></div>
+    <div class="legend" id="outLegend"></div>
+  </section>
+</main>
+
+<script id="ck-core">
+/* Core: kernels, convolution, seeded random kernels. No DOM access. */
+var CK = (function(){
+  var N = 28, K = 3, M = N - K + 1;
+  var t = 1/9;
+  var KERNELS = [
+    {key:'identity',   name:'Identity',        w:[0,0,0, 0,1,0, 0,0,0]},
+    {key:'blur',       name:'Blur',            w:[t,t,t, t,t,t, t,t,t]},
+    {key:'sharpen',    name:'Sharpen',         w:[0,-1,0, -1,5,-1, 0,-1,0]},
+    {key:'vertical',   name:'Vertical edge',   w:[-1,0,1, -2,0,2, -1,0,1]},
+    {key:'horizontal', name:'Horizontal edge', w:[-1,-2,-1, 0,0,0, 1,2,1]},
+    {key:'diagonal',   name:'Diagonal line',   w:[2,-1,-1, -1,2,-1, -1,-1,2]},
+    {key:'outline',    name:'Outline',         w:[-1,-1,-1, -1,8,-1, -1,-1,-1]}
+  ];
+  function kernel(key){
+    for (var i = 0; i < KERNELS.length; i++) if (KERNELS[i].key === key) return KERNELS[i].w.slice();
+    return null;
+  }
+  function mulberry32(a){
+    return function(){
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  // weights in [-1, 1], one decimal; the same seed gives the same kernel for everyone
+  function randomKernel(seed){
+    var r = mulberry32(seed * 7919 + 17), w = [];
+    for (var i = 0; i < 9; i++) w.push(Math.round((r() * 2 - 1) * 10) / 10);
+    return w;
+  }
+  // the 3x3 patch whose top-left corner is input pixel (r, c)
+  function patch(img, r, c){
+    var p = [];
+    for (var i = 0; i < K; i++) for (var j = 0; j < K; j++) p.push(img[(r + i) * N + c + j]);
+    return p;
+  }
+  function dot(a, b){ var s = 0; for (var i = 0; i < a.length; i++) s += a[i] * b[i]; return s; }
+  // valid convolution (no padding, stride 1): 28x28 -> 26x26
+  function conv(img, w){
+    var out = new Float64Array(M * M);
+    for (var r = 0; r < M; r++) for (var c = 0; c < M; c++) out[r * M + c] = dot(patch(img, r, c), w);
+    return out;
+  }
+  function relu(x){ return x > 0 ? x : 0; }
+  return {N:N, K:K, M:M, KERNELS:KERNELS, kernel:kernel, randomKernel:randomKernel,
+          patch:patch, dot:dot, conv:conv, relu:relu};
+})();
+</script>
+
+<script id="ck-ui">
+var CKUI = (function(){
+  var N = CK.N, M = CK.M;
+  var $ = function(id){ return document.getElementById(id); };
+
+  // ---------- images: drawn into a 28x28 canvas, ink read from alpha ----------
+  var IMAGES = [
+    {key:'seven',  name:'7'},
+    {key:'three',  name:'3'},
+    {key:'letterA',name:'A'},
+    {key:'square', name:'Square'},
+    {key:'circle', name:'Circle'},
+    {key:'cross',  name:'Cross'},
+    {key:'blank',  name:'Blank'}
+  ];
+  function makeImage(key){
+    var cv = document.createElement('canvas'); cv.width = N; cv.height = N;
+    var g = cv.getContext('2d');
+    g.fillStyle = '#000'; g.strokeStyle = '#000';
+    if (key === 'seven' || key === 'three' || key === 'letterA'){
+      var ch = {seven:'7', three:'3', letterA:'A'}[key];
+      g.font = '700 22px Arial, Helvetica, sans-serif';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(ch, 14, 15);
+    } else if (key === 'square'){
+      g.fillRect(7, 7, 14, 14);
+    } else if (key === 'circle'){
+      g.lineWidth = 3; g.beginPath(); g.arc(14, 14, 8.5, 0, Math.PI * 2); g.stroke();
+    } else if (key === 'cross'){
+      g.fillRect(12, 4, 4, 20); g.fillRect(4, 12, 20, 4);
+    }
+    var d = g.getImageData(0, 0, N, N).data, img = new Float64Array(N * N);
+    for (var i = 0; i < N * N; i++) img[i] = Math.round(d[i * 4 + 3] / 255 * 100) / 100;
+    return img;
+  }
+
+  // ---------- state ----------
+  var S = {
+    img: makeImage('seven'), imgKey: 'seven',
+    w: CK.kernel('vertical'), kerKey: 'vertical', randSeed: 0,
+    useRelu: false,
+    revealed: M * M,          // how many output pixels are filled in, in reading order
+    focus: {r: 8, c: 8},      // the output pixel shown in the calc panel
+    playing: false, speed: 'medium', acc: 0, last: 0,
+    out: null
+  };
+  var SPEEDS = [{key:'slow', name:'Slow', cps:5}, {key:'medium', name:'Medium', cps:40}, {key:'fast', name:'Fast', cps:400}];
+
+  function recompute(){ S.out = CK.conv(S.img, S.w); }
+  function outVal(i){ var v = S.out[i]; return S.useRelu ? CK.relu(v) : v; }
+  function outScale(){
+    var m = 0;
+    for (var i = 0; i < S.out.length; i++) m = Math.max(m, Math.abs(outVal(i)));
+    return m > 1e-9 ? m : 1;
+  }
+
+  // ---------- colours ----------
+  function mix(rgb, a){
+    return 'rgb(' + Math.round(255 + (rgb[0] - 255) * a) + ',' + Math.round(255 + (rgb[1] - 255) * a) + ',' + Math.round(255 + (rgb[2] - 255) * a) + ')';
+  }
+  var POS = [208, 59, 59], NEG = [42, 120, 214];
+  function divColor(v, s){
+    var t = Math.max(-1, Math.min(1, v / s));
+    return t >= 0 ? mix(POS, t) : mix(NEG, -t);
+  }
+  function divText(v, s){ return Math.abs(v / s) > 0.55 ? '#fff' : '#0b0b0b'; }
+  function gray(v){ var g = Math.round(255 * (1 - Math.max(0, Math.min(1, v)))); return 'rgb(' + g + ',' + g + ',' + g + ')'; }
+  function fmt(v){
+    if (Math.abs(v) < 0.005) return '0';
+    var s = v.toFixed(2);
+    return s.replace(/^-/, '−');
+  }
+
+  // ---------- canvas sizing ----------
+  var inCv = $('inCv'), outCv = $('outCv'), inG = inCv.getContext('2d'), outG = outCv.getContext('2d');
+  var sizes = {in: 0, out: 0};
+  function fit(cv, g, wrap){
+    var r = wrap.getBoundingClientRect();
+    var s = Math.max(120, Math.floor(Math.min(r.width, r.height)));
+    var dpr = window.devicePixelRatio || 1;
+    cv.style.width = s + 'px'; cv.style.height = s + 'px';
+    cv.width = Math.round(s * dpr); cv.height = Math.round(s * dpr);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return s;
+  }
+  function resize(){
+    sizes.in = fit(inCv, inG, $('inWrap'));
+    sizes.out = fit(outCv, outG, $('outWrap'));
+    draw();
+  }
+
+  // ---------- drawing ----------
+  function drawInput(){
+    var s = sizes.in, cell = s / N, g = inG;
+    g.clearRect(0, 0, s, s);
+    for (var r = 0; r < N; r++) for (var c = 0; c < N; c++){
+      g.fillStyle = gray(S.img[r * N + c]);
+      g.fillRect(c * cell, r * cell, cell + 0.5, cell + 0.5);
+    }
+    if (cell >= 7){
+      g.strokeStyle = 'rgba(0,0,0,0.07)'; g.lineWidth = 1; g.beginPath();
+      for (var k = 0; k <= N; k++){
+        var p = Math.round(k * cell) + 0.5;
+        g.moveTo(p, 0); g.lineTo(p, s); g.moveTo(0, p); g.lineTo(s, p);
+      }
+      g.stroke();
+    }
+    var f = S.focus;
+    g.strokeStyle = '#b3001b'; g.lineWidth = 3;
+    g.strokeRect(f.c * cell + 1.5, f.r * cell + 1.5, 3 * cell - 3, 3 * cell - 3);
+    g.strokeStyle = 'rgba(0,0,0,0.25)'; g.lineWidth = 1;
+    g.strokeRect(0.5, 0.5, s - 1, s - 1);
+  }
+  function drawOutput(){
+    var s = sizes.out, cell = s / M, g = outG, sc = outScale();
+    g.clearRect(0, 0, s, s);
+    for (var r = 0; r < M; r++) for (var c = 0; c < M; c++){
+      var i = r * M + c;
+      g.fillStyle = i < S.revealed ? divColor(outVal(i), sc) : '#f3f2ee';
+      g.fillRect(c * cell, r * cell, cell + 0.5, cell + 0.5);
+    }
+    if (cell >= 7){
+      g.strokeStyle = 'rgba(0,0,0,0.07)'; g.lineWidth = 1; g.beginPath();
+      for (var k = 0; k <= M; k++){
+        var p = Math.round(k * cell) + 0.5;
+        g.moveTo(p, 0); g.lineTo(p, s); g.moveTo(0, p); g.lineTo(s, p);
+      }
+      g.stroke();
+    }
+    var f = S.focus;
+    g.strokeStyle = '#b3001b'; g.lineWidth = 3;
+    g.strokeRect(f.c * cell + 1.5, f.r * cell + 1.5, cell - 3, cell - 3);
+    g.strokeStyle = 'rgba(0,0,0,0.25)'; g.lineWidth = 1;
+    g.strokeRect(0.5, 0.5, s - 1, s - 1);
+    $('outLegend').innerHTML =
+      '<span>' + fmt(-sc) + '<i class="cbar" style="background:linear-gradient(90deg,' + mix(NEG, 1) + ',#fff,' + mix(POS, 1) + ')"></i>' + fmt(sc) + '</span>' +
+      '<span>Red: the patch looks like the kernel. Blue: the opposite.</span>';
+  }
+  function miniGrid(vals, colorFn, textFn){
+    var h = '<div class="mini">';
+    for (var i = 0; i < 9; i++) h += '<div style="background:' + colorFn(vals[i]) + ';color:' + textFn(vals[i]) + '">' + fmt(vals[i]) + '</div>';
+    return h + '</div>';
+  }
+  function drawCalc(){
+    var f = S.focus, p = CK.patch(S.img, f.r, f.c), prod = [], pm = 0, km = 0;
+    for (var i = 0; i < 9; i++){ prod.push(p[i] * S.w[i]); pm = Math.max(pm, Math.abs(prod[i])); km = Math.max(km, Math.abs(S.w[i])); }
+    pm = pm || 1; km = km || 1;
+    var sum = CK.dot(p, S.w);
+    var h = '<div class="where">Output pixel (row ' + (f.r + 1) + ', column ' + (f.c + 1) + ') looks at input rows ' + (f.r + 1) + '–' + (f.r + 3) + ', columns ' + (f.c + 1) + '–' + (f.c + 3) + '</div>';
+    h += '<div class="calcrow">' +
+         '<div>' + miniGrid(p, gray, function(v){ return v > 0.5 ? '#fff' : '#0b0b0b'; }) + '<div class="mlabel">input patch</div></div>' +
+         '<span class="op">×</span>' +
+         '<div>' + miniGrid(S.w, function(v){ return divColor(v, km); }, function(v){ return divText(v, km); }) + '<div class="mlabel">kernel</div></div></div>';
+    h += '<div class="calcrow"><span class="op">=</span><div>' +
+         miniGrid(prod, function(v){ return divColor(v, pm); }, function(v){ return divText(v, pm); }) +
+         '<div class="mlabel">9 products, pixel by pixel</div></div></div>';
+    h += '<div class="sumline">sum of the 9 products = ' + fmt(sum) + '</div>';
+    if (S.useRelu) h += '<div class="sumline">ReLU(' + fmt(sum) + ') = ' + fmt(CK.relu(sum)) + '</div>';
+    $('calc').innerHTML = h;
+  }
+  function draw(){
+    if (!sizes.in) return;
+    drawInput(); drawOutput(); drawCalc();
+  }
+
+  // ---------- kernel boxes ----------
+  var boxes = [];
+  function buildKernelBoxes(){
+    var kg = $('kgrid');
+    for (var i = 0; i < 9; i++){
+      var b = document.createElement('div'); b.className = 'nb'; b.dataset.i = i;
+      kg.appendChild(b); boxes.push(b);
+      attachDrag(b, i);
+    }
+  }
+  function renderKernel(){
+    var km = 0;
+    for (var i = 0; i < 9; i++) km = Math.max(km, Math.abs(S.w[i]));
+    km = km || 1;
+    for (var j = 0; j < 9; j++){
+      var b = boxes[j];
+      if (b.querySelector('input')) continue;
+      b.textContent = fmt(S.w[j]);
+      b.style.background = divColor(S.w[j], km);
+      b.style.color = divText(S.w[j], km);
+    }
+  }
+  function setWeight(i, v){
+    S.w[i] = Math.max(-9, Math.min(9, v));
+    S.kerKey = null; markChips();
+    recompute(); renderKernel(); draw();
+  }
+  function attachDrag(b, i){
+    var start = null;
+    b.addEventListener('pointerdown', function(e){
+      if (b.querySelector('input')) return;
+      start = {y: e.clientY, v: S.w[i]};
+      b.setPointerCapture(e.pointerId); b.classList.add('drag'); e.preventDefault();
+    });
+    b.addEventListener('pointermove', function(e){
+      if (!start) return;
+      var step = e.shiftKey ? 0.002 : 0.02;
+      setWeight(i, Math.round((start.v - (e.clientY - start.y) * step) * 100) / 100);
+    });
+    function end(){ start = null; b.classList.remove('drag'); }
+    b.addEventListener('pointerup', end); b.addEventListener('pointercancel', end);
+    b.addEventListener('dblclick', function(){
+      var inp = document.createElement('input'); inp.value = (Math.round(S.w[i] * 100) / 100).toString();
+      b.textContent = ''; b.appendChild(inp); inp.focus(); inp.select();
+      function commit(){
+        var v = parseFloat(inp.value.replace('−', '-'));
+        if (inp.parentNode) b.removeChild(inp);
+        if (isFinite(v)) setWeight(i, v); else renderKernel();
+      }
+      inp.addEventListener('keydown', function(e){
+        if (e.key === 'Enter') commit();
+        if (e.key === 'Escape'){ b.removeChild(inp); renderKernel(); }
+        e.stopPropagation();
+      });
+      inp.addEventListener('blur', function(){ if (inp.parentNode) commit(); });
+    });
+  }
+
+  // ---------- chips and buttons ----------
+  function chip(parent, label, onClick){
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'ds'; b.textContent = label;
+    b.addEventListener('click', onClick); parent.appendChild(b); return b;
+  }
+  var imgChips = {}, kerChips = {};
+  function markChips(){
+    for (var k in imgChips) imgChips[k].classList.toggle('active', k === S.imgKey);
+    for (var q in kerChips) kerChips[q].classList.toggle('active', q === S.kerKey);
+  }
+  function setImage(key){
+    S.img = makeImage(key); S.imgKey = key;
+    markChips(); recompute(); draw();
+  }
+  function setKernel(key){
+    if (key === 'random'){ S.randSeed += 1; S.w = CK.randomKernel(S.randSeed); kerChips.random.textContent = 'Random #' + S.randSeed; }
+    else S.w = CK.kernel(key);
+    S.kerKey = key;
+    markChips(); recompute(); renderKernel(); draw();
+  }
+  function buildSeg(parent, items, onPick, isOn){
+    parent.innerHTML = '';
+    items.forEach(function(it){
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = it.name;
+      if (isOn(it.key)) b.className = 'on';
+      b.addEventListener('click', function(){ onPick(it.key); buildSeg(parent, items, onPick, isOn); });
+      parent.appendChild(b);
+    });
+  }
+
+  // ---------- sliding ----------
+  function setFocusIndex(i){ S.focus = {r: Math.floor(i / M), c: i % M}; }
+  function setPlaying(on){
+    S.playing = on;
+    $('playBtn').textContent = on ? '❚❚ Pause' : '▶ Slide';
+    if (on){ S.last = performance.now(); S.acc = 0; requestAnimationFrame(tick); }
+  }
+  function tick(now){
+    if (!S.playing) return;
+    var cps = SPEEDS.filter(function(s){ return s.key === S.speed; })[0].cps;
+    S.acc += (now - S.last) / 1000 * cps; S.last = now;
+    var n = Math.floor(S.acc);
+    if (n > 0){
+      S.acc -= n;
+      S.revealed = Math.min(M * M, S.revealed + n);
+      setFocusIndex(S.revealed - 1);
+      draw();
+      if (S.revealed >= M * M){ setPlaying(false); return; }
+    }
+    requestAnimationFrame(tick);
+  }
+  function play(){
+    if (S.playing){ setPlaying(false); return; }
+    if (S.revealed >= M * M){ S.revealed = 0; draw(); }
+    setPlaying(true);
+  }
+  function step(){
+    setPlaying(false);
+    if (S.revealed >= M * M) S.revealed = 0;
+    S.revealed += 1; setFocusIndex(S.revealed - 1); draw();
+  }
+  function showAll(){ setPlaying(false); S.revealed = M * M; draw(); }
+
+  // ---------- mouse on the canvases ----------
+  function cellAt(cv, e, n){
+    var r = cv.getBoundingClientRect(), cell = r.width / n;
+    return {r: Math.floor((e.clientY - r.top) / cell), c: Math.floor((e.clientX - r.left) / cell)};
+  }
+  function clampFocus(r, c){ return {r: Math.max(0, Math.min(M - 1, r)), c: Math.max(0, Math.min(M - 1, c))}; }
+  var paint = null;
+  function brush(r, c, erase){
+    for (var dr = -1; dr <= 1; dr++) for (var dc = -1; dc <= 1; dc++){
+      var rr = r + dr, cc = c + dc;
+      if (rr < 0 || rr >= N || cc < 0 || cc >= N) continue;
+      var i = rr * N + cc, center = dr === 0 && dc === 0, side = dr === 0 || dc === 0;
+      if (erase) S.img[i] = 0;
+      else S.img[i] = Math.max(S.img[i], center ? 1 : side ? 0.6 : 0.2);
+    }
+  }
+  function strokeTo(to){
+    var from = paint.at, steps = Math.max(Math.abs(to.r - from.r), Math.abs(to.c - from.c), 1);
+    for (var k = 1; k <= steps; k++)
+      brush(Math.round(from.r + (to.r - from.r) * k / steps), Math.round(from.c + (to.c - from.c) * k / steps), paint.erase);
+    paint.at = to;
+  }
+  inCv.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+  inCv.addEventListener('pointerdown', function(e){
+    var at = cellAt(inCv, e, N);
+    paint = {erase: e.button === 2 || e.shiftKey, at: at};
+    brush(at.r, at.c, paint.erase);
+    inCv.setPointerCapture(e.pointerId);
+    S.imgKey = null; markChips();
+    if (!S.playing) S.focus = clampFocus(at.r - 1, at.c - 1);
+    recompute(); draw(); e.preventDefault();
+  });
+  inCv.addEventListener('pointermove', function(e){
+    var at = cellAt(inCv, e, N);
+    if (paint){ strokeTo(at); recompute(); }
+    if (!S.playing) S.focus = clampFocus(at.r - 1, at.c - 1);
+    draw();
+  });
+  function endPaint(){ paint = null; }
+  inCv.addEventListener('pointerup', endPaint); inCv.addEventListener('pointercancel', endPaint);
+  outCv.addEventListener('pointermove', function(e){
+    if (S.playing) return;
+    var at = cellAt(outCv, e, M);
+    S.focus = clampFocus(at.r, at.c); draw();
+  });
+  outCv.addEventListener('pointerdown', function(e){
+    setPlaying(false);
+    var at = cellAt(outCv, e, M);
+    S.focus = clampFocus(at.r, at.c); draw();
+  });
+
+  document.addEventListener('keydown', function(e){
+    if (e.target && e.target.tagName === 'INPUT') return;
+    if (e.code === 'Space'){ e.preventDefault(); play(); }
+    else if (e.key === 'ArrowRight' && !e.shiftKey){ e.preventDefault(); step(); }
+  });
+
+  // ---------- init ----------
+  function init(){
+    var q = new URLSearchParams((location.search || '') + '&' + (location.hash || '').replace(/^#/, ''));
+    IMAGES.forEach(function(it){ imgChips[it.key] = chip($('imgChips'), it.name, function(){ setImage(it.key); }); });
+    CK.KERNELS.forEach(function(k){ kerChips[k.key] = chip($('kerChips'), k.name, function(){ setKernel(k.key); }); });
+    kerChips.random = chip($('kerChips'), 'Random', function(){ setKernel('random'); });
+    buildSeg($('speedSeg'), SPEEDS, function(k){ S.speed = k; }, function(k){ return k === S.speed; });
+    var acts = [{key:'raw', name:'Sum only'}, {key:'relu', name:'ReLU(sum)'}];
+    buildSeg($('actSeg'), acts, function(k){ S.useRelu = k === 'relu'; draw(); }, function(k){ return (k === 'relu') === S.useRelu; });
+    buildKernelBoxes();
+    $('playBtn').addEventListener('click', play);
+    $('stepBtn').addEventListener('click', step);
+    $('allBtn').addEventListener('click', showAll);
+
+    var ik = q.get('img'), kk = q.get('kernel');
+    if (ik && IMAGES.some(function(it){ return it.key === ik; })){ S.img = makeImage(ik); S.imgKey = ik; }
+    if (kk && CK.kernel(kk)){ S.w = CK.kernel(kk); S.kerKey = kk; }
+    markChips(); recompute(); renderKernel();
+    var best = 0;
+    for (var i = 0; i < S.out.length; i++) if (Math.abs(S.out[i]) > Math.abs(S.out[best])) best = i;
+    setFocusIndex(best);
+    window.addEventListener('resize', resize);
+    resize();
+  }
+  init();
+  return {state: S, setImage: setImage, setKernel: setKernel, play: play, step: step, showAll: showAll};
+})();
+</script>
+</body>
+</html>

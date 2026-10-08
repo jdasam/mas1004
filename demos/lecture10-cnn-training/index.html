@@ -1,0 +1,992 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CNN Training · MAS1004</title>
+<style>
+:root{
+  --surface:#fcfcfb; --ink:#0b0b0b; --sub:#52514e; --muted:#8a8985;
+  --rule:#dedcd6; --rule2:#c4c2bb; --soft:#f3f2ee;
+  --train:#0b0b0b; --test:#e07b00; --wrong:#c62828;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{
+  background:var(--surface); color:var(--ink);
+  font:400 16px/1.4 Inter,Pretendard,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  display:flex; flex-direction:column; min-height:640px;
+}
+button{font-family:inherit;font-size:inherit;color:inherit}
+
+#top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 28px;padding:10px 20px;border-bottom:1px solid var(--rule)}
+.brand{font-size:1.3rem;font-weight:700;letter-spacing:-.01em;line-height:1.2}
+.brand .sub{display:block;font-size:.85rem;font-weight:500;color:var(--sub);letter-spacing:0}
+.brand .sub.warn{color:var(--wrong);font-weight:700}
+.grp{display:flex;align-items:center;gap:8px}
+.gl{font-size:.85rem;color:var(--sub);font-weight:600}
+.seg{display:flex;border:1px solid var(--rule2);border-radius:9px;overflow:hidden;background:#fff}
+.seg button{border:0;border-left:1px solid var(--rule);background:transparent;padding:6px 11px;color:var(--sub);font-weight:600;font-size:.92rem;cursor:pointer}
+.seg button:first-child{border-left:0}
+.seg button:hover{color:var(--ink)}
+.seg button.on{background:var(--ink);color:#fff}
+.btn{padding:7px 13px;border-radius:9px;border:1px solid var(--ink);background:var(--ink);color:#fff;font-weight:600;font-size:.95rem;cursor:pointer}
+.btn:hover{background:#333}
+.btn.ghost{background:#fff;color:var(--ink)}
+.btn.ghost:hover{background:var(--soft)}
+#bPlay{min-width:76px}
+#stats{display:flex;gap:6px 26px;margin-left:auto}
+#stats span{display:block;font-size:.78rem;color:var(--sub);font-weight:600}
+#stats b{display:block;font-size:1.65rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
+
+#grid{flex:1;min-height:0;display:grid;grid-template-columns:minmax(250px,.72fr) minmax(0,1.38fr) minmax(0,1fr);gap:10px 26px;padding:10px 20px 14px}
+.panel{display:flex;flex-direction:column;min-height:0;min-width:0}
+.panel h3{margin:0;font-size:1.02rem;font-weight:700;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.cap{margin:2px 0 6px;font-size:.82rem;color:var(--sub);line-height:1.3}
+.cv{flex:1;min-height:0;position:relative}
+.cv canvas{position:absolute;inset:0;width:100%;height:100%}
+.key{display:inline-flex;align-items:center;gap:6px;font-size:.82rem;font-weight:600;color:var(--sub)}
+.key i{display:inline-block;width:22px;height:0;border-top:3px solid}
+
+#inRow{display:flex;gap:12px;align-items:flex-start;margin-bottom:6px}
+#cIn{width:min(25vh,210px);aspect-ratio:1;image-rendering:pixelated;border:1px solid var(--rule2);cursor:crosshair;touch-action:none;background:#fff;display:block}
+#pad{display:grid;grid-template-columns:repeat(3,34px);grid-template-rows:repeat(3,34px);gap:3px}
+#pad button{border:1px solid var(--rule2);border-radius:7px;background:#fff;font-weight:700;cursor:pointer;color:var(--sub);padding:0}
+#pad button:hover{color:var(--ink);background:var(--soft)}
+#pad .lbl{grid-column:1/-1;font-size:.75rem;color:var(--sub);font-weight:600;align-self:end;text-align:center}
+#bClear{margin-top:8px;width:100%}
+#cThumbs{width:100%;height:40px;display:block;cursor:pointer;margin-bottom:8px}
+#pIn .cv.probs{flex:1}
+#pIn .cv.curve{flex:1.15;margin-top:2px}
+.cbars{display:flex;flex-wrap:wrap;gap:4px 22px;font-size:.78rem;color:var(--sub);margin-top:4px;justify-content:center}
+.cbars div{display:flex;align-items:center;gap:6px}
+.cbars .bar{width:110px;height:10px;border-radius:2px;border:1px solid var(--rule2)}
+#cL2{cursor:pointer}
+
+[hidden]{display:none !important}
+#topView{flex:1;min-height:0;display:flex;flex-direction:column;padding:10px 20px 14px}
+#tvHead{display:flex;align-items:center;gap:8px 18px;flex-wrap:wrap}
+#tvHead h3{margin:0;font-size:1.02rem;font-weight:700}
+#tvStatus{font-size:.85rem;color:var(--sub);font-weight:600;margin-left:auto;font-variant-numeric:tabular-nums}
+#topView .cap{margin:4px 0 8px}
+#cT{cursor:pointer}
+#loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(252,252,251,.92);font-size:1.2rem;color:var(--sub);z-index:5}
+@media(max-width:1500px){
+  body{font-size:14px}
+  #top{gap:8px 20px;padding:8px 16px}
+  .brand{font-size:1.2rem}
+  .seg button{padding:5px 9px}
+  .btn{padding:6px 11px}
+  #stats{gap:4px 18px}
+  #stats b{font-size:1.45rem}
+  #grid{padding:8px 16px 10px;gap:8px 18px}
+  #pad{grid-template-columns:repeat(3,30px);grid-template-rows:repeat(3,30px)}
+}
+@media(max-width:900px){
+  #grid{grid-template-columns:minmax(0,1fr);grid-template-rows:none;grid-auto-rows:minmax(420px,auto)}
+  #cIn{width:200px}
+}
+</style>
+</head>
+<body>
+<div id="top">
+  <div class="brand">CNN Training<span class="sub" id="subtitle">8 filters → 16 filters → 10, 9,098 parameters, 10,000 training images</span></div>
+  <div class="grp">
+    <button class="btn" id="bPlay">Play</button>
+    <button class="btn ghost" id="bStep1">+1 step</button>
+    <button class="btn ghost" id="bStep10">+10 steps</button>
+    <button class="btn ghost" id="bReset">Reset</button>
+  </div>
+  <div class="grp"><span class="gl">Steps/s</span><div class="seg" id="segSpeed"></div></div>
+  <div class="grp"><span class="gl">Learning rate</span><div class="seg" id="segLr"></div></div>
+  <div class="grp"><span class="gl">View</span><div class="seg" id="segView"></div></div>
+  <div id="stats">
+    <div><span>Step</span><b id="sStep">0</b></div>
+    <div><span>Epoch</span><b id="sEpoch">0.00</b></div>
+    <div><span>Training loss</span><b id="sLoss">–</b></div>
+    <div><span>Test accuracy</span><b id="sAcc">–</b></div>
+  </div>
+</div>
+<main id="grid">
+  <section class="panel" id="pIn">
+    <h3>Input image</h3>
+    <p class="cap">Pick a test image below or draw with the mouse. Right-drag or Shift-drag erases.</p>
+    <div id="inRow">
+      <canvas id="cIn" width="28" height="28"></canvas>
+      <div>
+        <div id="pad">
+          <span></span><button data-dy="-2" data-dx="0" title="Move up 2 pixels">↑</button><span></span>
+          <button data-dy="0" data-dx="-2" title="Move left 2 pixels">←</button><span></span><button data-dy="0" data-dx="2" title="Move right 2 pixels">→</button>
+          <span></span><button data-dy="2" data-dx="0" title="Move down 2 pixels">↓</button><span></span>
+        </div>
+        <button class="btn ghost" id="bClear">Clear</button>
+      </div>
+    </div>
+    <canvas id="cThumbs"></canvas>
+    <h3>Output: the ten probabilities</h3>
+    <div class="cv probs"><canvas id="cP"></canvas></div>
+    <h3>Loss <span class="key"><i style="border-color:var(--train)"></i>training</span><span class="key"><i style="border-color:var(--test)"></i>test</span></h3>
+    <div class="cv curve"><canvas id="cC"></canvas></div>
+  </section>
+  <section class="panel" id="pL1">
+    <h3>Layer 1: 8 filters of 1 × 3 × 3 and their feature maps</h3>
+    <p class="cap">Each filter's 9 parameters now (large) and at step 0 (small). Below it, the filter slid over the input image, after ReLU (28 × 28).</p>
+    <div class="cv"><canvas id="cL1"></canvas></div>
+    <div class="cbars">
+      <div><span>parameter −<span class="w1s"></span></span><span class="bar" id="cbW"></span><span>+<span class="w1s"></span></span></div>
+      <div><span>feature map 0</span><span class="bar" id="cbA"></span><span>largest in the layer</span></div>
+    </div>
+  </section>
+  <section class="panel" id="pL2">
+    <h3>Layer 2: 16 filters of 8 × 3 × 3 and their feature maps</h3>
+    <p class="cap">Each map (14 × 14, after ReLU) comes from one filter applied to all 8 layer-1 maps after max pooling. Click a map to see its filter.</p>
+    <div class="cv"><canvas id="cL2"></canvas></div>
+  </section>
+</main>
+<main id="topView" hidden>
+  <div id="tvHead">
+    <h3>Test images that make each filter respond most</h3>
+    <div class="seg" id="segLayer"></div>
+    <span id="tvStatus"></span>
+  </div>
+  <p class="cap">For each filter, the 8 of the 2,000 test images whose feature map (after ReLU) has the largest value, largest first. The red square is the part of the image that this largest value is computed from. The number under each image is that value, then the correct digit. Click an image to use it as the input.</p>
+  <div class="cv"><canvas id="cT"></canvas></div>
+</main>
+<div id="loading">Loading 12,000 images…</div>
+<script src="mnist-data.js"></script>
+<script id="cn-core">
+// CN: data, the small CNN from lecture 9, backprop and SGD for the CNN training demo. No DOM access.
+const CN = (() => {
+  'use strict';
+  const N = 28, D = N * N;          // input image 28 × 28
+  const P = 14, Q = 7;              // sizes after the first and the second max pooling
+  const C1 = 8, C2 = 16, O = 10;    // filters in layer 1 and layer 2, outputs
+  const FLAT = C2 * Q * Q;          // 784 inputs to the last layer
+  const BATCH = 32;
+  const SIZES = {w1: C1 * 9, b1: C1, w2: C2 * C1 * 9, b2: C2, w3: O * FLAT, b3: O};
+  const KEYS = Object.keys(SIZES);
+  const PARAM_COUNT = KEYS.reduce((s, k) => s + SIZES[k], 0);   // 9,098
+  const NP = N + 2, PP = P + 2;     // padded widths (padding 1)
+
+  // mulberry32
+  function makeRng(seed){
+    let a = seed >>> 0;
+    return function(){
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function makeSet(pixels, labels){ return {n: labels.length, pixels, labels}; }
+  // bytes: [train pixels, train labels, test pixels, test labels]
+  function splitData(bytes, nTrain, nTest){
+    let o = 0;
+    const xTr = bytes.subarray(o, o += nTrain * D);
+    const yTr = bytes.subarray(o, o += nTrain);
+    const xTe = bytes.subarray(o, o += nTest * D);
+    const yTe = bytes.subarray(o, o += nTest);
+    if(o !== bytes.length) throw new Error('data length ' + bytes.length + ', expected ' + o);
+    return {train: makeSet(xTr, yTr), test: makeSet(xTe, yTe)};
+  }
+  // Image i of the set as 784 numbers in 0..1 (0 = white paper, 1 = ink).
+  function imageOf(set, i, out){
+    out = out || new Float64Array(D);
+    const px = set.pixels, o = i * D;
+    for(let k = 0; k < D; k++) out[k] = px[o + k] / 255;
+    return out;
+  }
+
+  // Like PyTorch's default: weights and biases uniform in ±1/√(inputs per output).
+  const FAN_IN = {w1: 9, b1: 9, w2: C1 * 9, b2: C1 * 9, w3: FLAT, b3: FLAT};
+  function createModel(seed){
+    const rng = makeRng(seed), m = {};
+    for(const k of KEYS){
+      const t = new Float64Array(SIZES[k]), a = 1 / Math.sqrt(FAN_IN[k]);
+      for(let i = 0; i < t.length; i++) t[i] = (2 * rng() - 1) * a;
+      m[k] = t;
+    }
+    return m;
+  }
+  function zerosLike(){ const g = {}; for(const k of KEYS) g[k] = new Float64Array(SIZES[k]); return g; }
+  function clone(m){ const c = {}; for(const k of KEYS) c[k] = Float64Array.from(m[k]); return c; }
+
+  // Everything computed for one image. a1, a2 are after ReLU; p1, p2 after max pooling; i1, i2 where each maximum came from.
+  function makeBuffers(){
+    return {
+      xp: new Float64Array(NP * NP), a1: new Float64Array(C1 * D), i1: new Int32Array(C1 * P * P),
+      pp: new Float64Array(C1 * PP * PP), a2: new Float64Array(C2 * P * P), i2: new Int32Array(FLAT),
+      p2: new Float64Array(FLAT), prob: new Float64Array(O), dz: new Float64Array(O), dpp: new Float64Array(C1 * PP * PP),
+    };
+  }
+
+  // Forward pass for x (784 numbers). Fills the buffers and returns the probabilities in b.prob.
+  function forward(m, x, b){
+    const xp = b.xp, a1 = b.a1, pp = b.pp, a2 = b.a2;
+    for(let y = 0; y < N; y++) for(let c = 0; c < N; c++) xp[(y + 1) * NP + c + 1] = x[y * N + c];
+    // layer 1: 8 filters of 3 × 3, padding 1, ReLU
+    const w1 = m.w1;
+    for(let k = 0; k < C1; k++){
+      const o = k * 9, bias = m.b1[k];
+      const w00 = w1[o], w01 = w1[o + 1], w02 = w1[o + 2], w10 = w1[o + 3], w11 = w1[o + 4], w12 = w1[o + 5], w20 = w1[o + 6], w21 = w1[o + 7], w22 = w1[o + 8];
+      const out = k * D;
+      for(let y = 0; y < N; y++){
+        const r0 = y * NP, r1 = r0 + NP, r2 = r1 + NP;
+        for(let c = 0; c < N; c++){
+          const z = bias
+            + w00 * xp[r0 + c] + w01 * xp[r0 + c + 1] + w02 * xp[r0 + c + 2]
+            + w10 * xp[r1 + c] + w11 * xp[r1 + c + 1] + w12 * xp[r1 + c + 2]
+            + w20 * xp[r2 + c] + w21 * xp[r2 + c + 1] + w22 * xp[r2 + c + 2];
+          a1[out + y * N + c] = z > 0 ? z : 0;
+        }
+      }
+    }
+    // max pooling 2 × 2 into the padded 16 × 16 maps that layer 2 reads
+    for(let k = 0; k < C1; k++) for(let y = 0; y < P; y++) for(let c = 0; c < P; c++){
+      const s = k * D + 2 * y * N + 2 * c;
+      let best = s;
+      if(a1[s + 1] > a1[best]) best = s + 1;
+      if(a1[s + N] > a1[best]) best = s + N;
+      if(a1[s + N + 1] > a1[best]) best = s + N + 1;
+      b.i1[k * P * P + y * P + c] = best;
+      pp[k * PP * PP + (y + 1) * PP + c + 1] = a1[best];
+    }
+    // layer 2: 16 filters of 8 × 3 × 3, padding 1, ReLU
+    const w2 = m.w2;
+    for(let f = 0; f < C2; f++){
+      const out = f * P * P, bias = m.b2[f];
+      for(let k = 0; k < P * P; k++) a2[out + k] = bias;
+      for(let ch = 0; ch < C1; ch++){
+        const o = (f * C1 + ch) * 9, inp = ch * PP * PP;
+        const w00 = w2[o], w01 = w2[o + 1], w02 = w2[o + 2], w10 = w2[o + 3], w11 = w2[o + 4], w12 = w2[o + 5], w20 = w2[o + 6], w21 = w2[o + 7], w22 = w2[o + 8];
+        for(let y = 0; y < P; y++){
+          const r0 = inp + y * PP, r1 = r0 + PP, r2 = r1 + PP, ro = out + y * P;
+          for(let c = 0; c < P; c++){
+            a2[ro + c] +=
+                w00 * pp[r0 + c] + w01 * pp[r0 + c + 1] + w02 * pp[r0 + c + 2]
+              + w10 * pp[r1 + c] + w11 * pp[r1 + c + 1] + w12 * pp[r1 + c + 2]
+              + w20 * pp[r2 + c] + w21 * pp[r2 + c + 1] + w22 * pp[r2 + c + 2];
+          }
+        }
+      }
+      for(let k = 0; k < P * P; k++) if(a2[out + k] < 0) a2[out + k] = 0;
+    }
+    // max pooling 2 × 2, then the last layer reads the 16 × 7 × 7 = 784 numbers in this order
+    for(let f = 0; f < C2; f++) for(let y = 0; y < Q; y++) for(let c = 0; c < Q; c++){
+      const s = f * P * P + 2 * y * P + 2 * c;
+      let best = s;
+      if(a2[s + 1] > a2[best]) best = s + 1;
+      if(a2[s + P] > a2[best]) best = s + P;
+      if(a2[s + P + 1] > a2[best]) best = s + P + 1;
+      const j = f * Q * Q + y * Q + c;
+      b.i2[j] = best; b.p2[j] = a2[best];
+    }
+    // 784 × 10 and softmax
+    const p = b.prob, p2 = b.p2, w3 = m.w3;
+    let mx = -Infinity;
+    for(let o = 0; o < O; o++){
+      let z = m.b3[o];
+      const base = o * FLAT;
+      for(let j = 0; j < FLAT; j++) z += w3[base + j] * p2[j];
+      p[o] = z;
+      if(z > mx) mx = z;
+    }
+    let s = 0;
+    for(let o = 0; o < O; o++){ p[o] = Math.exp(p[o] - mx); s += p[o]; }
+    for(let o = 0; o < O; o++) p[o] /= s;
+    return p;
+  }
+
+  // Adds the gradient of −log p(label) for the image last passed to forward(b) into g.
+  function backward(m, b, label, g){
+    const dz = b.dz, p2 = b.p2, w3 = m.w3, w2 = m.w2, pp = b.pp, dpp = b.dpp, a1 = b.a1, a2 = b.a2, xp = b.xp;
+    for(let o = 0; o < O; o++){
+      dz[o] = b.prob[o] - (o === label ? 1 : 0);
+      g.b3[o] += dz[o];
+      const base = o * FLAT;
+      for(let j = 0; j < FLAT; j++) g.w3[base + j] += dz[o] * p2[j];
+    }
+    dpp.fill(0);
+    // back through pooling (only the maximum gets the gradient), ReLU and layer 2
+    for(let j = 0; j < FLAT; j++){
+      const pos = b.i2[j];
+      if(!(a2[pos] > 0)) continue;
+      let gr = 0;
+      for(let o = 0; o < O; o++) gr += w3[o * FLAT + j] * dz[o];
+      if(gr === 0) continue;
+      const f = Math.floor(pos / (P * P)), r = pos - f * P * P, y = Math.floor(r / P), c = r - y * P;
+      g.b2[f] += gr;
+      for(let ch = 0; ch < C1; ch++){
+        const wo = (f * C1 + ch) * 9, io = ch * PP * PP + y * PP + c;
+        for(let i = 0; i < 3; i++) for(let k = 0; k < 3; k++){
+          const q = io + i * PP + k, w = wo + i * 3 + k;
+          g.w2[w] += gr * pp[q];
+          dpp[q] += gr * w2[w];
+        }
+      }
+    }
+    // back through the first pooling, ReLU and layer 1
+    for(let ch = 0; ch < C1; ch++) for(let y = 0; y < P; y++) for(let c = 0; c < P; c++){
+      const gr = dpp[ch * PP * PP + (y + 1) * PP + c + 1];
+      if(gr === 0) continue;
+      const pos = b.i1[ch * P * P + y * P + c];
+      if(!(a1[pos] > 0)) continue;
+      const r = pos - ch * D, yy = Math.floor(r / N), cc = r - yy * N;
+      g.b1[ch] += gr;
+      for(let i = 0; i < 3; i++) for(let k = 0; k < 3; k++) g.w1[ch * 9 + i * 3 + k] += gr * xp[(yy + i) * NP + cc + k];
+    }
+  }
+
+  // Average loss over the images in idxs and its gradient (written into g).
+  function gradBatch(m, set, idxs, g, b){
+    for(const k of KEYS) g[k].fill(0);
+    b = b || makeBuffers();
+    const x = new Float64Array(D);
+    let loss = 0;
+    for(const i of idxs){
+      imageOf(set, i, x);
+      const p = forward(m, x, b), y = set.labels[i];
+      loss -= Math.log(Math.max(p[y], 1e-12));
+      backward(m, b, y, g);
+    }
+    const inv = 1 / idxs.length;
+    for(const k of KEYS){ const t = g[k]; for(let i = 0; i < t.length; i++) t[i] *= inv; }
+    return loss * inv;
+  }
+
+  function sgdStep(m, g, lr){
+    for(const k of KEYS){ const w = m[k], d = g[k]; for(let i = 0; i < w.length; i++) w[i] -= lr * d[i]; }
+  }
+
+  // Sums of loss and correct guesses over images a..b-1 of the set (the page spreads this over several frames).
+  function evalRange(m, set, a, e, b){
+    b = b || makeBuffers();
+    const x = new Float64Array(D);
+    let loss = 0, right = 0;
+    for(let i = a; i < e; i++){
+      imageOf(set, i, x);
+      const p = forward(m, x, b), y = set.labels[i];
+      loss -= Math.log(Math.max(p[y], 1e-12));
+      let best = 0;
+      for(let o = 1; o < O; o++) if(p[o] > p[best]) best = o;
+      if(best === y) right++;
+    }
+    return {loss, right};
+  }
+  function evaluate(m, set, count){
+    const n = Math.min(count || set.n, set.n), r = evalRange(m, set, 0, n);
+    return {loss: r.loss / n, acc: r.right / n, n};
+  }
+
+  function permutation(n, seed){
+    const rng = makeRng(seed), a = new Int32Array(n);
+    for(let i = 0; i < n; i++) a[i] = i;
+    for(let i = n - 1; i > 0; i--){ const j = Math.floor(rng() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+  // A training run: the model, a copy of it at step 0, its position in the shuffled training images, and the step count.
+  function createRun(train, seed){
+    const model = createModel(seed);
+    return {seed, model, start: clone(model), grad: zerosLike(), buf: makeBuffers(), step: 0, seen: 0, epoch: 0, pos: 0,
+      order: permutation(train.n, seed * 1000 + 1), lastLoss: NaN};
+  }
+  // One step of stochastic gradient descent on the next batch of 32 (the last batch of an epoch has 16).
+  function trainStep(run, train, lr){
+    const end = Math.min(run.pos + BATCH, train.n);
+    const idxs = run.order.subarray(run.pos, end);
+    run.lastLoss = gradBatch(run.model, train, idxs, run.grad, run.buf);
+    sgdStep(run.model, run.grad, lr);
+    run.seen += idxs.length;
+    run.step++;
+    run.pos = end;
+    if(run.pos >= train.n){
+      run.epoch++;
+      run.pos = 0;
+      run.order = permutation(train.n, run.seed * 1000 + 1 + run.epoch);
+    }
+    return run.lastLoss;
+  }
+
+  // For each filter of both layers, the K images (of those scanned so far) whose feature map has the largest value,
+  // with that value and where in the map it is. Ties keep the image scanned first. Images whose map is all 0 are left out.
+  function makeTops(K){
+    const mk = n => Array.from({length: n}, () => ({n: 0, v: new Float64Array(K), i: new Int32Array(K).fill(-1), pos: new Int32Array(K)}));
+    return {K, l1: mk(C1), l2: mk(C2)};
+  }
+  function pushTop(t, K, v, i, pos){
+    if(!(v > 0) || (t.n === K && v <= t.v[K - 1])) return;
+    let j = t.n < K ? t.n++ : K - 1;
+    while(j > 0 && t.v[j - 1] < v){ t.v[j] = t.v[j - 1]; t.i[j] = t.i[j - 1]; t.pos[j] = t.pos[j - 1]; j--; }
+    t.v[j] = v; t.i[j] = i; t.pos[j] = pos;
+  }
+  // Adds images a..e-1 of the set to tops (the page spreads this over several frames).
+  function scanTops(m, set, a, e, tops, b){
+    b = b || makeBuffers();
+    const x = new Float64Array(D), a1 = b.a1, a2 = b.a2;
+    for(let i = a; i < e; i++){
+      imageOf(set, i, x);
+      forward(m, x, b);
+      for(let k = 0; k < C1; k++){
+        const o = k * D;
+        let best = o;
+        for(let q = o + 1; q < o + D; q++) if(a1[q] > a1[best]) best = q;
+        pushTop(tops.l1[k], tops.K, a1[best], i, best - o);
+      }
+      for(let f = 0; f < C2; f++){
+        const o = f * P * P;
+        let best = o;
+        for(let q = o + 1; q < o + P * P; q++) if(a2[q] > a2[best]) best = q;
+        pushTop(tops.l2[f], tops.K, a2[best], i, best - o);
+      }
+    }
+    return tops;
+  }
+  // The input pixels (rows y0..y1, columns x0..x1) that the value at pos of a layer-1 map (28 × 28) or a layer-2 map (14 × 14) depends on.
+  // Layer 1: the 3 × 3 patch under the filter. Layer 2: 3 × 3 pooled cells, each from 2 × 2 layer-1 cells, each from 3 × 3 pixels, so 8 × 8.
+  function receptiveField(layer, pos){
+    let r0, r1, c0, c1;
+    if(layer === 1){ const y = Math.floor(pos / N), x = pos % N; r0 = y - 1; r1 = y + 1; c0 = x - 1; c1 = x + 1; }
+    else { const y = Math.floor(pos / P), x = pos % P; r0 = 2 * y - 3; r1 = 2 * y + 4; c0 = 2 * x - 3; c1 = 2 * x + 4; }
+    const cl = v => Math.max(0, Math.min(N - 1, v));
+    return {y0: cl(r0), y1: cl(r1), x0: cl(c0), x1: cl(c1)};
+  }
+
+  return {N, D, P, Q, C1, C2, O, FLAT, BATCH, KEYS, SIZES, PARAM_COUNT, makeRng, splitData, imageOf, createModel, zerosLike, clone,
+    makeBuffers, forward, backward, gradBatch, sgdStep, evalRange, evaluate, permutation, createRun, trainStep, makeTops, scanTops, receptiveField};
+})();
+</script>
+<script id="cn-ui">
+// CNUI: page, training loop and drawing.
+const CNUI = (() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const params = new URLSearchParams(location.search || location.hash.slice(1));
+  const SPEEDS = [1, 5, 20, 100, Infinity];
+  const LRS = [0.01, 0.1, 1];
+  const SEED = +(params.get('seed') || 1);
+  const W1_SCALE = 0.6;          // layer-1 parameter that gets full colour
+  const W2_SCALE = 0.3;          // layer-2 parameter that gets full colour
+  const EVAL_N = 2000;           // test images for the accuracy curve
+  const TRAIN_MS = 30, EVAL_MS = 8;   // time per frame for training steps and for measuring the test images
+  const TOP_N = 2000, TOP_K = 8, TOP_MS = 10;   // test images searched for each filter's top images, how many are shown, time per frame
+
+  const st = {
+    data: null, run: null, records: [], job: null, wantRecord: false, lossSum: 0, lossN: 0,
+    playing: false, broken: false,
+    speed: SPEEDS.includes(+params.get('speed')) ? +params.get('speed') : (params.get('speed') === 'max' ? Infinity : 5),
+    lr: LRS.includes(+params.get('lr')) ? +params.get('lr') : 0.1,
+    acc: 0, lastT: 0, dirty: true,
+    input: new Float64Array(784), inputLabel: null, inputPick: -1, thumbIdx: [],
+    sel2: 0, buf: null, cells2: [],
+    view: params.get('view') === 'top' ? 'top' : 'train', layerT: params.get('layer') === '2' ? 2 : 1, tops: null, topJob: null, cellsT: [],
+  };
+
+  // ---------- data ----------
+  async function loadData(){
+    const d = window.MNIST_DATA;
+    if(!d) throw new Error('mnist-data.js was not loaded. Keep it next to index.html.');
+    if(typeof DecompressionStream === 'undefined') throw new Error('This browser cannot unpack the images. Use a recent Chrome, Edge, Firefox or Safari.');
+    const bin = atob(d.gzipBase64);
+    const u8 = new Uint8Array(bin.length);
+    for(let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    const stream = new Blob([u8]).stream().pipeThrough(new DecompressionStream('gzip'));
+    const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+    return CN.splitData(bytes, d.nTrain, d.nTest);
+  }
+
+  // ---------- training ----------
+  function nextEvalStep(s){
+    if(s < 20) return s + 2 - (s % 2);
+    if(s < 100) return s + 5 - (s % 5);
+    if(s < 400) return s + 20 - (s % 20);
+    return s + 50 - (s % 50);
+  }
+  // Measuring 2,000 test images takes a few hundred ms, so it runs a little in every frame on a copy of the model.
+  function startJob(){
+    const r = st.run;
+    st.job = {step: r.step, epoch: r.seen / st.data.train.n, model: CN.clone(r.model), buf: CN.makeBuffers(), i: 0, loss: 0, right: 0,
+      trLoss: st.lossN ? st.lossSum / st.lossN : NaN};
+    st.lossSum = 0; st.lossN = 0;
+  }
+  function workJob(budget){
+    const j = st.job, t0 = performance.now();
+    while(j.i < EVAL_N && performance.now() - t0 < budget){
+      const e = Math.min(EVAL_N, j.i + 20);
+      const r = CN.evalRange(j.model, st.data.test, j.i, e, j.buf);
+      j.loss += r.loss; j.right += r.right; j.i = e;
+    }
+    if(j.i >= EVAL_N){
+      st.records.push({step: j.step, epoch: j.epoch, trLoss: j.trLoss, teLoss: j.loss / EVAL_N, teAcc: j.right / EVAL_N});
+      st.job = null;
+      st.dirty = true;
+    }
+  }
+  // The top images are searched on a copy of the model, a little in every frame, while the Top images view is open.
+  function startTopJob(){
+    st.topJob = {step: st.run.step, model: CN.clone(st.run.model), buf: CN.makeBuffers(), i: 0, t: CN.makeTops(TOP_K)};
+  }
+  function workTopJob(budget){
+    const j = st.topJob, t0 = performance.now();
+    while(j.i < TOP_N && performance.now() - t0 < budget){
+      const e = Math.min(TOP_N, j.i + 10);
+      CN.scanTops(j.model, st.data.test, j.i, e, j.t, j.buf);
+      j.i = e;
+    }
+    if(j.i >= TOP_N){ st.tops = {step: j.step, t: j.t}; st.topJob = null; st.dirty = true; }
+    topStatus();
+  }
+  function topStatus(){
+    const j = st.topJob, t = st.tops, f = n => n.toLocaleString('en-US');
+    $('tvStatus').textContent = !t ? `Searching the test images… ${j ? f(j.i) : 0} / ${f(TOP_N)}`
+      : `Model at step ${f(t.step)}` + (j ? ` · updating to step ${f(j.step)}` : '');
+  }
+  function lastRecorded(){ return st.records.length ? st.records[st.records.length - 1].step : -1; }
+  function stepOnce(){
+    if(st.broken) return;
+    const loss = CN.trainStep(st.run, st.data.train, st.lr);
+    if(!isFinite(loss)){
+      st.broken = true; pause();
+      $('subtitle').textContent = 'Training broke down: the loss is no longer a number. Press Reset.';
+      $('subtitle').classList.add('warn');
+    } else { st.lossSum += loss; st.lossN++; }
+    st.dirty = true;
+  }
+  function manualSteps(n){
+    pause();
+    for(let i = 0; i < n; i++) stepOnce();
+    st.wantRecord = true;
+  }
+  function reset(){
+    st.run = CN.createRun(st.data.train, SEED);
+    st.records = []; st.job = null; st.wantRecord = false; st.lossSum = 0; st.lossN = 0;
+    st.tops = null; st.topJob = null;
+    st.broken = false;
+    $('subtitle').textContent = '8 filters → 16 filters → 10, ' + CN.PARAM_COUNT.toLocaleString('en-US') + ' parameters, 10,000 training images';
+    $('subtitle').classList.remove('warn');
+    st.dirty = true;
+  }
+  function play(){ if(st.broken) return; st.playing = true; st.acc = 0; st.lastT = performance.now(); $('bPlay').textContent = 'Pause'; }
+  function pause(){ st.playing = false; $('bPlay').textContent = 'Play'; }
+
+  function frame(t){
+    if(st.playing){
+      const dt = Math.min(0.25, (t - st.lastT) / 1000);
+      st.lastT = t;
+      const t0 = performance.now();
+      if(st.speed === Infinity){
+        while(st.playing && performance.now() - t0 < TRAIN_MS) stepOnce();
+      } else {
+        st.acc = Math.min(st.acc + dt * st.speed, st.speed * 0.2 + 1);
+        while(st.playing && st.acc >= 1 && performance.now() - t0 < TRAIN_MS){ stepOnce(); st.acc -= 1; }
+      }
+    }
+    const last = lastRecorded();
+    if(!st.job && (last < 0 || st.run.step >= nextEvalStep(last) || (st.wantRecord && last !== st.run.step))){ startJob(); st.wantRecord = false; }
+    if(st.job) workJob(EVAL_MS);
+    if(st.view === 'top' && !st.topJob && (!st.tops || st.tops.step !== st.run.step)) startTopJob();
+    if(st.topJob) workTopJob(TOP_MS);
+    if(st.dirty){ drawAll(); st.dirty = false; }
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- colours and canvas helpers ----------
+  function fit(cv){
+    const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+    if(cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h; }
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, r.width, r.height);
+    return {ctx, W: r.width, H: r.height};
+  }
+  // parameters: red positive, blue negative
+  function wColor(v, scale){
+    let t = v / scale;
+    if(!(t === t)) t = 0;
+    t = Math.max(-1, Math.min(1, t));
+    const Z = [247, 247, 245], P = [200, 30, 30], N = [25, 85, 190];
+    const C = t >= 0 ? P : N, a = Math.abs(t);
+    return [Z[0] + a * (C[0] - Z[0]), Z[1] + a * (C[1] - Z[1]), Z[2] + a * (C[2] - Z[2])];
+  }
+  // feature maps: white at 0, dark red at the largest value in the layer (matplotlib's Reds, as on the lecture 9 slide)
+  const REDS = [[255,245,240],[254,224,210],[252,187,161],[252,146,114],[251,106,74],[239,59,44],[203,24,29],[165,15,21],[103,0,13]];
+  const REDS_LUT = Array.from({length: 256}, (_, i) => {
+    const x = i / 255 * 8, k = Math.min(7, Math.floor(x)), f = x - k, a = REDS[k], b = REDS[k + 1];
+    return [a[0] + f * (b[0] - a[0]), a[1] + f * (b[1] - a[1]), a[2] + f * (b[2] - a[2])];
+  });
+  function aColor(t){ return REDS_LUT[t > 0 ? Math.min(255, Math.round(t * 255)) : 0]; }
+  const tmp = document.createElement('canvas');
+  // Draws a w × h grid of colours (colorAt(k) for cell k, row by row) as a square of the given size.
+  function blit(ctx, w, h, colorAt, x, y, size, border){
+    tmp.width = w; tmp.height = h;
+    const tctx = tmp.getContext('2d'), img = tctx.createImageData(w, h), px = img.data;
+    for(let k = 0; k < w * h; k++){ const c = colorAt(k); px[4 * k] = c[0]; px[4 * k + 1] = c[1]; px[4 * k + 2] = c[2]; px[4 * k + 3] = 255; }
+    tctx.putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(tmp, Math.round(x), Math.round(y), Math.round(size), Math.round(size));
+    ctx.strokeStyle = border || '#c4c2bb'; ctx.lineWidth = 1;
+    ctx.strokeRect(Math.round(x) + .5, Math.round(y) + .5, Math.round(size) - 1, Math.round(size) - 1);
+  }
+  const ink = v => { const g = 255 - 255 * Math.max(0, Math.min(1, v)); return [g, g, g]; };
+  function font(weight, size){ return `${weight} ${size}px Inter, Pretendard, system-ui, sans-serif`; }
+  function maxOf(a){ let m = 0; for(let i = 0; i < a.length; i++) if(a[i] > m) m = a[i]; return m; }
+
+  // ---------- input ----------
+  function drawInput(){
+    const cv = $('cIn'), ctx = cv.getContext('2d');
+    const img = ctx.createImageData(28, 28);
+    for(let k = 0; k < 784; k++){ const c = ink(st.input[k]); img.data[4*k] = c[0]; img.data[4*k+1] = c[1]; img.data[4*k+2] = c[2]; img.data[4*k+3] = 255; }
+    ctx.putImageData(img, 0, 0);
+  }
+  function drawThumbs(){
+    const {ctx, W, H} = fit($('cThumbs'));
+    const cw = W / 10, s = Math.floor(Math.min(H - 4, cw - 6)), test = st.data.test;
+    for(let d = 0; d < 10; d++){
+      const i = st.thumbIdx[d], x = d * cw + (cw - s) / 2;
+      blit(ctx, 28, 28, k => ink(test.pixels[i * 784 + k] / 255), x, 2, s, d === st.inputPick ? '#0b0b0b' : '#dedcd6');
+      if(d === st.inputPick){ ctx.strokeStyle = '#0b0b0b'; ctx.lineWidth = 2; ctx.strokeRect(Math.round(x) - 1, 1, s + 2, s + 2); }
+    }
+  }
+  function useTestImage(d){
+    const i = st.thumbIdx[d];
+    CN.imageOf(st.data.test, i, st.input);
+    st.inputLabel = st.data.test.labels[i]; st.inputPick = d;
+    st.dirty = true;
+  }
+  function shiftInput(dy, dx){
+    const old = Float64Array.from(st.input);
+    st.input.fill(0);
+    for(let y = 0; y < 28; y++) for(let x = 0; x < 28; x++){
+      const sy = y - dy, sx = x - dx;
+      if(sy >= 0 && sy < 28 && sx >= 0 && sx < 28) st.input[y * 28 + x] = old[sy * 28 + sx];
+    }
+    st.dirty = true;
+  }
+  let paint = null;
+  function brush(r, c, erase){
+    for(let dr = -1; dr <= 1; dr++) for(let dc = -1; dc <= 1; dc++){
+      const rr = r + dr, cc = c + dc;
+      if(rr < 0 || rr >= 28 || cc < 0 || cc >= 28) continue;
+      const i = rr * 28 + cc, center = dr === 0 && dc === 0, side = dr === 0 || dc === 0;
+      if(erase) st.input[i] = 0;
+      else st.input[i] = Math.max(st.input[i], center ? 1 : side ? 0.6 : 0.2);
+    }
+  }
+  function cellAt(e){
+    const r = $('cIn').getBoundingClientRect(), cell = r.width / 28;
+    return {r: Math.floor((e.clientY - r.top) / cell), c: Math.floor((e.clientX - r.left) / cell)};
+  }
+  function strokeTo(to){
+    const from = paint.at, steps = Math.max(Math.abs(to.r - from.r), Math.abs(to.c - from.c), 1);
+    for(let k = 1; k <= steps; k++) brush(Math.round(from.r + (to.r - from.r) * k / steps), Math.round(from.c + (to.c - from.c) * k / steps), paint.erase);
+    paint.at = to;
+  }
+
+  // ---------- output ----------
+  function drawProbs(){
+    const {ctx, W, H} = fit($('cP'));
+    const p = st.buf.prob, y = st.inputLabel;
+    let best = 0; for(let o = 1; o < 10; o++) if(p[o] > p[best]) best = o;
+    const tw = 74, labH = 16, top = 4, barH = H - top - labH;
+    const big = Math.round(Math.min(34, barH * 0.5));
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = y === null || best === y ? '#0b0b0b' : '#c62828';
+    ctx.font = font(700, big); ctx.fillText(String(best), 4, top + big);
+    ctx.font = font(600, Math.round(big * 0.45)); ctx.fillText(`${(100 * p[best]).toFixed(0)}%`, 4 + big * 0.75, top + big);
+    ctx.fillStyle = '#52514e'; ctx.font = font(500, 11);
+    ctx.fillText('top guess', 4, top + big + 16);
+    if(y !== null) ctx.fillText(`correct: ${y}`, 4, top + big + 30);
+    const bx0 = tw, bw = (W - tw) / 10;
+    ctx.fillStyle = '#f3f2ee'; ctx.fillRect(bx0, top, bw * 10, barH);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for(let o = 0; o < 10; o++){
+      const h = (p[o] === p[o] ? p[o] : 0) * barH;
+      ctx.fillStyle = (y !== null ? o === y : o === best) ? '#0b0b0b' : (o === best ? '#c62828' : '#b9b7b0');
+      ctx.fillRect(bx0 + o * bw + 1, top + barH - h, bw - 2, h);
+      ctx.fillStyle = o === y ? '#0b0b0b' : '#8a8985';
+      ctx.font = font(o === y ? 700 : 500, 11);
+      ctx.fillText(String(o), bx0 + o * bw + bw / 2, top + barH + 2);
+    }
+  }
+
+  // ---------- curve ----------
+  function niceStep(span, maxTicks){
+    for(const s of [0.02, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 20, 50]) if(span / s <= maxTicks) return s;
+    return 100;
+  }
+  function drawCurve(){
+    const {ctx, W, H} = fit($('cC'));
+    const L = 34, R = 40, T = 6, B = 20, pw = W - L - R, ph = H - T - B;
+    const recs = st.records, last = recs[recs.length - 1];
+    const xMax = Math.max(0.25, last ? last.epoch : 0);
+    const maxLoss = Math.min(8, Math.ceil(Math.max(2.5, ...recs.map(r => isFinite(r.trLoss) ? r.trLoss : 0), ...recs.map(r => isFinite(r.teLoss) ? r.teLoss : 0)) * 2) / 2);
+    const xs = e => L + e / xMax * pw, ys = v => T + ph - Math.min(v, maxLoss) / maxLoss * ph;
+    ctx.font = font(500, 11); ctx.fillStyle = '#8a8985'; ctx.strokeStyle = '#eceae5'; ctx.lineWidth = 1;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const ys0 = niceStep(maxLoss, 3);
+    for(let v = 0; v <= maxLoss + 1e-9; v += ys0){ const yy = Math.round(ys(v)) + .5; ctx.beginPath(); ctx.moveTo(L, yy); ctx.lineTo(L + pw, yy); ctx.stroke(); ctx.fillText(v.toFixed(1), L - 5, yy); }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const xs0 = niceStep(xMax, 4);
+    for(let e = 0; e <= xMax + 1e-9; e += xs0) ctx.fillText(+e.toFixed(2) + '', xs(e), T + ph + 4);
+    ctx.textAlign = 'left'; ctx.fillText('epoch', L + pw + 6, T + ph + 4);
+    ctx.strokeStyle = '#c4c2bb'; ctx.beginPath(); ctx.moveTo(L + .5, T); ctx.lineTo(L + .5, T + ph); ctx.lineTo(L + pw, T + ph + .5); ctx.stroke();
+    for(const [key, color] of [['trLoss', '#0b0b0b'], ['teLoss', '#e07b00']]){
+      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.beginPath();
+      let on = false;
+      for(const r of recs){
+        if(!isFinite(r[key])){ on = false; continue; }
+        const x = xs(r.epoch), yy = ys(r[key]);
+        on ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy); on = true;
+      }
+      ctx.stroke();
+    }
+  }
+
+  // ---------- layer 1 ----------
+  function drawFilter(ctx, w, o, scale, x, y, s, numbers){
+    blit(ctx, 3, 3, k => wColor(w[o + k], scale), x, y, s);
+    if(!numbers) return;
+    const c = s / 3;
+    ctx.font = font(600, Math.floor(Math.min(13, c * 0.3))); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for(let k = 0; k < 9; k++){
+      const v = w[o + k];
+      ctx.fillStyle = Math.abs(v / scale) > 0.55 ? '#fff' : '#3a3936';
+      ctx.fillText((v < 0 ? '−' : '') + Math.abs(v).toFixed(2), x + (k % 3 + 0.5) * c, y + (Math.floor(k / 3) + 0.5) * c);
+    }
+  }
+  function drawLayer1(){
+    const {ctx, W, H} = fit($('cL1'));
+    const b = st.buf, m = st.run.model, m0 = st.run.start;
+    const cols = 4, rows = 2, gx = 18, gy = 16, lab = 18, gap = 8, under = 16;
+    const cw = (W - gx * (cols - 1)) / cols, ch = (H - gy * (rows - 1)) / rows;
+    const ms = Math.floor(Math.min(cw, (ch - lab - gap - under) / 1.45));
+    // the filter gets the height that the map does not need, between 0.3 and 0.66 of the map
+    const ft = Math.floor(Math.max(ms * 0.3, Math.min(ms * 0.66, ch - lab - gap - under - ms)) / 3) * 3, f0 = Math.floor(Math.min(ft * 0.5, ms - ft - 10) / 3) * 3;
+    const top = maxOf(b.a1) || 1;
+    for(let k = 0; k < CN.C1; k++){
+      const cx = (k % cols) * (cw + gx), cy = Math.floor(k / cols) * (ch + gy);
+      const x0 = Math.round(cx + (cw - ms) / 2), y0 = Math.round(cy + (ch - (lab + ft + gap + ms + under)) / 2);
+      ctx.fillStyle = '#0b0b0b'; ctx.font = font(700, 13); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(`filter ${k + 1}`, x0, y0 + 13);
+      drawFilter(ctx, m.w1, k * 9, W1_SCALE, x0, y0 + lab, ft, ft / 3 >= 40);
+      const sx = x0 + ft + 10;
+      if(sx + f0 <= x0 + ms){
+        ctx.fillStyle = '#8a8985'; ctx.font = font(500, 11); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+        ctx.fillText('step 0', sx, y0 + lab + ft - f0 - 4);
+        drawFilter(ctx, m0.w1, k * 9, W1_SCALE, sx, y0 + lab + ft - f0, f0, false);
+      }
+      const my = y0 + lab + ft + gap, o = k * 784;
+      blit(ctx, 28, 28, q => aColor(b.a1[o + q] / top), x0, my, ms);
+      const mx = maxOf(b.a1.subarray(o, o + 784));
+      ctx.fillStyle = '#52514e'; ctx.font = font(500, 11); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(`largest ${mx.toFixed(2)}`, x0 + ms / 2, my + ms + 3);
+    }
+  }
+
+  // ---------- layer 2 ----------
+  function drawLayer2(){
+    const {ctx, W, H} = fit($('cL2'));
+    const b = st.buf, m = st.run.model, f = st.sel2;
+    const gap8 = 7, slot = Math.floor(Math.min(64, (W - 7 * gap8) / 8));
+    const hb = 22 + 16 + 14 + slot + 8 + 16 + slot + 4;
+    const g = 10, lab = 15;
+    const gs = Math.floor(Math.min((W - 3 * g) / 4, (H - hb - 14 - 3 * g) / 4 - lab));
+    const top2 = maxOf(b.a2) || 1, top1 = maxOf(b.a1) || 1;
+    const gx0 = Math.round((W - (4 * gs + 3 * g)) / 2);
+    st.cells2 = [];
+    for(let k = 0; k < CN.C2; k++){
+      const x = gx0 + (k % 4) * (gs + g), y = Math.floor(k / 4) * (gs + lab + g);
+      const o = k * 196, mx = maxOf(b.a2.subarray(o, o + 196));
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = '#0b0b0b'; ctx.font = font(700, 12); ctx.textAlign = 'left';
+      ctx.fillText(String(k + 1), x, y + 11);
+      ctx.fillStyle = '#52514e'; ctx.font = font(500, 11); ctx.textAlign = 'right';
+      ctx.fillText(mx.toFixed(2), x + gs, y + 11);
+      blit(ctx, 14, 14, q => aColor(b.a2[o + q] / top2), x, y + lab, gs);
+      if(k === f){ ctx.strokeStyle = '#0b0b0b'; ctx.lineWidth = 3; ctx.strokeRect(x - 2.5, y + lab - 2.5, gs + 5, gs + 5); }
+      st.cells2.push({x, y: y + lab, s: gs, k});
+    }
+    // the selected filter: one 3 × 3 slice for each pooled layer-1 map
+    let y = 4 * (gs + lab) + 3 * g + 14;
+    const bx0 = Math.round((W - (8 * slot + 7 * gap8)) / 2);
+    ctx.fillStyle = '#0b0b0b'; ctx.font = font(700, 13); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(`Layer-2 filter ${f + 1}: 8 slices of 3 × 3, 72 parameters`, bx0, y + 13);
+    y += 22;
+    ctx.fillStyle = '#52514e'; ctx.font = font(500, 11);
+    ctx.fillText('Layer-1 maps after max pooling (14 × 14)', bx0, y + 11);
+    y += 16;
+    for(let c = 0; c < CN.C1; c++){
+      const x = bx0 + c * (slot + gap8);
+      ctx.fillStyle = '#0b0b0b'; ctx.font = font(700, 11); ctx.textAlign = 'center';
+      ctx.fillText(String(c + 1), x + slot / 2, y + 10);
+      blit(ctx, 14, 14, q => aColor(b.pp[c * 256 + (Math.floor(q / 14) + 1) * 16 + (q % 14) + 1] / top1), x, y + 14, slot);
+    }
+    y += 14 + slot + 8;
+    ctx.fillStyle = '#52514e'; ctx.font = font(500, 11); ctx.textAlign = 'left';
+    ctx.fillText(`Slice applied to each map (full colour at ±${W2_SCALE})`, bx0, y + 11);
+    y += 16;
+    for(let c = 0; c < CN.C1; c++) drawFilter(ctx, m.w2, (f * CN.C1 + c) * 9, W2_SCALE, bx0 + c * (slot + gap8), y, Math.floor(slot / 3) * 3, false);
+  }
+
+  // ---------- top images ----------
+  function drawTop(){
+    const {ctx, W, H} = fit($('cT'));
+    st.cellsT = [];
+    topStatus();
+    if(!st.tops) return;
+    const L = st.layerT, list = L === 1 ? st.tops.t.l1 : st.tops.t.l2, test = st.data.test;
+    const cols = 2, rows = list.length / cols, gx = 40, gy = 10, leftW = 84, gap = 6, under = 15;
+    const colW = (W - gx) / cols, rowH = (H - gy * (rows - 1)) / rows;
+    const s = Math.floor(Math.min(rowH - under, (colW - leftW - (TOP_K - 1) * gap) / TOP_K));
+    list.forEach((t, k) => {
+      const cx = Math.floor(k / rows) * (colW + gx), cy = (k % rows) * (rowH + gy);
+      ctx.fillStyle = '#0b0b0b'; ctx.font = font(700, 13); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(`filter ${k + 1}`, cx, cy + 14);
+      if(L === 1){
+        const ft = Math.floor(Math.min(rowH - 26, leftW - 30, 54) / 3) * 3;
+        if(ft >= 9) drawFilter(ctx, st.run.model.w1, k * 9, W1_SCALE, cx, cy + 22, ft, false);
+      }
+      if(!t.n){
+        ctx.fillStyle = '#8a8985'; ctx.font = font(500, 12); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.fillText('No test image makes this filter larger than 0.', cx + leftW, cy + s / 2);
+        return;
+      }
+      for(let r = 0; r < t.n; r++){
+        const i = t.i[r], x = cx + leftW + r * (s + gap), y = cy;
+        blit(ctx, 28, 28, q => ink(test.pixels[i * 784 + q] / 255), x, y, s, '#dedcd6');
+        const box = CN.receptiveField(L, t.pos[r]), u = s / 28;
+        ctx.strokeStyle = '#e0261b'; ctx.lineWidth = 2;
+        ctx.strokeRect(Math.round(x + box.x0 * u) + 1, Math.round(y + box.y0 * u) + 1, Math.round((box.x1 - box.x0 + 1) * u) - 2, Math.round((box.y1 - box.y0 + 1) * u) - 2);
+        ctx.font = font(500, 11); ctx.textBaseline = 'top';
+        ctx.fillStyle = '#52514e'; ctx.textAlign = 'left'; ctx.fillText(t.v[r].toFixed(2), x, y + s + 2);
+        ctx.fillStyle = '#0b0b0b'; ctx.font = font(700, 11); ctx.textAlign = 'right'; ctx.fillText(String(test.labels[i]), x + s, y + s + 2);
+        st.cellsT.push({x, y, s, i, k});
+      }
+    });
+  }
+  function useTopImage(c){
+    CN.imageOf(st.data.test, c.i, st.input);
+    st.inputLabel = st.data.test.labels[c.i]; st.inputPick = st.thumbIdx.indexOf(c.i);
+    if(st.layerT === 2) st.sel2 = c.k;
+    setView('train');
+  }
+  function setView(v){
+    st.view = v;
+    $('grid').hidden = v !== 'train';
+    $('topView').hidden = v !== 'top';
+    if(st.paintView) st.paintView();
+    st.dirty = true;
+  }
+
+  // ---------- page ----------
+  function drawStats(){
+    const r = st.run, recs = st.records;
+    let tr = NaN;
+    for(let i = recs.length - 1; i >= 0; i--) if(isFinite(recs[i].trLoss)){ tr = recs[i].trLoss; break; }
+    const last = recs[recs.length - 1];
+    $('sStep').textContent = r.step.toLocaleString('en-US');
+    $('sEpoch').textContent = (r.seen / st.data.train.n).toFixed(2);
+    $('sLoss').textContent = isFinite(tr) ? tr.toFixed(3) : '–';
+    $('sAcc').textContent = last ? (100 * last.teAcc).toFixed(1) + '%' : '–';
+  }
+  function drawAll(){
+    CN.forward(st.run.model, st.input, st.buf);
+    drawStats();
+    if(st.view === 'top'){ drawTop(); return; }
+    drawInput(); drawThumbs(); drawProbs(); drawCurve(); drawLayer1(); drawLayer2();
+  }
+  function drawColorbars(){
+    const w = [], a = [];
+    for(let i = 0; i <= 10; i++){
+      const c = wColor(W1_SCALE * (i / 5 - 1), W1_SCALE); w.push(`rgb(${c.map(Math.round).join(',')}) ${i * 10}%`);
+      const d = aColor(i / 10); a.push(`rgb(${d.map(Math.round).join(',')}) ${i * 10}%`);
+    }
+    $('cbW').style.background = `linear-gradient(90deg, ${w.join(',')})`;
+    $('cbA').style.background = `linear-gradient(90deg, ${a.join(',')})`;
+    document.querySelectorAll('.w1s').forEach(e => { e.textContent = String(W1_SCALE); });
+  }
+  function seg(el, values, label, get, set){
+    el.innerHTML = '';
+    for(const v of values){
+      const b = document.createElement('button');
+      b.textContent = label(v);
+      b.onclick = () => { set(v); paint(); };
+      el.appendChild(b);
+    }
+    const paint = () => [...el.children].forEach((b, i) => b.classList.toggle('on', values[i] === get()));
+    paint();
+    return paint;
+  }
+
+  async function init(){
+    try {
+      st.data = await loadData();
+    } catch(err){
+      $('loading').textContent = err.message;
+      throw err;
+    }
+    $('loading').remove();
+    st.buf = CN.makeBuffers();
+    const labels = st.data.test.labels;
+    for(let d = 0; d < 10; d++) for(let i = 0; i < labels.length; i++) if(labels[i] === d){ st.thumbIdx.push(i); break; }
+    const img = +(params.get('img') || 0);
+    if(img >= 0 && img < st.data.test.n){
+      CN.imageOf(st.data.test, img, st.input);
+      st.inputLabel = labels[img]; st.inputPick = st.thumbIdx.indexOf(img);
+    }
+    seg($('segSpeed'), SPEEDS, v => v === Infinity ? 'Max' : String(v), () => st.speed, v => { st.speed = v; });
+    seg($('segLr'), LRS, v => String(v), () => st.lr, v => { st.lr = v; });
+    st.paintView = seg($('segView'), ['train', 'top'], v => v === 'train' ? 'Training' : 'Top images', () => st.view, setView);
+    seg($('segLayer'), [1, 2], v => `Layer ${v}`, () => st.layerT, v => { st.layerT = v; st.dirty = true; });
+    $('cT').addEventListener('click', e => {
+      const r = $('cT').getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+      for(const c of st.cellsT) if(x >= c.x && x <= c.x + c.s && y >= c.y && y <= c.y + c.s + 14){ useTopImage(c); break; }
+    });
+    $('bPlay').onclick = () => st.playing ? pause() : play();
+    $('bStep1').onclick = () => manualSteps(1);
+    $('bStep10').onclick = () => manualSteps(10);
+    $('bReset').onclick = () => { pause(); reset(); };
+    $('bClear').onclick = () => { st.input.fill(0); st.inputLabel = null; st.inputPick = -1; st.dirty = true; };
+    document.querySelectorAll('#pad button').forEach(bt => { bt.onclick = () => shiftInput(+bt.dataset.dy, +bt.dataset.dx); });
+    $('cThumbs').addEventListener('click', e => {
+      const r = $('cThumbs').getBoundingClientRect(), d = Math.floor((e.clientX - r.left) / (r.width / 10));
+      if(d >= 0 && d < 10) useTestImage(d);
+    });
+    const cIn = $('cIn');
+    cIn.addEventListener('contextmenu', e => e.preventDefault());
+    cIn.addEventListener('pointerdown', e => {
+      const at = cellAt(e);
+      paint = {erase: e.button === 2 || e.shiftKey, at};
+      brush(at.r, at.c, paint.erase);
+      cIn.setPointerCapture(e.pointerId);
+      st.inputLabel = null; st.inputPick = -1; st.dirty = true;
+      e.preventDefault();
+    });
+    cIn.addEventListener('pointermove', e => { if(paint){ strokeTo(cellAt(e)); st.dirty = true; } });
+    const endPaint = () => { paint = null; };
+    cIn.addEventListener('pointerup', endPaint); cIn.addEventListener('pointercancel', endPaint);
+    $('cL2').addEventListener('click', e => {
+      const r = $('cL2').getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+      for(const c of st.cells2) if(x >= c.x - 4 && x <= c.x + c.s + 4 && y >= c.y - 18 && y <= c.y + c.s + 4){ st.sel2 = c.k; st.dirty = true; break; }
+    });
+    document.addEventListener('keydown', e => {
+      if(e.target.tagName === 'INPUT') return;
+      if(e.code === 'Space'){ e.preventDefault(); st.playing ? pause() : play(); }
+      else if(e.code === 'ArrowRight'){ e.preventDefault(); manualSteps(1); }
+    });
+    window.addEventListener('resize', () => { st.dirty = true; });
+    drawColorbars();
+    reset();
+    setView(st.view);
+    if(params.get('play') === '1') play();
+    requestAnimationFrame(frame);
+  }
+  const ready = init();
+  return {st, ready, reset, play, pause, manualSteps, useTestImage, shiftInput, setView};
+})();
+</script>
+</body>
+</html>

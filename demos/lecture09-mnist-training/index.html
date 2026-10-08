@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MNIST Training · MAS1004</title>
+<style>
+:root{
+  --surface:#fcfcfb; --ink:#0b0b0b; --sub:#52514e; --muted:#8a8985;
+  --rule:#dedcd6; --rule2:#c4c2bb; --soft:#f3f2ee;
+  --train:#0b0b0b; --test:#e07b00; --wrong:#c62828;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{
+  background:var(--surface); color:var(--ink);
+  font:400 16px/1.4 Inter,Pretendard,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  display:flex; flex-direction:column; min-height:640px;
+}
+button{font-family:inherit;font-size:inherit;color:inherit}
+
+#top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 28px;padding:10px 20px;border-bottom:1px solid var(--rule)}
+.brand{font-size:1.3rem;font-weight:700;letter-spacing:-.01em;line-height:1.2}
+.brand .sub{display:block;font-size:.85rem;font-weight:500;color:var(--sub);letter-spacing:0}
+.grp{display:flex;align-items:center;gap:8px}
+.gl{font-size:.85rem;color:var(--sub);font-weight:600}
+.seg{display:flex;border:1px solid var(--rule2);border-radius:9px;overflow:hidden;background:#fff}
+.seg button{border:0;border-left:1px solid var(--rule);background:transparent;padding:6px 11px;color:var(--sub);font-weight:600;font-size:.92rem;cursor:pointer}
+.seg button:first-child{border-left:0}
+.seg button:hover{color:var(--ink)}
+.seg button.on{background:var(--ink);color:#fff}
+.btn{padding:7px 13px;border-radius:9px;border:1px solid var(--ink);background:var(--ink);color:#fff;font-weight:600;font-size:.95rem;cursor:pointer}
+.btn:hover{background:#333}
+.btn.ghost{background:#fff;color:var(--ink)}
+.btn.ghost:hover{background:var(--soft)}
+#bPlay{min-width:76px}
+#stats{display:flex;gap:6px 26px;margin-left:auto}
+#stats span{display:block;font-size:.78rem;color:var(--sub);font-weight:600}
+#stats b{display:block;font-size:1.65rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
+
+#grid{flex:1;min-height:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:minmax(0,1fr) minmax(150px,26vh);gap:10px 22px;padding:10px 20px 14px}
+.panel{display:flex;flex-direction:column;min-height:0;min-width:0}
+.panel h3{margin:0;font-size:1.02rem;font-weight:700;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.cap{margin:2px 0 6px;font-size:.82rem;color:var(--sub);line-height:1.3}
+.cv{flex:1;min-height:0;position:relative}
+.cv canvas{position:absolute;inset:0;width:100%;height:100%}
+#pP{grid-column:1/-1}
+#pC .cv{flex:1}
+.key{display:inline-flex;align-items:center;gap:6px;font-size:.82rem;font-weight:600;color:var(--sub)}
+.key i{display:inline-block;width:22px;height:0;border-top:3px solid}
+#cbar{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--sub);margin-top:4px;justify-content:center}
+#cbar .bar{width:160px;height:10px;border-radius:2px;border:1px solid var(--rule2)}
+
+#loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(252,252,251,.92);font-size:1.2rem;color:var(--sub);z-index:5}
+@media(max-width:1500px){
+  body{font-size:14px}
+  #top{gap:8px 20px;padding:8px 16px}
+  .brand{font-size:1.2rem}
+  .seg button{padding:5px 9px}
+  .btn{padding:6px 11px}
+  #stats{gap:4px 18px}
+  #stats b{font-size:1.45rem}
+  #grid{padding:8px 16px 10px;gap:8px 18px}
+}
+@media(max-width:900px){
+  #grid{grid-template-columns:minmax(0,1fr);grid-template-rows:none;grid-auto-rows:420px}
+  #pP{grid-column:auto}
+}
+</style>
+</head>
+<body>
+<div id="top">
+  <div class="brand">MNIST Training<span class="sub" id="subtitle">784 → 64 → 10, 50,890 parameters, 10,000 training images</span></div>
+  <div class="grp">
+    <button class="btn" id="bPlay">Play</button>
+    <button class="btn ghost" id="bStep1">+1 step</button>
+    <button class="btn ghost" id="bStep10">+10 steps</button>
+    <button class="btn ghost" id="bReset">Reset</button>
+  </div>
+  <div class="grp"><span class="gl">Steps/s</span><div class="seg" id="segSpeed"></div></div>
+  <div class="grp"><span class="gl">Learning rate</span><div class="seg" id="segLr"></div></div>
+  <div id="stats">
+    <div><span>Step</span><b id="sStep">0</b></div>
+    <div><span>Epoch</span><b id="sEpoch">0.00</b></div>
+    <div><span>Training loss</span><b id="sLoss">–</b></div>
+    <div><span>Test accuracy</span><b id="sAcc">–</b></div>
+  </div>
+</div>
+<main id="grid">
+  <section class="panel" id="pW">
+    <h3>Weights into the 64 hidden neurons</h3>
+    <p class="cap">Each square is one hidden neuron: its 784 weights, one per pixel, drawn as a 28 × 28 image.</p>
+    <div class="cv"><canvas id="cW"></canvas></div>
+    <div id="cbar"><span id="cbLo"></span><span class="bar" id="cbBar"></span><span id="cbHi"></span></div>
+  </section>
+  <section class="panel" id="pM">
+    <h3>Hidden layer, 500 test images</h3>
+    <p class="cap">Each image gives 64 hidden values, drawn here along the two directions in which the 500 images spread out most. Each character is the image's correct digit.</p>
+    <div class="cv"><canvas id="cM"></canvas></div>
+  </section>
+  <section class="panel" id="pC">
+    <h3>Loss <span class="key"><i style="border-color:var(--train)"></i>2,000 training images</span><span class="key"><i style="border-color:var(--test)"></i>2,000 test images</span></h3>
+    <div class="cv"><canvas id="cL"></canvas></div>
+    <h3 style="margin-top:6px">Accuracy</h3>
+    <div class="cv"><canvas id="cA"></canvas></div>
+  </section>
+  <section class="panel" id="pP">
+    <h3>Ten test images: top guess and the ten probabilities from softmax <span class="key"><i style="border-color:#0b0b0b;border-top-width:8px;width:10px"></i>correct digit</span><span class="key"><i style="border-color:#c62828;border-top-width:8px;width:10px"></i>wrong top guess</span></h3>
+    <div class="cv"><canvas id="cP"></canvas></div>
+  </section>
+</main>
+<div id="loading">Loading 12,000 images…</div>
+<script src="mnist-data.js"></script>
+<script id="mt-core">
+// MT: data, model, backprop, SGD and PCA for the MNIST training demo. No DOM access.
+const MT = (() => {
+  'use strict';
+  const D = 784, H = 64, O = 10, BATCH = 32;
+
+  // mulberry32
+  function makeRng(seed){
+    let a = seed >>> 0;
+    return function(){
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function gauss(rng){
+    let u = 0, v = 0;
+    while(u === 0) u = rng();
+    v = rng();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  // One set of images. Pixels are kept as bytes for drawing and as a sparse list (index, value in 0..1) for computing.
+  function makeSet(pixels, labels){
+    const n = labels.length;
+    const start = new Int32Array(n + 1);
+    let total = 0;
+    for(let i = 0; i < n; i++){
+      start[i] = total;
+      for(let k = i * D, e = k + D; k < e; k++) if(pixels[k]) total++;
+    }
+    start[n] = total;
+    const idx = new Uint16Array(total), val = new Float32Array(total);
+    let t = 0;
+    for(let i = 0; i < n; i++){
+      for(let p = 0; p < D; p++){
+        const v = pixels[i * D + p];
+        if(v){ idx[t] = p; val[t] = v / 255; t++; }
+      }
+    }
+    return {n, pixels, labels, start, idx, val};
+  }
+
+  // bytes: [train pixels, train labels, test pixels, test labels]
+  function splitData(bytes, nTrain, nTest){
+    let o = 0;
+    const xTr = bytes.subarray(o, o += nTrain * D);
+    const yTr = bytes.subarray(o, o += nTrain);
+    const xTe = bytes.subarray(o, o += nTest * D);
+    const yTe = bytes.subarray(o, o += nTest);
+    if(o !== bytes.length) throw new Error('data length ' + bytes.length + ', expected ' + o);
+    return {train: makeSet(xTr, yTr), test: makeSet(xTe, yTe)};
+  }
+
+  const INIT = {w1Std: 0.01, w2Std: Math.sqrt(1 / H)};
+
+  function createModel(seed){
+    const rng = makeRng(seed);
+    const m = {W1: new Float32Array(H * D), b1: new Float32Array(H), W2: new Float32Array(O * H), b2: new Float32Array(O)};
+    for(let k = 0; k < m.W1.length; k++) m.W1[k] = INIT.w1Std * gauss(rng);
+    for(let k = 0; k < m.W2.length; k++) m.W2[k] = INIT.w2Std * gauss(rng);
+    return m;
+  }
+  function zerosLike(m){
+    return {W1: new Float32Array(m.W1.length), b1: new Float32Array(m.b1.length), W2: new Float32Array(m.W2.length), b2: new Float32Array(m.b2.length)};
+  }
+  const PARAM_COUNT = H * D + H + O * H + O;   // 50,890
+
+  // Hidden layer and probabilities for image i of the set. Returns the loss −log p(correct).
+  function forward(m, set, i, h, p){
+    const a = set.start[i], b = set.start[i + 1], idx = set.idx, val = set.val, W1 = m.W1;
+    for(let j = 0; j < H; j++){
+      let z = m.b1[j];
+      const base = j * D;
+      for(let k = a; k < b; k++) z += W1[base + idx[k]] * val[k];
+      h[j] = z > 0 ? z : 0;
+    }
+    let mx = -Infinity;
+    for(let o = 0; o < O; o++){
+      let z = m.b2[o];
+      const base = o * H;
+      for(let j = 0; j < H; j++) z += m.W2[base + j] * h[j];
+      p[o] = z;
+      if(z > mx) mx = z;
+    }
+    let s = 0;
+    for(let o = 0; o < O; o++){ p[o] = Math.exp(p[o] - mx); s += p[o]; }
+    for(let o = 0; o < O; o++) p[o] /= s;
+    return -Math.log(Math.max(p[set.labels[i]], 1e-12));
+  }
+
+  // Average loss over the images in idxs and its gradient (written into g).
+  function gradBatch(m, set, idxs, g){
+    g.W1.fill(0); g.b1.fill(0); g.W2.fill(0); g.b2.fill(0);
+    const h = new Float64Array(H), p = new Float64Array(O), dz = new Float64Array(O);
+    const idx = set.idx, val = set.val;
+    let loss = 0;
+    for(const i of idxs){
+      loss += forward(m, set, i, h, p);
+      const y = set.labels[i];
+      for(let o = 0; o < O; o++){
+        dz[o] = p[o] - (o === y ? 1 : 0);
+        g.b2[o] += dz[o];
+        const base = o * H;
+        for(let j = 0; j < H; j++) g.W2[base + j] += dz[o] * h[j];
+      }
+      const a = set.start[i], b = set.start[i + 1];
+      for(let j = 0; j < H; j++){
+        if(h[j] <= 0) continue;
+        let s = 0;
+        for(let o = 0; o < O; o++) s += m.W2[o * H + j] * dz[o];
+        g.b1[j] += s;
+        const base = j * D;
+        for(let k = a; k < b; k++) g.W1[base + idx[k]] += s * val[k];
+      }
+    }
+    const inv = 1 / idxs.length;
+    for(const key of ['W1', 'b1', 'W2', 'b2']){ const t = g[key]; for(let k = 0; k < t.length; k++) t[k] *= inv; }
+    return loss * inv;
+  }
+
+  function sgdStep(m, g, lr){
+    for(const key of ['W1', 'b1', 'W2', 'b2']){
+      const w = m[key], d = g[key];
+      for(let k = 0; k < w.length; k++) w[k] -= lr * d[k];
+    }
+  }
+
+  // Loss and accuracy over the first count images of the set.
+  function evaluate(m, set, count){
+    const n = Math.min(count || set.n, set.n);
+    const h = new Float64Array(H), p = new Float64Array(O);
+    let loss = 0, right = 0;
+    for(let i = 0; i < n; i++){
+      loss += forward(m, set, i, h, p);
+      let best = 0;
+      for(let o = 1; o < O; o++) if(p[o] > p[best]) best = o;
+      if(best === set.labels[i]) right++;
+    }
+    return {loss: loss / n, acc: right / n, n};
+  }
+
+  function probs(m, set, i){
+    const h = new Float64Array(H), p = new Float64Array(O);
+    forward(m, set, i, h, p);
+    return p;
+  }
+
+  // Hidden values (n × 64, row per image) for the images in idxs.
+  function hiddenOf(m, set, idxs){
+    const out = new Float64Array(idxs.length * H);
+    const h = new Float64Array(H), p = new Float64Array(O);
+    idxs.forEach((i, r) => { forward(m, set, i, h, p); out.set(h, r * H); });
+    return out;
+  }
+
+  // The two directions of largest spread (PCA) of the rows of X (n × d), found by subspace iteration
+  // that starts from prev's directions so that the picture changes smoothly between calls.
+  function pca2(X, n, d, prev){
+    const mean = new Float64Array(d);
+    for(let r = 0; r < n; r++) for(let c = 0; c < d; c++) mean[c] += X[r * d + c];
+    for(let c = 0; c < d; c++) mean[c] /= n;
+    const C = new Float64Array(d * d);
+    const row = new Float64Array(d);
+    for(let r = 0; r < n; r++){
+      for(let c = 0; c < d; c++) row[c] = X[r * d + c] - mean[c];
+      for(let a = 0; a < d; a++){
+        const va = row[a];
+        if(va === 0) continue;
+        for(let b = a; b < d; b++) C[a * d + b] += va * row[b];
+      }
+    }
+    for(let a = 0; a < d; a++) for(let b = a; b < d; b++){ C[a * d + b] /= n; C[b * d + a] = C[a * d + b]; }
+
+    const mul = v => { const u = new Float64Array(d); for(let a = 0; a < d; a++){ let s = 0; for(let b = 0; b < d; b++) s += C[a * d + b] * v[b]; u[a] = s; } return u; };
+    const dot = (u, v) => { let s = 0; for(let k = 0; k < d; k++) s += u[k] * v[k]; return s; };
+    const unit = (u, fallback) => { const l = Math.sqrt(dot(u, u)); if(!(l > 1e-15)) return fallback; for(let k = 0; k < d; k++) u[k] /= l; return u; };
+    let v1, v2;
+    if(prev){ v1 = Float64Array.from(prev.v1); v2 = Float64Array.from(prev.v2); }
+    else {
+      const rng = makeRng(7);
+      v1 = new Float64Array(d); v2 = new Float64Array(d);
+      for(let k = 0; k < d; k++){ v1[k] = gauss(rng); v2[k] = gauss(rng); }
+    }
+    v1 = unit(v1, v1);
+    for(let it = 0; it < 60; it++){
+      const u1 = unit(mul(v1), v1);
+      const u2 = mul(v2);
+      const c = dot(u2, u1);
+      for(let k = 0; k < d; k++) u2[k] -= c * u1[k];
+      v1 = u1; v2 = unit(u2, v2);
+    }
+    if(prev){
+      if(dot(v1, prev.v1) < 0) for(let k = 0; k < d; k++) v1[k] = -v1[k];
+      if(dot(v2, prev.v2) < 0) for(let k = 0; k < d; k++) v2[k] = -v2[k];
+    }
+    const xy = new Float64Array(n * 2);
+    for(let r = 0; r < n; r++){
+      let s1 = 0, s2 = 0;
+      for(let c = 0; c < d; c++){ const x = X[r * d + c] - mean[c]; s1 += x * v1[c]; s2 += x * v2[c]; }
+      xy[2 * r] = s1; xy[2 * r + 1] = s2;
+    }
+    return {v1, v2, xy, var1: dot(mul(v1), v1), var2: dot(mul(v2), v2)};
+  }
+
+  // A training run: the model, its position in the shuffled order of the training images, and the step count.
+  function createRun(train, seed){
+    const run = {seed, model: createModel(seed), grad: null, step: 0, seen: 0, epoch: 0, pos: 0, order: null, lastLoss: NaN};
+    run.grad = zerosLike(run.model);
+    run.order = permutation(train.n, seed * 1000 + 1);
+    return run;
+  }
+  function permutation(n, seed){
+    const rng = makeRng(seed), a = new Int32Array(n);
+    for(let i = 0; i < n; i++) a[i] = i;
+    for(let i = n - 1; i > 0; i--){ const j = Math.floor(rng() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+  // One step of stochastic gradient descent on the next batch of 32 (the last batch of an epoch has 16).
+  function trainStep(run, train, lr){
+    const end = Math.min(run.pos + BATCH, train.n);
+    const idxs = run.order.subarray(run.pos, end);
+    run.lastLoss = gradBatch(run.model, train, idxs, run.grad);
+    sgdStep(run.model, run.grad, lr);
+    run.seen += idxs.length;
+    run.step++;
+    run.pos = end;
+    if(run.pos >= train.n){
+      run.epoch++;
+      run.pos = 0;
+      run.order = permutation(train.n, run.seed * 1000 + 1 + run.epoch);
+    }
+    return run.lastLoss;
+  }
+
+  return {D, H, O, BATCH, PARAM_COUNT, INIT, makeRng, gauss, makeSet, splitData, createModel, zerosLike,
+    forward, gradBatch, sgdStep, evaluate, probs, hiddenOf, pca2, createRun, permutation, trainStep};
+})();
+</script>
+<script id="mt-ui">
+// MTUI: page, training loop and drawing.
+const MTUI = (() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const params = new URLSearchParams(location.search || location.hash.slice(1));
+  const SPEEDS = [1, 5, 20, 100, Infinity];
+  const LRS = [0.01, 0.1, 1];
+  const SEED = +(params.get('seed') || 1);
+  const W_SCALE = 0.08;          // weight that gets full colour in the weight squares
+  const MAP_N = 500;             // test images on the hidden layer map
+  const EVAL_N = 2000;           // images used for the loss and accuracy curves
+  const DIGIT_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
+
+  const st = {
+    data: null, run: null, records: [], playing: false,
+    speed: SPEEDS.includes(+params.get('speed')) ? +params.get('speed') : (params.get('speed') === 'max' ? Infinity : 5),
+    lr: LRS.includes(+params.get('lr')) ? +params.get('lr') : 0.1,
+    acc: 0, lastT: 0, dirty: true, mapDirtyAt: -1, mapPrev: null, mapIdx: null, mapShown: null, mapTarget: null, mapScale: 0,
+    probIdx: [],
+  };
+
+  // ---------- data ----------
+  async function loadData(){
+    const d = window.MNIST_DATA;
+    if(!d) throw new Error('mnist-data.js was not loaded. Keep it next to index.html.');
+    if(typeof DecompressionStream === 'undefined') throw new Error('This browser cannot unpack the images. Use a recent Chrome, Edge, Firefox or Safari.');
+    const bin = atob(d.gzipBase64);
+    const u8 = new Uint8Array(bin.length);
+    for(let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    const stream = new Blob([u8]).stream().pipeThrough(new DecompressionStream('gzip'));
+    const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+    return MT.splitData(bytes, d.nTrain, d.nTest);
+  }
+
+  // ---------- training ----------
+  function nextEvalStep(s){
+    if(s < 20) return s + 2 - (s % 2);
+    if(s < 100) return s + 5 - (s % 5);
+    if(s < 400) return s + 20 - (s % 20);
+    return s + 50 - (s % 50);
+  }
+  function record(){
+    const r = st.run;
+    if(st.records.length && st.records[st.records.length - 1].step === r.step) return;
+    const tr = MT.evaluate(r.model, st.data.train, EVAL_N), te = MT.evaluate(r.model, st.data.test, EVAL_N);
+    st.records.push({step: r.step, epoch: r.seen / st.data.train.n, trLoss: tr.loss, trAcc: tr.acc, teLoss: te.loss, teAcc: te.acc});
+  }
+  function stepOnce(){
+    MT.trainStep(st.run, st.data.train, st.lr);
+    if(st.run.step >= nextEvalStep(st.records.length ? st.records[st.records.length - 1].step : 0)) record();
+    st.dirty = true;
+  }
+  function manualSteps(n){
+    pause();
+    for(let i = 0; i < n; i++) stepOnce();
+    record();
+  }
+  function reset(){
+    st.run = MT.createRun(st.data.train, SEED);
+    st.records = [];
+    st.mapPrev = null; st.mapShown = null; st.mapScale = 0;
+    record();
+    st.dirty = true; st.mapDirtyAt = -1;
+  }
+  function play(){ st.playing = true; st.acc = 0; st.lastT = performance.now(); $('bPlay').textContent = 'Pause'; }
+  function pause(){ st.playing = false; $('bPlay').textContent = 'Play'; }
+
+  function frame(t){
+    if(st.playing){
+      const dt = Math.min(0.25, (t - st.lastT) / 1000);
+      st.lastT = t;
+      const t0 = performance.now();
+      if(st.speed === Infinity){
+        while(performance.now() - t0 < 30) stepOnce();
+      } else {
+        st.acc = Math.min(st.acc + dt * st.speed, st.speed * 0.2 + 1);
+        while(st.acc >= 1 && performance.now() - t0 < 30){ stepOnce(); st.acc -= 1; }
+      }
+    }
+    if(st.dirty){ drawAll(); st.dirty = false; }
+    animateMap();
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- canvas helpers ----------
+  function fit(cv){
+    const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+    if(cv.width !== w || cv.height !== h){ cv.width = w; cv.height = h; }
+    const ctx = cv.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, r.width, r.height);
+    return {ctx, W: r.width, H: r.height};
+  }
+  function wColor(v){
+    const t = Math.max(-1, Math.min(1, v / W_SCALE));
+    const Z = [247, 247, 245], P = [200, 30, 30], N = [25, 85, 190];
+    const C = t >= 0 ? P : N, a = Math.abs(t);
+    return [Z[0] + a * (C[0] - Z[0]), Z[1] + a * (C[1] - Z[1]), Z[2] + a * (C[2] - Z[2])];
+  }
+
+  // ---------- weights ----------
+  const off = document.createElement('canvas');
+  const TILE = 28, GAP = 2, GRID = 8, OFF = GRID * TILE + (GRID - 1) * GAP;
+  off.width = OFF; off.height = OFF;
+  function drawWeights(){
+    const {ctx, W, H} = fit($('cW'));
+    const octx = off.getContext('2d');
+    const img = octx.createImageData(OFF, OFF), px = img.data;
+    for(let k = 0; k < px.length; k += 4){ px[k] = 252; px[k + 1] = 252; px[k + 2] = 251; px[k + 3] = 255; }
+    const W1 = st.run.model.W1;
+    for(let j = 0; j < MT.H; j++){
+      const x0 = (j % GRID) * (TILE + GAP), y0 = Math.floor(j / GRID) * (TILE + GAP);
+      for(let y = 0; y < TILE; y++) for(let x = 0; x < TILE; x++){
+        const c = wColor(W1[j * MT.D + y * TILE + x]), k = ((y0 + y) * OFF + x0 + x) * 4;
+        px[k] = c[0]; px[k + 1] = c[1]; px[k + 2] = c[2];
+      }
+    }
+    octx.putImageData(img, 0, 0);
+    const S = Math.floor(Math.min(W, H) / OFF * 8) / 8 * OFF;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(off, Math.round((W - S) / 2), Math.round((H - S) / 2), S, S);
+  }
+  function drawColorbar(){
+    const stops = [];
+    for(let i = 0; i <= 10; i++){ const c = wColor(W_SCALE * (i / 5 - 1)); stops.push(`rgb(${c.map(Math.round).join(',')}) ${i * 10}%`); }
+    $('cbBar').style.background = `linear-gradient(90deg, ${stops.join(',')})`;
+    $('cbLo').textContent = '−' + W_SCALE + ' or less';
+    $('cbHi').textContent = '+' + W_SCALE + ' or more';
+  }
+
+  // ---------- hidden layer map ----------
+  function updateMapTarget(){
+    const Hm = MT.hiddenOf(st.run.model, st.data.test, st.mapIdx);
+    const p = MT.pca2(Hm, MAP_N, MT.H, st.mapPrev);
+    st.mapPrev = p;
+    st.mapTarget = p.xy;
+    if(!st.mapShown) st.mapShown = Float64Array.from(p.xy);
+    const a = Array.from(p.xy, Math.abs).sort((x, y) => x - y);
+    const q = a[Math.floor(0.98 * (a.length - 1))] || 1e-9;
+    st.mapScaleTarget = q;
+    if(!st.mapScale) st.mapScale = q;
+    st.mapDirtyAt = st.run.step;
+  }
+  let lastMapUpdate = 0;
+  function animateMap(){
+    if(!st.run) return;
+    const now = performance.now();
+    if(st.mapDirtyAt !== st.run.step && now - lastMapUpdate > 90){ updateMapTarget(); lastMapUpdate = now; }
+    if(!st.mapTarget) return;
+    let moving = false;
+    const k = 0.25;
+    for(let i = 0; i < st.mapShown.length; i++){
+      const d = st.mapTarget[i] - st.mapShown[i];
+      if(Math.abs(d) > 1e-6 * st.mapScale){ st.mapShown[i] += k * d; moving = true; }
+    }
+    const ds = st.mapScaleTarget - st.mapScale;
+    if(Math.abs(ds) > 1e-4 * st.mapScale){ st.mapScale += k * ds; moving = true; }
+    if(moving || st.mapNeedsDraw){ drawMap(); st.mapNeedsDraw = false; }
+  }
+  function drawMap(){
+    const {ctx, W, H} = fit($('cM'));
+    const S = Math.min(W, H), cx = W / 2, cy = H / 2, half = S / 2 - 10;
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#dedcd6'; ctx.lineWidth = 1;
+    ctx.fillRect(cx - S / 2, cy - S / 2, S, S); ctx.strokeRect(cx - S / 2 + .5, cy - S / 2 + .5, S - 1, S - 1);
+    const sc = half / (st.mapScale * 1.05);
+    const fs = Math.max(10, Math.round(S / 34));
+    ctx.font = `700 ${fs}px Inter, system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const labels = st.data.test.labels, xy = st.mapShown;
+    for(let r = 0; r < MAP_N; r++){
+      const x = cx + xy[2 * r] * sc, y = cy - xy[2 * r + 1] * sc;
+      if(x < cx - S / 2 || x > cx + S / 2 || y < cy - S / 2 || y > cy + S / 2) continue;
+      const lab = labels[st.mapIdx[r]];
+      ctx.fillStyle = DIGIT_COLORS[lab];
+      ctx.fillText(String(lab), x, y);
+    }
+  }
+
+  // ---------- probabilities ----------
+  function drawProbs(){
+    const {ctx, W, H} = fit($('cP'));
+    const n = st.probIdx.length, cw = W / n, test = st.data.test;
+    const isz = Math.min(Math.floor(H * 0.36), Math.floor(cw * 0.42));
+    const barTop = isz + 8, labH = 16, barH = H - barTop - labH;
+    for(let c = 0; c < n; c++){
+      const i = st.probIdx[c], x0 = c * cw, y = test.labels[i];
+      const p = MT.probs(st.run.model, test, i);
+      let best = 0; for(let o = 1; o < 10; o++) if(p[o] > p[best]) best = o;
+      // image, dark ink on white
+      const img = ctx.createImageData(28, 28);
+      for(let k = 0; k < 784; k++){ const v = 255 - test.pixels[i * 784 + k]; img.data[4*k] = v; img.data[4*k+1] = v; img.data[4*k+2] = v; img.data[4*k+3] = 255; }
+      const tmp = document.createElement('canvas'); tmp.width = 28; tmp.height = 28; tmp.getContext('2d').putImageData(img, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      const ix = Math.round(x0 + cw * 0.07);
+      ctx.drawImage(tmp, ix, 0, isz, isz);
+      ctx.strokeStyle = '#dedcd6'; ctx.lineWidth = 1; ctx.strokeRect(ix + .5, .5, isz - 1, isz - 1);
+      const tx = ix + isz + Math.max(6, cw * 0.06), big = Math.round(Math.min(isz * 0.55, 30));
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = best === y ? '#0b0b0b' : '#c62828';
+      ctx.font = `700 ${big}px Inter, system-ui, sans-serif`;
+      ctx.fillText(String(best), tx, isz * 0.55);
+      ctx.font = `600 ${Math.round(big * 0.5)}px Inter, system-ui, sans-serif`;
+      ctx.fillText(`${(100 * p[best]).toFixed(0)}%`, tx, isz * 0.55 + big * 0.6);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      // bars
+      const bw = (cw * 0.86) / 10, bx0 = x0 + cw * 0.07;
+      ctx.fillStyle = '#f3f2ee'; ctx.fillRect(bx0, barTop, bw * 10, barH);
+      for(let o = 0; o < 10; o++){
+        const h = p[o] * barH;
+        ctx.fillStyle = o === y ? '#0b0b0b' : (o === best ? '#c62828' : '#b9b7b0');
+        ctx.fillRect(bx0 + o * bw + 1, barTop + barH - h, bw - 2, h);
+        ctx.fillStyle = o === y ? '#0b0b0b' : '#8a8985';
+        ctx.font = (o === y ? '700 ' : '500 ') + '11px Inter, system-ui, sans-serif';
+        ctx.fillText(String(o), bx0 + o * bw + bw / 2, barTop + barH + 2);
+      }
+    }
+  }
+
+  // ---------- curves ----------
+  function niceStep(span, maxTicks){
+    for(const s of [0.02, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 20, 50]) if(span / s <= maxTicks) return s;
+    return 100;
+  }
+  function drawCurve(cv, key1, key2, yMax, fmt){
+    const {ctx, W, H} = fit(cv);
+    const L = 44, R = 62, T = 6, B = 22, pw = W - L - R, ph = H - T - B;
+    const recs = st.records, last = recs[recs.length - 1];
+    const xMax = Math.max(0.25, last ? last.epoch : 0);
+    const xs = e => L + e / xMax * pw, ys = v => T + ph - Math.min(v, yMax) / yMax * ph;
+    ctx.font = '500 11px Inter, system-ui, sans-serif'; ctx.fillStyle = '#8a8985'; ctx.strokeStyle = '#eceae5'; ctx.lineWidth = 1;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const ys0 = niceStep(yMax, 4);
+    for(let v = 0; v <= yMax + 1e-9; v += ys0){ const y = Math.round(ys(v)) + .5; ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + pw, y); ctx.stroke(); ctx.fillText(fmt(v), L - 6, y); }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const xs0 = niceStep(xMax, 6);
+    for(let e = 0; e <= xMax + 1e-9; e += xs0){ ctx.fillText(+e.toFixed(2) + '', xs(e), T + ph + 5); }
+    ctx.textAlign = 'left'; ctx.fillText('epoch', L + pw + 22, T + ph + 5);
+    ctx.strokeStyle = '#c4c2bb'; ctx.beginPath(); ctx.moveTo(L + .5, T); ctx.lineTo(L + .5, T + ph); ctx.lineTo(L + pw, T + ph + .5); ctx.stroke();
+    for(const [key, color] of [[key1, '#0b0b0b'], [key2, '#e07b00']]){
+      ctx.strokeStyle = color; ctx.lineWidth = 2.2; ctx.lineJoin = 'round'; ctx.beginPath();
+      recs.forEach((r, i) => { const x = xs(r.epoch), y = ys(r[key]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      ctx.stroke();
+    }
+  }
+  function drawCurves(){
+    const maxLoss = Math.max(2.5, ...st.records.map(r => Math.max(r.trLoss, r.teLoss)));
+    drawCurve($('cL'), 'trLoss', 'teLoss', Math.min(8, Math.ceil(maxLoss * 2) / 2), v => v.toFixed(1));
+    drawCurve($('cA'), 'trAcc', 'teAcc', 1, v => Math.round(v * 100) + '%');
+  }
+
+  // ---------- page ----------
+  function drawStats(){
+    const r = st.run, last = st.records[st.records.length - 1];
+    $('sStep').textContent = r.step.toLocaleString('en-US');
+    $('sEpoch').textContent = (r.seen / st.data.train.n).toFixed(2);
+    $('sLoss').textContent = last ? last.trLoss.toFixed(3) : '–';
+    $('sAcc').textContent = last ? (100 * last.teAcc).toFixed(1) + '%' : '–';
+  }
+  function drawAll(){
+    drawStats(); drawWeights(); drawProbs(); drawCurves();
+    st.mapNeedsDraw = true;
+  }
+  function seg(el, values, label, get, set){
+    el.innerHTML = '';
+    for(const v of values){
+      const b = document.createElement('button');
+      b.textContent = label(v);
+      b.onclick = () => { set(v); paint(); };
+      el.appendChild(b);
+    }
+    const paint = () => [...el.children].forEach((b, i) => b.classList.toggle('on', values[i] === get()));
+    paint();
+  }
+
+  async function init(){
+    try {
+      st.data = await loadData();
+    } catch(err){
+      $('loading').textContent = err.message;
+      throw err;
+    }
+    $('loading').remove();
+    st.mapIdx = Int32Array.from({length: MAP_N}, (_, i) => i);
+    for(let dgt = 0; dgt < 10; dgt++){
+      const labels = st.data.test.labels;
+      for(let i = 0; i < labels.length; i++) if(labels[i] === dgt){ st.probIdx.push(i); break; }
+    }
+    seg($('segSpeed'), SPEEDS, v => v === Infinity ? 'Max' : String(v), () => st.speed, v => { st.speed = v; });
+    seg($('segLr'), LRS, v => String(v), () => st.lr, v => { st.lr = v; });
+    $('bPlay').onclick = () => st.playing ? pause() : play();
+    $('bStep1').onclick = () => { manualSteps(1); st.dirty = true; };
+    $('bStep10').onclick = () => { manualSteps(10); st.dirty = true; };
+    $('bReset').onclick = () => { pause(); reset(); };
+    document.addEventListener('keydown', e => {
+      if(e.target.tagName === 'INPUT') return;
+      if(e.code === 'Space'){ e.preventDefault(); st.playing ? pause() : play(); }
+      else if(e.code === 'ArrowRight'){ e.preventDefault(); manualSteps(1); st.dirty = true; }
+    });
+    window.addEventListener('resize', () => { st.dirty = true; });
+    drawColorbar();
+    reset();
+    if(params.get('play') === '1') play();
+    requestAnimationFrame(frame);
+  }
+  const ready = init();
+  return {st, ready, reset, play, pause, manualSteps, record};
+})();
+</script>
+</body>
+</html>

@@ -52,6 +52,14 @@ button{font-family:inherit;font-size:inherit;color:inherit}
 #cbar{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--sub);margin-top:4px;justify-content:center}
 #cbar .bar{width:160px;height:10px;border-radius:2px;border:1px solid var(--rule2)}
 
+[hidden]{display:none !important}
+#outView{flex:1;min-height:0;display:flex;flex-direction:column;gap:6px;padding:10px 20px 14px}
+#pN{flex:1}
+#pD{flex:0 0 clamp(150px,25vh,240px)}
+#pD .seg button{padding:3px 10px}
+#dBias{font-size:.9rem;font-weight:600;color:var(--sub);font-variant-numeric:tabular-nums}
+#cN,#cD{cursor:pointer}
+
 #loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(252,252,251,.92);font-size:1.2rem;color:var(--sub);z-index:5}
 @media(max-width:1500px){
   body{font-size:14px}
@@ -80,6 +88,7 @@ button{font-family:inherit;font-size:inherit;color:inherit}
   </div>
   <div class="grp"><span class="gl">Steps/s</span><div class="seg" id="segSpeed"></div></div>
   <div class="grp"><span class="gl">Learning rate</span><div class="seg" id="segLr"></div></div>
+  <div class="grp"><span class="gl">View</span><div class="seg" id="segView"></div></div>
   <div id="stats">
     <div><span>Step</span><b id="sStep">0</b></div>
     <div><span>Epoch</span><b id="sEpoch">0.00</b></div>
@@ -108,6 +117,18 @@ button{font-family:inherit;font-size:inherit;color:inherit}
   <section class="panel" id="pP">
     <h3>Ten test images: top guess and the ten probabilities from softmax <span class="key"><i style="border-color:#0b0b0b;border-top-width:8px;width:10px"></i>correct digit</span><span class="key"><i style="border-color:#c62828;border-top-width:8px;width:10px"></i>wrong top guess</span></h3>
     <div class="cv"><canvas id="cP"></canvas></div>
+  </section>
+</main>
+<main id="outView" hidden>
+  <section class="panel" id="pN">
+    <h3>Layer 2 weights: from each hidden neuron to the 10 output neurons</h3>
+    <p class="cap">Each cell is one hidden neuron, placed as in the Training view. Square: its 784 weights from the pixels. Bars: its 10 weights to the output neurons for digits 0 to 9, red up for positive, blue down for negative, full height at ±0.5 or more. Gray: its output is 0 for all 500 test images, so its weights to the outputs change none of their scores.</p>
+    <div class="cv"><canvas id="cN"></canvas></div>
+  </section>
+  <section class="panel" id="pD">
+    <h3>Output neuron for digit <div class="seg" id="segDigit"></div><span id="dBias"></span></h3>
+    <p class="cap">Its score is b + w₁h₁ + w₂h₂ + … + w₆₄h₆₄, where h₁ … h₆₄ are the outputs of the 64 hidden neurons and w₁ … w₆₄ their weights to this output neuron. Shown: the 8 hidden neurons with the largest w and the 8 with the most negative w. Click a square to mark it above.</p>
+    <div class="cv"><canvas id="cD"></canvas></div>
   </section>
 </main>
 <div id="loading">Loading 12,000 images…</div>
@@ -270,6 +291,23 @@ const MT = (() => {
     return out;
   }
 
+  // For each hidden neuron, the number of the first n images of the set for which its output is above 0.
+  function activeCounts(m, set, n){
+    const counts = new Int32Array(H);
+    const h = new Float64Array(H), p = new Float64Array(O);
+    for(let i = 0; i < Math.min(n, set.n); i++){
+      forward(m, set, i, h, p);
+      for(let j = 0; j < H; j++) if(h[j] > 0) counts[j]++;
+    }
+    return counts;
+  }
+
+  // The hidden neurons ordered by their weight to output o, largest first.
+  function outOrder(m, o){
+    const order = Int32Array.from({length: H}, (_, j) => j);
+    return order.sort((a, b) => m.W2[o * H + b] - m.W2[o * H + a] || a - b);
+  }
+
   // The two directions of largest spread (PCA) of the rows of X (n × d), found by subspace iteration
   // that starts from prev's directions so that the picture changes smoothly between calls.
   function pca2(X, n, d, prev){
@@ -350,7 +388,7 @@ const MT = (() => {
   }
 
   return {D, H, O, BATCH, PARAM_COUNT, INIT, makeRng, gauss, makeSet, splitData, createModel, zerosLike,
-    forward, gradBatch, sgdStep, evaluate, probs, hiddenOf, pca2, createRun, permutation, trainStep};
+    forward, gradBatch, sgdStep, evaluate, probs, hiddenOf, activeCounts, outOrder, pca2, createRun, permutation, trainStep};
 })();
 </script>
 <script id="mt-ui">
@@ -363,6 +401,8 @@ const MTUI = (() => {
   const LRS = [0.01, 0.1, 1];
   const SEED = +(params.get('seed') || 1);
   const W_SCALE = 0.08;          // weight that gets full colour in the weight squares
+  const OUT_SCALE = 0.5;         // layer 2 weight that gets a full-height bar
+  const OUT_TOP = 8;             // hidden neurons shown for the largest and for the most negative weights
   const MAP_N = 500;             // test images on the hidden layer map
   const EVAL_N = 2000;           // images used for the loss and accuracy curves
   const DIGIT_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
@@ -373,6 +413,9 @@ const MTUI = (() => {
     lr: LRS.includes(+params.get('lr')) ? +params.get('lr') : 0.1,
     acc: 0, lastT: 0, dirty: true, mapDirtyAt: -1, mapPrev: null, mapIdx: null, mapShown: null, mapTarget: null, mapScale: 0,
     probIdx: [],
+    view: params.get('view') === 'out' ? 'out' : 'train',
+    digit: /^[0-9]$/.test(params.get('digit') || '') ? +params.get('digit') : 0,
+    selN: -1, cellsN: [], cellsD: [], act: null, actStep: -1, actT: 0,
   };
 
   // ---------- data ----------
@@ -415,11 +458,12 @@ const MTUI = (() => {
     st.run = MT.createRun(st.data.train, SEED);
     st.records = [];
     st.mapPrev = null; st.mapShown = null; st.mapScale = 0;
+    st.actStep = -1;
     record();
     st.dirty = true; st.mapDirtyAt = -1;
   }
   function play(){ st.playing = true; st.acc = 0; st.lastT = performance.now(); $('bPlay').textContent = 'Pause'; }
-  function pause(){ st.playing = false; $('bPlay').textContent = 'Play'; }
+  function pause(){ st.playing = false; $('bPlay').textContent = 'Play'; st.dirty = true; }
 
   function frame(t){
     if(st.playing){
@@ -459,20 +503,25 @@ const MTUI = (() => {
   const off = document.createElement('canvas');
   const TILE = 28, GAP = 2, GRID = 8, OFF = GRID * TILE + (GRID - 1) * GAP;
   off.width = OFF; off.height = OFF;
-  function drawWeights(){
-    const {ctx, W, H} = fit($('cW'));
+  // All 64 weight squares, drawn once per change into the offscreen canvas. Square j is at tileX(j), tileY(j).
+  const tileX = j => (j % GRID) * (TILE + GAP), tileY = j => Math.floor(j / GRID) * (TILE + GAP);
+  function buildTiles(){
     const octx = off.getContext('2d');
     const img = octx.createImageData(OFF, OFF), px = img.data;
     for(let k = 0; k < px.length; k += 4){ px[k] = 252; px[k + 1] = 252; px[k + 2] = 251; px[k + 3] = 255; }
     const W1 = st.run.model.W1;
     for(let j = 0; j < MT.H; j++){
-      const x0 = (j % GRID) * (TILE + GAP), y0 = Math.floor(j / GRID) * (TILE + GAP);
+      const x0 = tileX(j), y0 = tileY(j);
       for(let y = 0; y < TILE; y++) for(let x = 0; x < TILE; x++){
         const c = wColor(W1[j * MT.D + y * TILE + x]), k = ((y0 + y) * OFF + x0 + x) * 4;
         px[k] = c[0]; px[k + 1] = c[1]; px[k + 2] = c[2];
       }
     }
     octx.putImageData(img, 0, 0);
+  }
+  function drawWeights(){
+    const {ctx, W, H} = fit($('cW'));
+    buildTiles();
     const S = Math.floor(Math.min(W, H) / OFF * 8) / 8 * OFF;
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(off, Math.round((W - S) / 2), Math.round((H - S) / 2), S, S);
@@ -500,7 +549,7 @@ const MTUI = (() => {
   }
   let lastMapUpdate = 0;
   function animateMap(){
-    if(!st.run) return;
+    if(!st.run || st.view !== 'train') return;
     const now = performance.now();
     if(st.mapDirtyAt !== st.run.step && now - lastMapUpdate > 90){ updateMapTarget(); lastMapUpdate = now; }
     if(!st.mapTarget) return;
@@ -572,6 +621,105 @@ const MTUI = (() => {
     }
   }
 
+  // ---------- layer 2 weights ----------
+  const fmtW = v => (v < 0 ? '−' : '+') + Math.abs(v).toFixed(2);
+  function drawOut(){
+    const m = st.run.model;
+    // which hidden neurons give 0 for all 500 test images; while playing, at most every 250 ms
+    if(st.actStep !== st.run.step && (!st.playing || performance.now() - st.actT > 250)){
+      st.act = MT.activeCounts(m, st.data.test, MAP_N); st.actStep = st.run.step; st.actT = performance.now();
+    }
+    buildTiles();
+    drawNeurons(); drawDigit();
+    $('dBias').textContent = 'b = ' + fmtW(m.b2[st.digit]);
+  }
+  function drawTile(ctx, j, x, y, s){
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(off, tileX(j), tileY(j), TILE, TILE, x, y, s, s);
+    if(st.act && st.act[j] === 0){ ctx.fillStyle = 'rgba(252,252,251,.72)'; ctx.fillRect(x, y, s, s); }
+    ctx.strokeStyle = '#dedcd6'; ctx.lineWidth = 1; ctx.strokeRect(x + .5, y + .5, s - 1, s - 1);
+  }
+  function drawNeurons(){
+    const {ctx, W, H} = fit($('cN'));
+    const W2 = st.run.model.W2, cw = W / GRID, ch = H / GRID;
+    const padX = Math.max(4, cw * 0.04);
+    const t = Math.floor(Math.min(ch - 6, cw * 0.4));
+    const labF = Math.max(9, Math.min(13, Math.round(t * 0.2)));
+    st.cellsN = [];
+    for(let j = 0; j < MT.H; j++){
+      const cx = (j % GRID) * cw, cy = Math.floor(j / GRID) * ch;
+      const x = Math.round(cx + padX), y = Math.round(cy + (ch - t) / 2);
+      const dead = st.act && st.act[j] === 0;
+      drawTile(ctx, j, x, y, t);
+      const bx = x + t + Math.max(6, cw * 0.04), bw = (cx + cw - padX - bx) / 10;
+      const bot = y + t - labF - 2, mid = (y + bot) / 2, half = (bot - y) / 2;
+      ctx.fillStyle = '#ecebe6'; ctx.fillRect(bx + st.digit * bw, y, bw, t);
+      ctx.strokeStyle = '#c4c2bb'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(bx, Math.round(mid) + .5); ctx.lineTo(bx + 10 * bw, Math.round(mid) + .5); ctx.stroke();
+      const inset = bw > 8 ? 1.5 : 1;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      for(let o = 0; o < MT.O; o++){
+        const v = W2[o * MT.H + j], h = Math.min(1, Math.abs(v) / OUT_SCALE) * half;
+        ctx.fillStyle = dead ? '#c4c2bb' : (v >= 0 ? '#c81e1e' : '#1955be');
+        ctx.fillRect(bx + o * bw + inset, v >= 0 ? mid - h : mid, bw - 2 * inset, h);
+        ctx.fillStyle = o === st.digit ? '#0b0b0b' : '#8a8985';
+        ctx.font = `${o === st.digit ? 700 : 500} ${labF}px Inter, system-ui, sans-serif`;
+        ctx.fillText(String(o), bx + o * bw + bw / 2, bot + 2);
+      }
+      if(j === st.selN){ ctx.strokeStyle = '#0b0b0b'; ctx.lineWidth = 2; ctx.strokeRect(cx + 1, cy + 1, cw - 2, ch - 2); }
+      st.cellsN.push({x: cx, y: cy, w: cw, h: ch, j, bx, bw});
+    }
+  }
+  function drawDigit(){
+    const {ctx, W, H} = fit($('cD'));
+    const m = st.run.model, d = st.digit, order = MT.outOrder(m, d), K = OUT_TOP;
+    const groups = [Array.from(order.subarray(0, K)), Array.from(order.subarray(MT.H - K))];
+    const headF = 13, valF = 12, gap = 8, gapG = Math.max(36, W * 0.05);
+    const s = Math.floor(Math.min(H - headF - 8 - valF - 6, (W - gapG - 2 * (K - 1) * gap) / (2 * K)));
+    const gw = K * s + (K - 1) * gap, x0 = Math.round((W - 2 * gw - gapG) / 2), y = headF + 8;
+    st.cellsD = [];
+    groups.forEach((g, gi) => {
+      const gx = x0 + gi * (gw + gapG);
+      ctx.font = `700 ${headF}px Inter, system-ui, sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillStyle = gi === 0 ? '#c81e1e' : '#1955be';
+      ctx.fillText(gi === 0 ? `${K} largest weights` : `${K} most negative weights`, gx, 0);
+      g.forEach((j, r) => {
+        const x = gx + r * (s + gap), v = m.W2[d * MT.H + j];
+        drawTile(ctx, j, x, y, s);
+        if(j === st.selN){ ctx.strokeStyle = '#0b0b0b'; ctx.lineWidth = 2; ctx.strokeRect(x - 2, y - 2, s + 4, s + 4); }
+        ctx.font = `600 ${valF}px Inter, system-ui, sans-serif`; ctx.textAlign = 'center';
+        ctx.fillStyle = st.act && st.act[j] === 0 ? '#8a8985' : (v >= 0 ? '#c81e1e' : '#1955be');
+        ctx.fillText(fmtW(v), x + s / 2, y + s + 4);
+        st.cellsD.push({x, y, s, j});
+      });
+    });
+  }
+  function clickNeurons(e){
+    const r = $('cN').getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    for(const c of st.cellsN){
+      if(x < c.x || x >= c.x + c.w || y < c.y || y >= c.y + c.h) continue;
+      if(x >= c.bx && x < c.bx + 10 * c.bw) setDigit(Math.floor((x - c.bx) / c.bw));
+      else { st.selN = st.selN === c.j ? -1 : c.j; st.dirty = true; }
+      return;
+    }
+  }
+  function clickDigit(e){
+    const r = $('cD').getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    for(const c of st.cellsD) if(x >= c.x && x <= c.x + c.s && y >= c.y && y <= c.y + c.s + 18){ st.selN = st.selN === c.j ? -1 : c.j; st.dirty = true; return; }
+  }
+  function setDigit(d){
+    st.digit = d;
+    if(st.paintDigit) st.paintDigit();
+    st.dirty = true;
+  }
+  function setView(v){
+    st.view = v;
+    $('grid').hidden = v !== 'train';
+    $('outView').hidden = v !== 'out';
+    if(st.paintView) st.paintView();
+    st.dirty = true;
+  }
+
   // ---------- curves ----------
   function niceStep(span, maxTicks){
     for(const s of [0.02, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 20, 50]) if(span / s <= maxTicks) return s;
@@ -613,7 +761,9 @@ const MTUI = (() => {
     $('sAcc').textContent = last ? (100 * last.teAcc).toFixed(1) + '%' : '–';
   }
   function drawAll(){
-    drawStats(); drawWeights(); drawProbs(); drawCurves();
+    drawStats();
+    if(st.view === 'out'){ drawOut(); return; }
+    drawWeights(); drawProbs(); drawCurves();
     st.mapNeedsDraw = true;
   }
   function seg(el, values, label, get, set){
@@ -626,6 +776,7 @@ const MTUI = (() => {
     }
     const paint = () => [...el.children].forEach((b, i) => b.classList.toggle('on', values[i] === get()));
     paint();
+    return paint;
   }
 
   async function init(){
@@ -643,6 +794,10 @@ const MTUI = (() => {
     }
     seg($('segSpeed'), SPEEDS, v => v === Infinity ? 'Max' : String(v), () => st.speed, v => { st.speed = v; });
     seg($('segLr'), LRS, v => String(v), () => st.lr, v => { st.lr = v; });
+    st.paintView = seg($('segView'), ['train', 'out'], v => v === 'train' ? 'Training' : 'Layer 2 weights', () => st.view, setView);
+    st.paintDigit = seg($('segDigit'), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], v => String(v), () => st.digit, setDigit);
+    $('cN').addEventListener('click', clickNeurons);
+    $('cD').addEventListener('click', clickDigit);
     $('bPlay').onclick = () => st.playing ? pause() : play();
     $('bStep1').onclick = () => { manualSteps(1); st.dirty = true; };
     $('bStep10').onclick = () => { manualSteps(10); st.dirty = true; };
@@ -651,15 +806,17 @@ const MTUI = (() => {
       if(e.target.tagName === 'INPUT') return;
       if(e.code === 'Space'){ e.preventDefault(); st.playing ? pause() : play(); }
       else if(e.code === 'ArrowRight'){ e.preventDefault(); manualSteps(1); st.dirty = true; }
+      else if(st.view === 'out' && /^[0-9]$/.test(e.key)) setDigit(+e.key);
     });
     window.addEventListener('resize', () => { st.dirty = true; });
     drawColorbar();
     reset();
+    setView(st.view);
     if(params.get('play') === '1') play();
     requestAnimationFrame(frame);
   }
   const ready = init();
-  return {st, ready, reset, play, pause, manualSteps, record};
+  return {st, ready, reset, play, pause, manualSteps, record, setView, setDigit};
 })();
 </script>
 </body>

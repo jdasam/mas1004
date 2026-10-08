@@ -10,6 +10,8 @@ Interactive demos used in class (source in `demos/`, list of all demos at https:
 - Lecture 5, Neuron Patch: https://jdasam.github.io/mas1004/demos/lecture05-neuron-patch/
 - Lecture 6, One Layer in 2D: https://jdasam.github.io/mas1004/demos/lecture06-one-layer-2d/
 - Lecture 6, Backprop by Hand: https://jdasam.github.io/mas1004/demos/lecture06-backprop-by-hand/
+- Lecture 9, MNIST Training: https://jdasam.github.io/mas1004/demos/lecture09-mnist-training/
+- Lecture 9, CNN Kernel: https://jdasam.github.io/mas1004/demos/cnn-kernel/
 - ANT6040 Week 2, Layer by Layer in 2D: https://jdasam.github.io/mas1004/demos/layer-by-layer-2d/
 - ANT6040 Week 2, Same Moons, Shuffled Labels: https://jdasam.github.io/mas1004/demos/moons-shuffled-labels/
 - ANT6040 Week 2, Fit Any Labels: https://jdasam.github.io/mas1004/demos/fit-any-labels/

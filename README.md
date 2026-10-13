@@ -13,6 +13,7 @@ Interactive demos used in class (source in `demos/`, list of all demos at https:
 - Lecture 9, MNIST Training: https://jdasam.github.io/mas1004/demos/lecture09-mnist-training/
 - Lecture 9, CNN Kernel: https://jdasam.github.io/mas1004/demos/cnn-kernel/
 - Lecture 10, CNN Training: https://jdasam.github.io/mas1004/demos/lecture10-cnn-training/
+- Lecture 11, Inside ResNet18: https://jdasam.github.io/mas1004/demos/lecture11-resnet18-cam/
 - ANT6040 Week 2, Layer by Layer in 2D: https://jdasam.github.io/mas1004/demos/layer-by-layer-2d/
 - ANT6040 Week 2, Same Moons, Shuffled Labels: https://jdasam.github.io/mas1004/demos/moons-shuffled-labels/
 - ANT6040 Week 2, Fit Any Labels: https://jdasam.github.io/mas1004/demos/fit-any-labels/

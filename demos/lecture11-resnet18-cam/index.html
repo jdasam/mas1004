@@ -1,0 +1,926 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inside ResNet18 · MAS1004</title>
+<link rel="icon" href="data:,">
+<style>
+:root{
+  --surface:#fcfcfb; --ink:#0b0b0b; --sub:#52514e; --muted:#8a8985;
+  --rule:#dedcd6; --rule2:#c4c2bb; --soft:#f3f2ee;
+  --pos:#d62728; --neg:#1f6fb4; --target:#e07b00; --ok:#2e7d32;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{
+  background:var(--surface); color:var(--ink);
+  font:400 16px/1.4 Inter,Pretendard,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  display:flex; flex-direction:column; min-height:640px;
+}
+button{font-family:inherit;font-size:inherit;color:inherit}
+a{color:#1a5fb4}
+
+#top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 24px;padding:10px 20px;border-bottom:1px solid var(--rule)}
+.brand{font-size:1.3rem;font-weight:700;letter-spacing:-.01em;line-height:1.2}
+.brand .sub{display:block;font-size:.85rem;font-weight:500;color:var(--sub);letter-spacing:0}
+.grp{display:flex;align-items:center;gap:8px}
+.gl{font-size:.85rem;color:var(--sub);font-weight:600}
+.seg{display:flex;border:1px solid var(--rule2);border-radius:9px;overflow:hidden;background:#fff}
+.seg button{border:0;border-left:1px solid var(--rule);background:transparent;padding:6px 11px;color:var(--sub);font-weight:600;font-size:.92rem;cursor:pointer}
+.seg button:first-child{border-left:0}
+.seg button:hover{color:var(--ink)}
+.seg button.on{background:var(--ink);color:#fff}
+.btn{padding:7px 13px;border-radius:9px;border:1px solid var(--ink);background:var(--ink);color:#fff;font-weight:600;font-size:.95rem;cursor:pointer}
+.btn:hover{background:#333}
+.btn.ghost{background:#fff;color:var(--ink)}
+.btn.ghost:hover{background:var(--soft)}
+#photos{display:flex;gap:5px}
+#photos img{width:44px;height:44px;border-radius:5px;border:2px solid transparent;cursor:pointer;display:block}
+#photos img.on{border-color:var(--ink)}
+#status{margin-left:auto;font-size:.85rem;color:var(--sub);font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+
+[hidden]{display:none !important}
+main{flex:1;min-height:0;display:grid;gap:10px 30px;padding:12px 20px 14px}
+#coverView{grid-template-columns:auto minmax(0,1fr)}
+#insideView{grid-template-columns:auto minmax(500px,1.3fr) minmax(300px,1fr)}
+.panel{display:flex;flex-direction:column;min-height:0;min-width:0}
+.panel h3{margin:0 0 2px;font-size:1.02rem;font-weight:700}
+.cap{margin:2px 0 8px;font-size:.82rem;color:var(--sub);line-height:1.35;max-width:62ch}
+.photoBox{position:relative}
+canvas.photo{display:block;border-radius:4px;cursor:pointer;touch-action:none;background:#eee}
+.credit{font-size:.75rem;color:var(--muted);margin-top:4px;max-width:520px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.credit a{color:var(--muted)}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px}
+.chk{display:inline-flex;align-items:center;gap:5px;font-size:.88rem;font-weight:600;color:var(--sub);cursor:pointer}
+
+#answer{display:flex;flex-direction:column;gap:5px;margin:4px 0 12px;max-width:760px}
+.ans{display:grid;grid-template-columns:minmax(0,15em) minmax(60px,1fr) 4.2em;align-items:center;gap:10px;padding:3px 6px;border-radius:6px;cursor:pointer}
+.ans:hover{background:var(--soft)}
+.ans.sel{outline:2px solid var(--ink)}
+.ans .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ans.tg .nm::after{content:"  target";color:var(--target);font-size:.78rem;font-weight:700}
+.ans .bar{height:14px;background:var(--soft);border-radius:3px;overflow:hidden}
+.ans .bar i{display:block;height:100%;background:var(--ink)}
+.ans.tg .bar i{background:var(--target)}
+.ans .pc{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.facts{display:flex;gap:6px 28px;flex-wrap:wrap;margin:2px 0 10px}
+.facts span{display:block;font-size:.78rem;color:var(--sub);font-weight:600}
+.facts b{display:block;font-size:1.45rem;font-weight:700;line-height:1.15;font-variant-numeric:tabular-nums}
+#changed{font-size:1.05rem;font-weight:700;color:var(--ok);min-height:1.5em}
+#leadRow{display:flex;align-items:center;gap:12px;margin:0 0 8px;max-width:760px}
+#leadBar{flex:1;height:12px;background:var(--soft);border-radius:3px;overflow:hidden;border:1px solid var(--rule)}
+#leadBar i{display:block;height:100%;background:var(--target);transition:width .15s}
+#leadCap{font-size:.82rem;color:var(--sub);white-space:nowrap}
+#fLead.behind{color:var(--pos)}
+.note{font-size:.88rem;color:var(--sub);line-height:1.45;max-width:62ch;margin:6px 0 0}
+.note b{color:var(--ink);font-variant-numeric:tabular-nums}
+.legend{display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--sub);margin-top:6px}
+.legend .ramp{width:150px;height:10px;border-radius:2px;border:1px solid var(--rule2)}
+
+#classSeg button{max-width:11em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#classSeg{flex-wrap:wrap}
+#contrib{display:flex;flex-direction:column;gap:2px;overflow:auto;min-height:0}
+.fr{display:grid;grid-template-columns:3.2rem 3.6rem 4.2rem minmax(40px,1fr) 4rem auto auto;align-items:center;gap:8px;padding:3px 6px;border-radius:6px;cursor:pointer;font-variant-numeric:tabular-nums;font-size:.9rem}
+.fr:hover{background:var(--soft)}
+.fr.sel{outline:2px solid var(--ink)}
+.fr.head{cursor:default;font-size:.75rem;color:var(--sub);font-weight:600}
+.fr.head:hover{background:none}
+.fr .id{font-weight:700}
+.fr .bar{height:12px;position:relative}
+.fr .bar i{position:absolute;top:0;height:100%;border-radius:2px}
+.fr .th{display:flex;gap:3px}
+.fr .th canvas,.fr .mk canvas{width:34px;height:34px;border-radius:3px;display:block}
+.fr .mk{padding-right:4px;border-right:1px solid var(--rule)}
+.fr.gap{display:block;cursor:default;color:var(--muted);font-size:.8rem;padding:4px 6px 1px}
+.fr.gap:hover{background:none}
+#sum{font-size:.88rem;color:var(--sub);margin:0 0 6px;line-height:1.45}
+#sum b{color:var(--ink);font-variant-numeric:tabular-nums}
+#detail h3 span{color:var(--sub);font-weight:600;font-size:.88rem}
+#dTop{display:flex;gap:12px;align-items:flex-start;margin-bottom:6px}
+#dTop figure{margin:0}
+#dTop canvas{border-radius:4px;display:block}
+#dTop figcaption{font-size:.75rem;color:var(--sub);font-weight:600;margin-top:2px}
+#dText{font-size:.86rem;color:var(--sub);line-height:1.45}
+#dText b{color:var(--ink);font-variant-numeric:tabular-nums}
+#dGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 8px;overflow:auto;min-height:0}
+#dGrid figure{margin:0}
+#dGrid canvas{width:100%;aspect-ratio:1;border-radius:3px;display:block}
+#dGrid figcaption{font-size:.72rem;color:var(--sub);font-variant-numeric:tabular-nums}
+#foot{font-size:.75rem;color:var(--muted);padding:0 20px 8px}
+#foot a{color:var(--muted)}
+#loading{position:fixed;inset:0;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;background:rgba(252,252,251,.94);font-size:1.2rem;color:var(--sub);z-index:5;text-align:center;padding:16px}
+#loading small{font-size:.9rem}
+#drop{position:fixed;inset:0;background:rgba(11,11,11,.35);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.5rem;font-weight:700;z-index:6;pointer-events:none}
+@media(max-width:1500px){
+  body{font-size:14px}
+  #top{gap:8px 18px;padding:8px 16px}
+  .brand{font-size:1.2rem}
+  .seg button{padding:5px 9px}
+  .btn{padding:6px 11px}
+  #photos img{width:40px;height:40px}
+  main{padding:10px 16px 10px;gap:8px 22px}
+  .fr .th canvas:nth-child(4){display:none}
+}
+</style>
+</head>
+<body>
+<div id="top">
+  <div class="brand">Inside ResNet18<span class="sub">Trained on ImageNet: 1,000 categories, 11.7 million parameters</span></div>
+  <div class="grp"><span class="gl">View</span><div class="seg" id="segView"></div></div>
+  <div class="grp"><span class="gl">Photo</span><div id="photos"></div>
+    <button class="btn ghost" id="bUpload">Upload</button><input type="file" id="file" accept="image/*" hidden>
+  </div>
+  <div id="status"></div>
+</div>
+
+<main id="coverView">
+  <section class="panel">
+    <h3>Cover cells of the photo</h3>
+    <p class="cap">The 224 × 224 square the model sees, cut into 7 × 7 cells of 32 × 32 pixels. Click or drag over cells to cover them with grey. Click a grey cell to uncover it.</p>
+    <div class="photoBox"><canvas class="photo" id="cPhoto"></canvas></div>
+    <div class="credit" id="credit1"></div>
+    <div class="row">
+      <button class="btn ghost" id="bUncover">Uncover all</button>
+      <span class="gl">Overlay</span><div class="seg" id="segOverlay"></div>
+      <label class="chk"><input type="checkbox" id="chkNum">Numbers</label>
+    </div>
+  </section>
+  <section class="panel">
+    <h3>The answer</h3>
+    <p class="cap">The five categories with the highest probability, out of 1,000. The target is the first answer for the uncovered photo. Click a category to show its CAM.</p>
+    <div id="answer"></div>
+    <div class="facts">
+      <div><span>Covered</span><b id="fCovered">0 of 49</b></div>
+      <div><span>Target probability</span><b id="fTargetP">–</b></div>
+      <div><span>Target score</span><b id="fTargetZ">–</b></div>
+      <div><span>Lead over the next</span><b id="fLead">–</b></div>
+      <div><span>Target rank</span><b id="fTargetR">–</b></div>
+    </div>
+    <div id="leadRow"><div id="leadBar"><i></i></div><span id="leadCap"></span></div>
+    <div id="changed"></div>
+    <div id="overlayNote"></div>
+  </section>
+</main>
+
+<main id="insideView" hidden>
+  <section class="panel">
+    <h3>Pick a cell</h3>
+    <p class="cap">Colour: the CAM of the chosen category, as in the Cover view. Click a cell to see the features behind that cell's value. Click it again for the whole image.</p>
+    <div class="photoBox"><canvas class="photo" id="cPhoto2"></canvas></div>
+    <div class="credit" id="credit2"></div>
+    <div class="row"><button class="btn ghost" id="bWhole">Whole image</button></div>
+    <div class="row"><span class="gl">Category</span></div>
+    <div class="row" style="margin-top:4px"><div class="seg" id="classSeg"></div></div>
+  </section>
+  <section class="panel">
+    <h3 id="contribTitle">Features that add most to the score</h3>
+    <p id="sum"></p>
+    <div id="contrib"></div>
+  </section>
+  <section class="panel" id="detail">
+    <h3 id="dTitle">Feature</h3>
+    <div id="dTop">
+      <figure><canvas id="cFeat"></canvas><figcaption>Its 7 × 7 map on this photo</figcaption></figure>
+      <figure><canvas id="cMade"></canvas><figcaption>Made by gradient ascent</figcaption></figure>
+    </div>
+    <div id="dText"></div>
+    <p class="cap" id="dCap"></p>
+    <div id="dGrid"></div>
+  </section>
+</main>
+<div id="foot">Photos: <a href="credits.html">Open Images, CC BY 2.0, credits</a>. The model runs in this page with <a href="https://onnxruntime.ai/docs/tutorials/web/">ONNX Runtime Web</a>; uploaded photos stay on this computer.</div>
+<div id="loading">Loading the model…<small id="loadMsg"></small></div>
+<div id="drop" hidden>Drop a photo</div>
+
+<script src="labels.js"></script>
+<script src="examples/examples.js"></script>
+<script src="features/features.js"></script>
+<script src="features/made.js"></script>
+<script src="classifier.js"></script>
+<script src="model/info.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.wasm.min.js"></script>
+<script id="rc-core">
+// RC: the arithmetic of the last part of ResNet18 for the demo. No DOM access.
+// features F: 512 maps of 7 × 7 (layer4 output after ReLU), F[k * 49 + cell], cell = row * 7 + column.
+// W: last layer weights, W[c * 512 + k] for category c. B: biases, B[c].
+const RC = (() => {
+  'use strict';
+  const S = 224, G = 7, CELLS = 49, CELL = 32, K = 512, NC = 1000;
+  const MEAN = [0.485, 0.456, 0.406], STD = [0.229, 0.224, 0.225];
+  const GREY = 128;
+  const FILL = MEAN.map((m, c) => (GREY / 255 - m) / STD[c]);   // a grey pixel after normalising
+
+  // RGBA bytes of a 224 × 224 image -> 3 × 224 × 224 floats, the way ResNet18 was trained.
+  function normalise(rgba){
+    const area = S * S, out = new Float32Array(3 * area);
+    for (let p = 0; p < area; p++)
+      for (let c = 0; c < 3; c++) out[c * area + p] = (rgba[p * 4 + c] / 255 - MEAN[c]) / STD[c];
+    return out;
+  }
+
+  // Copy of a normalised image with the cells where covered[cell] is true filled with grey.
+  function cover(norm, covered, into){
+    const out = into || new Float32Array(norm.length);
+    out.set(norm);
+    const area = S * S;
+    for (let cell = 0; cell < CELLS; cell++){
+      if (!covered[cell]) continue;
+      const r0 = Math.floor(cell / G) * CELL, c0 = (cell % G) * CELL;
+      for (let ch = 0; ch < 3; ch++)
+        for (let y = r0; y < r0 + CELL; y++) out.fill(FILL[ch], ch * area + y * S + c0, ch * area + y * S + c0 + CELL);
+    }
+    return out;
+  }
+
+  // Average pooling: the 512 numbers the last layer reads.
+  function pool(F){
+    const out = new Float32Array(K);
+    for (let k = 0; k < K; k++){
+      let s = 0;
+      for (let i = 0; i < CELLS; i++) s += F[k * CELLS + i];
+      out[k] = s / CELLS;
+    }
+    return out;
+  }
+
+  function scores(pooled, W, B){
+    const out = new Float32Array(NC);
+    for (let c = 0; c < NC; c++){
+      let s = B[c];
+      const o = c * K;
+      for (let k = 0; k < K; k++) s += W[o + k] * pooled[k];
+      out[c] = s;
+    }
+    return out;
+  }
+
+  function softmax(z){
+    let m = -Infinity;
+    for (const v of z) if (v > m) m = v;
+    const out = new Float32Array(z.length);
+    let t = 0;
+    for (let i = 0; i < z.length; i++){ out[i] = Math.exp(z[i] - m); t += out[i]; }
+    for (let i = 0; i < z.length; i++) out[i] /= t;
+    return out;
+  }
+
+  // CAM of category c: for each cell, sum over the 512 features of weight × feature value at that cell.
+  // The score of c is the average of these 49 values plus the bias B[c].
+  function cam(F, W, c){
+    const out = new Float32Array(CELLS);
+    const o = c * K;
+    for (let k = 0; k < K; k++){
+      const w = W[o + k];
+      for (let i = 0; i < CELLS; i++) out[i] += w * F[k * CELLS + i];
+    }
+    return out;
+  }
+
+  // What each feature adds to the score of c: weight × value, at one cell or (cell == null) averaged over the 49.
+  function contributions(F, W, c, cell){
+    const out = new Float32Array(K);
+    const o = c * K;
+    for (let k = 0; k < K; k++){
+      let f;
+      if (cell == null){ f = 0; for (let i = 0; i < CELLS; i++) f += F[k * CELLS + i]; f /= CELLS; }
+      else f = F[k * CELLS + cell];
+      out[k] = W[o + k] * f;
+    }
+    return out;
+  }
+
+  function featureValue(F, k, cell){
+    if (cell != null) return F[k * CELLS + cell];
+    let s = 0;
+    for (let i = 0; i < CELLS; i++) s += F[k * CELLS + i];
+    return s / CELLS;
+  }
+
+  function featureMap(F, k){ return F.subarray(k * CELLS, (k + 1) * CELLS); }
+
+  // How far the score of c is above the largest other score. Below 0, c is no longer the first answer.
+  function lead(z, c){
+    let m = -Infinity;
+    for (let i = 0; i < z.length; i++) if (i !== c && z[i] > m) m = z[i];
+    return z[c] - m;
+  }
+
+  // 1 for the largest.
+  function rankOf(z, c){
+    let r = 1;
+    for (let i = 0; i < z.length; i++) if (z[i] > z[c]) r++;
+    return r;
+  }
+
+  // Indices of the n largest values (or the n smallest when smallest is true), in order.
+  function topIndices(arr, n, smallest){
+    const idx = Array.from(arr.keys());
+    idx.sort((a, b) => smallest ? arr[a] - arr[b] : arr[b] - arr[a]);
+    return idx.slice(0, n);
+  }
+
+  // The categories that feature k has the largest weights to.
+  function largestWeights(W, k, n){
+    const col = new Float32Array(NC);
+    for (let c = 0; c < NC; c++) col[c] = W[c * K + k];
+    return topIndices(col, n).map(c => ({c, w: col[c]}));
+  }
+
+  return {S, G, CELLS, CELL, K, NC, GREY, FILL, normalise, cover, pool, scores, softmax, cam,
+          contributions, featureValue, featureMap, lead, rankOf, topIndices, largestWeights};
+})();
+if (typeof module !== 'undefined') module.exports = RC;
+</script>
+<script id="rc-ui">
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const LABELS = window.LABELS, EXAMPLES = window.EXAMPLES, FEATURES = window.FEATURES;
+const {S, G, CELLS, CELL, K} = RC;
+ort.env.wasm.numThreads = 1;   // GitHub Pages cannot send the headers that multi-threaded WebAssembly needs
+
+const st = {
+  view: 'cover',
+  photo: null,            // {rgba: Uint8ClampedArray, norm: Float32Array, credit: html, example: index or -1}
+  covered: new Uint8Array(CELLS),
+  gen: 0,                 // goes up whenever the photo or the covered cells change
+  result: null,           // {gen, F, scores, probs}
+  target: null,           // first answer for the uncovered photo
+  cls: null,              // category shown in CAM and in the Inside view
+  overlay: 'none',
+  numbers: false,
+  occ: null,              // {gen, target, values: Float32Array(49) with NaN for not yet / covered, done, total}
+  cell: null,             // Inside view: chosen cell, null = whole image
+  feature: null,          // Inside view: chosen feature
+  runMs: null,
+};
+let session = null, W = null, B = null, MAPS = null;
+
+// ---------------------------------------------------------------------------
+// Running the model. One run at a time: the session cannot run two at once.
+// ---------------------------------------------------------------------------
+let chain = Promise.resolve();
+function runModel(batch, n){
+  const job = chain.then(async () => {
+    const t0 = performance.now();
+    const out = await session.run({image: new ort.Tensor('float32', batch, [n, 3, S, S])});
+    const ms = performance.now() - t0;
+    if (n === 1) st.runMs = ms;
+    return out.features.data;
+  });
+  chain = job.catch(() => {});
+  return job;
+}
+
+function current(){ return RC.cover(st.photo.norm, st.covered); }
+
+let wanted = -1, running = false;
+function requestRun(){
+  wanted = st.gen;
+  if (!running) runLoop();
+}
+async function runLoop(){
+  running = true;
+  while (st.result == null || st.result.gen !== wanted){
+    const gen = wanted;
+    const F = new Float32Array(await runModel(current(), 1));
+    const z = RC.scores(RC.pool(F), W, B);
+    st.result = {gen, F, scores: z, probs: RC.softmax(z)};
+    if (st.target == null){ st.target = RC.topIndices(z, 1)[0]; st.cls = st.target; st.lead0 = RC.lead(z, st.target); }
+    if (st.feature == null) st.feature = RC.topIndices(RC.contributions(F, W, st.cls, null), 1)[0];
+    render();
+  }
+  running = false;
+  if (st.overlay === 'occ') occlusion();
+}
+
+// Occlusion: cover each still-uncovered cell on its own, on top of what is already covered,
+// and record how far the score of the target falls. Scores, not probabilities: at 100% a single
+// cell rarely moves the probability, but it still moves the score.
+let occBusy = false;
+async function occlusion(){
+  if (occBusy || !st.result || st.result.gen !== st.gen) return;
+  if (st.occ && st.occ.gen === st.gen && st.occ.target === st.target) return;
+  occBusy = true;
+  const gen = st.gen, target = st.target, z0 = st.result.scores[target];
+  const cells = [];
+  for (let i = 0; i < CELLS; i++) if (!st.covered[i]) cells.push(i);
+  st.occ = {gen, target, values: new Float32Array(CELLS).fill(NaN), done: 0, total: cells.length};
+  const per = 3 * S * S, BATCH = 7;
+  try {
+    for (let s = 0; s < cells.length; s += BATCH){
+      if (st.gen !== gen || st.overlay !== 'occ') { st.occ = null; break; }
+      const part = cells.slice(s, s + BATCH);
+      const batch = new Float32Array(per * part.length);
+      part.forEach((cell, j) => {
+        const cov = st.covered.slice(); cov[cell] = 1;
+        RC.cover(st.photo.norm, cov, batch.subarray(j * per, (j + 1) * per));
+      });
+      const out = await runModel(batch, part.length);
+      part.forEach((cell, j) => {
+        const F = out.subarray(j * K * CELLS, (j + 1) * K * CELLS);
+        const z = RC.scores(RC.pool(F), W, B)[target];
+        if (st.occ) st.occ.values[cell] = z0 - z;
+      });
+      if (st.occ) st.occ.done += part.length;
+      render();
+    }
+  } finally { occBusy = false; }
+  if (st.overlay === 'occ' && (!st.occ || st.occ.gen !== st.gen)) occlusion();
+}
+
+// ---------------------------------------------------------------------------
+// Photos
+// ---------------------------------------------------------------------------
+const crop = document.createElement('canvas');
+crop.width = crop.height = S;
+const cropCtx = crop.getContext('2d', {willReadFrequently: true});
+
+function setPhoto(rgba, credit, example){
+  st.photo = {rgba, norm: RC.normalise(rgba), credit, example};
+  st.covered = new Uint8Array(CELLS);
+  st.gen++; st.result = null; st.target = null; st.cls = null; st.occ = null; st.cell = null; st.feature = null;
+  document.querySelectorAll('#photos img').forEach((im, i) => im.classList.toggle('on', i === example));
+  render();
+  requestRun();
+}
+
+function loadImage(src){
+  return new Promise((ok, bad) => { const im = new Image(); im.onload = () => ok(im); im.onerror = bad; im.src = src; });
+}
+
+async function showExample(i){
+  const e = EXAMPLES[i];
+  const im = await loadImage(e.src);
+  cropCtx.clearRect(0, 0, S, S);
+  cropCtx.drawImage(im, 0, 0);
+  const credit = `Photo: <a href="${e.link}">${escapeHtml(e.author || 'unknown')}</a>, CC BY 2.0`;
+  setPhoto(cropCtx.getImageData(0, 0, S, S).data, credit, i);
+}
+
+// The same preparation as Assignment 1's page: the shorter side to 256, then the 224 × 224 square in the middle.
+function resizeShorterSide(source, target){
+  let width = source.naturalWidth || source.width, height = source.naturalHeight || source.height;
+  const scale = target / Math.min(width, height);
+  const finalWidth = width <= height ? target : Math.floor(width * scale);
+  const finalHeight = width <= height ? Math.floor(height * scale) : target;
+  let stage = document.createElement('canvas');
+  stage.width = width; stage.height = height;
+  stage.getContext('2d').drawImage(source, 0, 0, width, height);
+  while (width >= finalWidth * 2 && height >= finalHeight * 2){
+    const next = document.createElement('canvas');
+    next.width = Math.floor(width / 2); next.height = Math.floor(height / 2);
+    const c = next.getContext('2d'); c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
+    c.drawImage(stage, 0, 0, next.width, next.height);
+    stage = next; width = next.width; height = next.height;
+  }
+  if (width === finalWidth && height === finalHeight) return stage;
+  const last = document.createElement('canvas');
+  last.width = finalWidth; last.height = finalHeight;
+  const c = last.getContext('2d'); c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
+  c.drawImage(stage, 0, 0, finalWidth, finalHeight);
+  return last;
+}
+
+async function showFile(file){
+  if (!file || !file.type.startsWith('image/')) return;
+  const url = URL.createObjectURL(file);
+  try {
+    const im = await loadImage(url);
+    const r = resizeShorterSide(im, 256);
+    cropCtx.clearRect(0, 0, S, S);
+    cropCtx.drawImage(r, Math.round((r.width - S) / 2), Math.round((r.height - S) / 2), S, S, 0, 0, S, S);
+    setPhoto(cropCtx.getImageData(0, 0, S, S).data, 'Your photo. It stays on this computer.', -1);
+  } catch (e) {
+    $('status').textContent = 'This file could not be read as a picture.';
+  } finally { URL.revokeObjectURL(url); }
+}
+
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g, ch => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[ch])); }
+
+// ---------------------------------------------------------------------------
+// Drawing
+// ---------------------------------------------------------------------------
+const POS = [214, 39, 40], NEG = [31, 111, 180];
+const photoCanvas = document.createElement('canvas');
+photoCanvas.width = photoCanvas.height = S;
+
+function coveredPhoto(){
+  const c = photoCanvas.getContext('2d');
+  c.putImageData(new ImageData(new Uint8ClampedArray(st.photo.rgba), S, S), 0, 0);
+  c.fillStyle = `rgb(${RC.GREY},${RC.GREY},${RC.GREY})`;
+  for (let i = 0; i < CELLS; i++) if (st.covered[i]) c.fillRect((i % G) * CELL, Math.floor(i / G) * CELL, CELL, CELL);
+  return photoCanvas;
+}
+
+function sizeCanvas(cv, css){
+  const dpr = window.devicePixelRatio || 1;
+  cv.style.width = cv.style.height = css + 'px';
+  if (cv.width !== Math.round(css * dpr)){ cv.width = cv.height = Math.round(css * dpr); }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return ctx;
+}
+
+// values: 49 numbers. Red for positive, blue for negative, full colour at scale. NaN cells stay clear.
+function drawCells(ctx, size, values, scale, opts = {}){
+  const cs = size / G;
+  for (let i = 0; i < CELLS; i++){
+    const v = values[i];
+    if (!Number.isFinite(v) || scale <= 0) continue;
+    const a = Math.min(1, Math.abs(v) / scale) * (opts.alpha || 0.72);
+    const col = v >= 0 ? POS : NEG;
+    ctx.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${a})`;
+    ctx.fillRect((i % G) * cs, Math.floor(i / G) * cs, cs, cs);
+  }
+  if (opts.numbers){
+    ctx.font = `700 ${Math.max(10, Math.round(cs * 0.27))}px Inter, system-ui, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.fillStyle = '#0b0b0b';
+    for (let i = 0; i < CELLS; i++){
+      const v = values[i];
+      if (!Number.isFinite(v)) continue;
+      const t = opts.format(v), x = (i % G + 0.5) * cs, y = (Math.floor(i / G) + 0.5) * cs;
+      ctx.strokeText(t, x, y); ctx.fillText(t, x, y);
+    }
+  }
+}
+
+function drawGrid(ctx, size, highlight){
+  const cs = size / G;
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 1; i < G; i++){ ctx.moveTo(i * cs, 0); ctx.lineTo(i * cs, size); ctx.moveTo(0, i * cs); ctx.lineTo(size, i * cs); }
+  ctx.stroke();
+  if (highlight != null){
+    ctx.strokeStyle = '#0b0b0b'; ctx.lineWidth = 3;
+    ctx.strokeRect((highlight % G) * cs + 1.5, Math.floor(highlight / G) * cs + 1.5, cs - 3, cs - 3);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+    ctx.strokeRect((highlight % G) * cs + 4, Math.floor(highlight / G) * cs + 4, cs - 8, cs - 8);
+  }
+}
+
+function maxAbs(values){ let m = 0; for (const v of values) if (Number.isFinite(v)) m = Math.max(m, Math.abs(v)); return m; }
+const fixed = (v, d) => { const t = Math.abs(v).toFixed(d); return (v < 0 && +t !== 0 ? '−' : '') + t; };
+const fmt1 = v => fixed(v, 1), fmt2 = v => fixed(v, 2), pct = p => (p * 100).toFixed(1) + '%';
+const plus = v => (v < 0 ? ' − ' : ' + ') + `<b>${fixed(Math.abs(v), 2)}</b>`;
+const name = c => LABELS[c];
+
+function photoSize(view){
+  const h = window.innerHeight, w = window.innerWidth;
+  if (view === 'cover') return Math.max(280, Math.min(680, h - 270, w * 0.45));
+  return Math.max(240, Math.min(520, h - 330, w * 0.24));
+}
+
+function render(){
+  if (!st.photo) return;
+  $('coverView').hidden = st.view !== 'cover';
+  $('insideView').hidden = st.view !== 'inside';
+  document.querySelectorAll('#segView button').forEach(b => b.classList.toggle('on', b.dataset.v === st.view));
+  document.querySelectorAll('#segOverlay button').forEach(b => b.classList.toggle('on', b.dataset.v === st.overlay));
+  $('credit1').innerHTML = $('credit2').innerHTML = st.photo.credit;
+  if (st.view === 'cover') renderCover(); else renderInside();
+  renderStatus();
+}
+
+function renderStatus(){
+  const r = st.result;
+  let s = '';
+  if (!r || r.gen !== st.gen) s = 'Running…';
+  else if (st.overlay === 'occ' && st.occ && st.occ.done < st.occ.total) s = `Occlusion: ${st.occ.done} of ${st.occ.total} cells`;
+  if (st.runMs != null) s += (s ? ' · ' : '') + `one run: ${Math.round(st.runMs)} ms`;
+  $('status').textContent = s;
+}
+
+function renderCover(){
+  const size = photoSize('cover');
+  const ctx = sizeCanvas($('cPhoto'), size);
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(coveredPhoto(), 0, 0, size, size);
+  const r = st.result;
+  let note = '';
+  if (r && st.overlay === 'cam'){
+    const m = RC.cam(r.F, W, st.cls);
+    drawCells(ctx, size, m, maxAbs(m), {numbers: st.numbers, format: fmt1});
+    const avg = m.reduce((a, b) => a + b, 0) / CELLS;
+    note = `<p class="note">CAM of <b>${escapeHtml(name(st.cls))}</b>: each cell is the sum, over the 512 features at that cell, of feature value × weight.
+      Score = average of the 49 cells + bias = <b>${fmt2(avg)}</b>${plus(B[st.cls])} = <b>${fmt2(r.scores[st.cls])}</b>.</p>
+      <div class="legend"><span>pushes the score down</span><span class="ramp" style="background:linear-gradient(90deg,rgb(${NEG}),#fff,rgb(${POS}))"></span><span>pushes it up</span></div>`;
+  } else if (st.overlay === 'occ'){
+    const o = st.occ;
+    if (o && o.gen === st.gen) drawCells(ctx, size, o.values, Math.max(maxAbs(o.values), 0.05), {numbers: st.numbers, format: fmt1});
+    note = `<p class="note">Occlusion: each cell shows how much the score of the target, <b>${escapeHtml(name(st.target ?? 0))}</b>, falls when that cell is also covered.
+      One run of the model per cell. The score is the number before softmax: it still moves when the probability is stuck at 100%.</p>
+      <div class="legend"><span>score rises</span><span class="ramp" style="background:linear-gradient(90deg,rgb(${NEG}),#fff,rgb(${POS}))"></span><span>score falls</span></div>`;
+  }
+  drawGrid(ctx, size, null);
+  $('overlayNote').innerHTML = note;
+
+  const nCov = st.covered.reduce((a, b) => a + b, 0);
+  $('fCovered').textContent = `${nCov} of 49`;
+  if (!r) { $('answer').innerHTML = ''; return; }
+  const top = RC.topIndices(r.probs, 5);
+  $('answer').innerHTML = top.map(c => `
+    <div class="ans${c === st.target ? ' tg' : ''}${st.overlay === 'cam' && c === st.cls ? ' sel' : ''}" data-c="${c}">
+      <div class="nm" title="${escapeHtml(name(c))}">${escapeHtml(name(c))}</div>
+      <div class="bar"><i style="width:${(r.probs[c] * 100).toFixed(1)}%"></i></div>
+      <div class="pc">${pct(r.probs[c])}</div>
+    </div>`).join('');
+  $('fTargetP').textContent = pct(r.probs[st.target]);
+  $('fTargetZ').textContent = fmt2(r.scores[st.target]);
+  $('fTargetR').textContent = `${RC.rankOf(r.scores, st.target)} of 1,000`;
+  const ld = RC.lead(r.scores, st.target);
+  $('fLead').textContent = (ld > 0 ? '+' : '') + fmt2(ld);
+  $('fLead').classList.toggle('behind', ld < 0);
+  $('leadBar').firstElementChild.style.width = `${Math.max(0, Math.min(1, ld / st.lead0)) * 100}%`;
+  $('leadCap').textContent = `lead at the start ${fmt2(st.lead0)}; the answer changes at 0`;
+  $('changed').textContent = top[0] !== st.target && r.gen === st.gen
+    ? `The answer changed after covering ${nCov} cell${nCov === 1 ? '' : 's'}.` : '';
+}
+
+// --- Inside view
+const sheets = [];
+function sheet(s){
+  if (!sheets[s]) sheets[s] = loadImage(`features/sheet${s}.jpg`);
+  return sheets[s];
+}
+
+// The image made by gradient ascent for feature k (features/made<s>.jpg), if the file is there.
+const madeSheets = [];
+function drawMade(cv, k, css){
+  const ctx = sizeCanvas(cv, css);
+  if (!window.MADE) return;
+  const s = Math.floor(k / MADE.perSheet), pos = k % MADE.perSheet, T = MADE.size;
+  if (!madeSheets[s]) madeSheets[s] = loadImage(`features/made${s}.jpg`);
+  madeSheets[s].then(im => ctx.drawImage(im, (pos % MADE.cols) * T, Math.floor(pos / MADE.cols) * T, T, T, 0, 0, css, css));
+}
+
+// Draw top photo `rank` of feature k into a canvas, with that feature's 7 × 7 map over it.
+function drawTopPhoto(cv, k, rank, css, withMap){
+  const ctx = sizeCanvas(cv, css);
+  const slot = FEATURES.slot[k][rank];
+  const s = Math.floor(slot / FEATURES.perSheet), pos = slot % FEATURES.perSheet, T = FEATURES.thumb;
+  sheet(s).then(im => {
+    ctx.drawImage(im, (pos % FEATURES.cols) * T, Math.floor(pos / FEATURES.cols) * T, T, T, 0, 0, css, css);
+    if (withMap){
+      const base = (k * FEATURES.top + rank) * CELLS;
+      const vals = Array.from(MAPS.subarray(base, base + CELLS), v => v / 255);
+      drawCells(ctx, css, vals, 1, {alpha: 0.6});
+    }
+  });
+}
+
+function renderInside(){
+  const r = st.result;
+  const size = photoSize('inside');
+  $('insideView').firstElementChild.style.width = size + 'px';   // the category buttons wrap instead of widening the column
+  const ctx = sizeCanvas($('cPhoto2'), size);
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(coveredPhoto(), 0, 0, size, size);
+  if (!r) return;
+  const m = RC.cam(r.F, W, st.cls);
+  drawCells(ctx, size, m, maxAbs(m), {alpha: 0.5});
+  drawGrid(ctx, size, st.cell);
+
+  // category buttons: the five first answers, and the chosen one if it is not among them
+  const cats = RC.topIndices(r.probs, 5);
+  if (!cats.includes(st.cls)) cats.push(st.cls);
+  $('classSeg').innerHTML = cats.map(c => `<button data-c="${c}" class="${c === st.cls ? 'on' : ''}" title="${escapeHtml(name(c))} ${pct(r.probs[c])}">${escapeHtml(name(c))}</button>`).join('');
+
+  const where = st.cell == null ? 'the whole image' : `cell row ${Math.floor(st.cell / G) + 1}, column ${st.cell % G + 1}`;
+  $('contribTitle').textContent = `What adds to the score of ${name(st.cls)}, in ${where}`;
+  const contrib = RC.contributions(r.F, W, st.cls, st.cell);
+  const total = contrib.reduce((a, b) => a + b, 0);
+  $('sum').innerHTML = st.cell == null
+    ? `Each feature adds weight × value, its value averaged over the 49 cells. The sum over all 512 features is <b>${fmt2(total)}</b>, and the score is <b>${fmt2(total)}</b>${plus(B[st.cls])} (bias) = <b>${fmt2(r.scores[st.cls])}</b>.`
+    : `At this cell each feature adds weight × its value here. The sum over all 512 features, <b>${fmt2(total)}</b>, is this cell's CAM value. The score is the average of the 49 cell values plus the bias.`;
+  const pos = RC.topIndices(contrib, 10), neg = RC.topIndices(contrib, 3, true).filter(k => contrib[k] < 0);
+  const scale = Math.max(...pos.concat(neg).map(k => Math.abs(contrib[k])), 1e-6);
+  const row = k => {
+    const v = contrib[k], wdt = Math.abs(v) / scale * 50;
+    const bar = v >= 0 ? `<i style="left:50%;width:${wdt}%;background:rgb(${POS})"></i>` : `<i style="right:50%;width:${wdt}%;background:rgb(${NEG})"></i>`;
+    return `<div class="fr${k === st.feature ? ' sel' : ''}" data-k="${k}">
+      <span class="id">#${k}</span><span>${fmt2(RC.featureValue(r.F, k, st.cell))}</span><span>${fixed(W[st.cls * K + k], 3)}</span>
+      <span class="bar">${bar}</span><span>${v >= 0 ? '+' : ''}${fmt2(v)}</span>
+      <span class="mk"><canvas data-k="${k}"></canvas></span>
+      <span class="th">${[0, 1, 2, 3].map(j => `<canvas data-k="${k}" data-r="${j}"></canvas>`).join('')}</span></div>`;
+  };
+  $('contrib').innerHTML =
+    `<div class="fr head"><span>feature</span><span>value</span><span>weight</span><span style="grid-column:span 2">weight × value</span><span>made</span><span>its top photos</span></div>` +
+    pos.map(row).join('') + (neg.length ? `<div class="fr gap">… the most negative:</div>` + neg.map(row).join('') : '');
+  $('contrib').querySelectorAll('.th canvas').forEach(cv => drawTopPhoto(cv, +cv.dataset.k, +cv.dataset.r, 34, false));
+  $('contrib').querySelectorAll('.mk canvas').forEach(cv => drawMade(cv, +cv.dataset.k, 34));
+
+  renderDetail();
+}
+
+function renderDetail(){
+  const r = st.result, k = st.feature;
+  if (!r || k == null) return;
+  const best = FEATURES.value[k][0];
+  const here = RC.featureMap(r.F, k);
+  let peak = 0; for (const v of here) peak = Math.max(peak, v);
+  $('dTitle').innerHTML = `Feature #${k} <span>of 512</span>`;
+  const dw = $('detail').clientWidth || 320;
+  const fs = Math.max(110, Math.min(200, Math.floor((dw - 12) / 2)));
+  drawMade($('cMade'), k, fs);
+  const ctx = sizeCanvas($('cFeat'), fs);
+  ctx.drawImage(coveredPhoto(), 0, 0, fs, fs);
+  drawCells(ctx, fs, here, best, {alpha: 0.6});
+  drawGrid(ctx, fs, st.cell);
+  const ws = RC.largestWeights(W, k, 3);
+  const made = window.MADE ? `In the made image: <b>${fmt1(MADE.peak[k])}</b>. ` : '';
+  $('dText').innerHTML = `Largest value of feature #${k} on this photo: <b>${fmt2(peak)}</b>. ${made}
+    In the best of the ${FEATURES.photos.toLocaleString('en')} photos: <b>${fmt2(best)}</b> (full red).<br>
+    The made image starts as random noise. ${window.MADE ? MADE.steps : 512} steps of gradient ascent change its pixels,
+    not the parameters, to make this feature's average over its 7 × 7 map as large as possible.<br>
+    Weight to ${escapeHtml(name(st.cls))}: <b>${fixed(W[st.cls * K + k], 3)}</b><br>
+    Largest weights to: ${ws.map(x => `${escapeHtml(name(x.c))} <b>${fixed(x.w, 3)}</b>`).join(', ')}`;
+  $('dCap').textContent = `The ${FEATURES.top} photos, out of ${FEATURES.photos.toLocaleString('en')} from Open Images, where feature #${k} reaches its largest values. Red: where in the photo, on the same scale.`;
+  $('dGrid').innerHTML = FEATURES.value[k].map((v, j) => `<figure><canvas data-r="${j}"></canvas><figcaption>${fmt2(v)}</figcaption></figure>`).join('');
+  const gw = $('dGrid').clientWidth || 360;
+  const css = Math.floor((gw - 3 * 8) / 4);
+  $('dGrid').querySelectorAll('canvas').forEach(cv => drawTopPhoto(cv, k, +cv.dataset.r, css, true));
+}
+
+// ---------------------------------------------------------------------------
+// Input
+// ---------------------------------------------------------------------------
+function cellAt(cv, e){
+  const b = cv.getBoundingClientRect();
+  const x = Math.floor((e.clientX - b.left) / b.width * G), y = Math.floor((e.clientY - b.top) / b.height * G);
+  return (x < 0 || y < 0 || x >= G || y >= G) ? null : y * G + x;
+}
+
+let paint = null;   // 1 = covering, 0 = uncovering, while the mouse is down
+$('cPhoto').addEventListener('pointerdown', e => {
+  const cell = cellAt(e.target, e);
+  if (cell == null || !st.photo) return;
+  e.target.setPointerCapture(e.pointerId);
+  paint = st.covered[cell] ? 0 : 1;
+  setCell(cell, paint);
+});
+$('cPhoto').addEventListener('pointermove', e => {
+  if (paint == null) return;
+  const cell = cellAt(e.target, e);
+  if (cell != null) setCell(cell, paint);
+});
+['pointerup', 'pointercancel'].forEach(ev => $('cPhoto').addEventListener(ev, () => { paint = null; }));
+
+function setCell(cell, value){
+  if (st.covered[cell] === value) return;
+  st.covered[cell] = value;
+  st.gen++;
+  render();
+  requestRun();
+}
+
+$('cPhoto2').addEventListener('pointerdown', e => {
+  const cell = cellAt(e.target, e);
+  if (cell == null) return;
+  st.cell = st.cell === cell ? null : cell;
+  pickTopFeature();
+  render();
+});
+$('bWhole').onclick = () => { st.cell = null; pickTopFeature(); render(); };
+function pickTopFeature(){
+  if (st.result) st.feature = RC.topIndices(RC.contributions(st.result.F, W, st.cls, st.cell), 1)[0];
+}
+$('classSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  st.cls = +b.dataset.c; pickTopFeature(); render();
+});
+$('contrib').addEventListener('click', e => {
+  const row = e.target.closest('.fr[data-k]'); if (!row) return;
+  st.feature = +row.dataset.k; render();
+});
+$('answer').addEventListener('click', e => {
+  const row = e.target.closest('.ans'); if (!row) return;
+  st.cls = +row.dataset.c;
+  if (st.overlay !== 'cam') st.overlay = 'cam';
+  render();
+});
+$('bUncover').onclick = () => {
+  if (!st.covered.some(v => v)) return;
+  st.covered = new Uint8Array(CELLS); st.gen++; render(); requestRun();
+};
+$('chkNum').onchange = e => { st.numbers = e.target.checked; render(); };
+
+function seg(id, items, onPick){
+  $(id).innerHTML = items.map(([v, t]) => `<button data-v="${v}">${t}</button>`).join('');
+  $(id).addEventListener('click', e => { const b = e.target.closest('button'); if (b) onPick(b.dataset.v); });
+}
+seg('segView', [['cover', 'Cover'], ['inside', 'Inside']], v => { st.view = v; render(); });
+seg('segOverlay', [['none', 'None'], ['cam', 'CAM'], ['occ', 'Occlusion']], v => {
+  st.overlay = v; render();
+  if (v === 'occ') occlusion();
+});
+
+$('bUpload').onclick = () => $('file').click();
+$('file').onchange = e => { showFile(e.target.files[0]); e.target.value = ''; };
+let dragDepth = 0;
+window.addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; $('drop').hidden = false; });
+window.addEventListener('dragleave', () => { if (--dragDepth <= 0){ dragDepth = 0; $('drop').hidden = true; } });
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => { e.preventDefault(); dragDepth = 0; $('drop').hidden = true; showFile(e.dataTransfer.files[0]); });
+let resizeTimer = null;
+window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 120); });
+
+$('photos').innerHTML = EXAMPLES.map((e, i) => `<img src="${e.src}" alt="Example photo ${i + 1}" title="Example photo ${i + 1}" data-i="${i}">`).join('');
+$('photos').addEventListener('click', e => { const im = e.target.closest('img'); if (im) showExample(+im.dataset.i); });
+
+// ---------------------------------------------------------------------------
+// Loading
+// ---------------------------------------------------------------------------
+// Every data file is a script, so that the page also works when index.html is opened by double-clicking
+// (file://): there fetch is blocked, and pixels of a picture loaded from a neighbouring file cannot be read.
+function fromBase64(b64){
+  const s = atob(b64), out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+  return out;
+}
+
+function loadScript(src){
+  return new Promise((ok, bad) => {
+    const el = document.createElement('script');
+    el.src = src; el.onload = ok; el.onerror = () => bad(new Error(`${src} could not be loaded`));
+    document.head.appendChild(el);
+  });
+}
+
+// The model: 22 MB of ONNX, as base64 in model/part0.js, part1.js, ... (8 MB each, so that no single
+// file is large). Over http the parts are fetched as text, to show progress.
+async function modelBytes(){
+  const n = MODEL_INFO.parts, pieces = [];
+  if (location.protocol === 'http:' || location.protocol === 'https:'){
+    const got = new Array(n).fill(0), total = MODEL_INFO.bytes * 4 / 3, mb = v => (v / 1e6).toFixed(0);
+    const texts = await Promise.all(Array.from({length: n}, (_, i) => fetchBytes(`model/part${i}.js`, g => {
+      got[i] = g; $('loadMsg').textContent = `${mb(got.reduce((a, b) => a + b, 0))} of ${mb(total)} MB`;
+    })));
+    for (const bytes of texts){
+      const text = new TextDecoder().decode(bytes);
+      pieces.push(fromBase64(text.slice(text.indexOf('="') + 2, text.lastIndexOf('"'))));
+    }
+  } else {
+    for (let i = 0; i < n; i++){
+      $('loadMsg').textContent = `Reading part ${i + 1} of ${n} of the model`;
+      await loadScript(`model/part${i}.js`).catch(() => {
+        throw new Error(`model/part${i}.js is missing. Copy the whole folder, including the folder model with ${n} parts.`);
+      });
+      pieces.push(fromBase64(window.MODEL_PARTS[i]));
+      window.MODEL_PARTS[i] = null;
+    }
+  }
+  const out = new Uint8Array(MODEL_INFO.bytes);
+  let o = 0;
+  for (const p of pieces){ out.set(p, o); o += p.length; }
+  if (o !== MODEL_INFO.bytes) throw new Error(`the model parts hold ${o} bytes instead of ${MODEL_INFO.bytes}`);
+  return out;
+}
+
+async function fetchBytes(url, onProgress){
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url}: ${res.status}`);
+  if (!res.body || !onProgress) return new Uint8Array(await res.arrayBuffer());
+  const total = +res.headers.get('content-length') || 0;
+  const reader = res.body.getReader(), parts = [];
+  let got = 0;
+  for (;;){
+    const {done, value} = await reader.read();
+    if (done) break;
+    parts.push(value); got += value.length;
+    onProgress(got, total);
+  }
+  const out = new Uint8Array(got);
+  let o = 0; for (const p of parts){ out.set(p, o); o += p.length; }
+  return out;
+}
+
+const params = new URLSearchParams(location.search);
+const ready = (async () => {
+  try {
+    const model = await modelBytes();
+    const f = new Float32Array(fromBase64(window.CLASSIFIER_B64).buffer);
+    W = f.subarray(0, RC.NC * K); B = f.subarray(RC.NC * K);
+    MAPS = fromBase64(FEATURES.mapsB64);
+    $('loadMsg').textContent = 'Starting the model…';
+    session = await ort.InferenceSession.create(model, {executionProviders: ['wasm'], graphOptimizationLevel: 'all'});
+    $('loading').hidden = true;
+  } catch (e) {
+    $('loading').innerHTML = `The model could not be loaded.<small>${escapeHtml(e.message || e)}</small>`;
+    throw e;
+  }
+  if (params.get('view') === 'inside') st.view = 'inside';
+  if (['none', 'cam', 'occ'].includes(params.get('overlay'))) st.overlay = params.get('overlay');
+  await showExample(Math.min(EXAMPLES.length - 1, Math.max(0, +params.get('photo') || 0)));
+})();
+
+window.RCUI = {st, ready, render, showExample, setCell, runModel,
+  idle: () => new Promise(ok => { const t = setInterval(() => {
+    if (!running && !occBusy && st.result && st.result.gen === st.gen) { clearInterval(t); ok(); } }, 50); })};
+})();
+</script>
+</body>
+</html>

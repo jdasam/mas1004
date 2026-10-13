@@ -93,6 +93,7 @@ canvas.photo{display:block;border-radius:4px;cursor:pointer;touch-action:none;ba
 .fr .th{display:flex;gap:3px}
 .fr .th canvas,.fr .mk canvas{width:34px;height:34px;border-radius:3px;display:block}
 .fr .mk{padding-right:4px;border-right:1px solid var(--rule)}
+.fr.head .chk{font-size:inherit;gap:4px}
 .fr.gap{display:block;cursor:default;color:var(--muted);font-size:.8rem;padding:4px 6px 1px}
 .fr.gap:hover{background:none}
 #sum{font-size:.88rem;color:var(--sub);margin:0 0 6px;line-height:1.45}
@@ -104,6 +105,7 @@ canvas.photo{display:block;border-radius:4px;cursor:pointer;touch-action:none;ba
 #dTop figcaption{font-size:.75rem;color:var(--sub);font-weight:600;margin-top:2px}
 #dText{font-size:.86rem;color:var(--sub);line-height:1.45}
 #dText b{color:var(--ink);font-variant-numeric:tabular-nums}
+#topToggle{margin:0 0 8px}
 #dGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 8px;overflow:auto;min-height:0}
 #dGrid figure{margin:0}
 #dGrid canvas{width:100%;aspect-ratio:1;border-radius:3px;display:block}
@@ -188,6 +190,7 @@ canvas.photo{display:block;border-radius:4px;cursor:pointer;touch-action:none;ba
     </div>
     <div id="dText"></div>
     <p class="cap" id="dCap"></p>
+    <label class="chk" id="topToggle"><input type="checkbox" id="chkTop">Show its top photos</label>
     <div id="dGrid"></div>
   </section>
 </main>
@@ -355,6 +358,8 @@ const st = {
   occ: null,              // {gen, target, values: Float32Array(49) with NaN for not yet / covered, done, total}
   cell: null,             // Inside view: chosen cell, null = whole image
   feature: null,          // Inside view: chosen feature
+  listPhotos: false,      // Inside view: top photos in the rows of the feature list
+  shownFeature: null,     // Inside view: the feature whose top photos are shown on the right; another feature hides them again
   runMs: null,
 };
 let session = null, W = null, B = null, MAPS = null;
@@ -719,10 +724,10 @@ function renderInside(){
       <span class="id">#${k}</span><span>${fmt2(RC.featureValue(r.F, k, st.cell))}</span><span>${fixed(W[st.cls * K + k], 3)}</span>
       <span class="bar">${bar}</span><span>${v >= 0 ? '+' : ''}${fmt2(v)}</span>
       <span class="mk"><canvas data-k="${k}"></canvas></span>
-      <span class="th">${[0, 1, 2, 3].map(j => `<canvas data-k="${k}" data-r="${j}"></canvas>`).join('')}</span></div>`;
+      <span class="th">${st.listPhotos ? [0, 1, 2, 3].map(j => `<canvas data-k="${k}" data-r="${j}"></canvas>`).join('') : ''}</span></div>`;
   };
   $('contrib').innerHTML =
-    `<div class="fr head"><span>feature</span><span>value</span><span>weight</span><span style="grid-column:span 2">weight × value</span><span>made</span><span>its top photos</span></div>` +
+    `<div class="fr head"><span>feature</span><span>value</span><span>weight</span><span style="grid-column:span 2">weight × value</span><span>made</span><span><label class="chk"><input type="checkbox" id="chkList"${st.listPhotos ? ' checked' : ''}>its top photos</label></span></div>` +
     pos.map(row).join('') + (neg.length ? `<div class="fr gap">… the most negative:</div>` + neg.map(row).join('') : '');
   $('contrib').querySelectorAll('.th canvas').forEach(cv => drawTopPhoto(cv, +cv.dataset.k, +cv.dataset.r, 34, false));
   $('contrib').querySelectorAll('.mk canvas').forEach(cv => drawMade(cv, +cv.dataset.k, 34));
@@ -753,7 +758,12 @@ function renderDetail(){
     not the parameters, to make this feature's average over its 7 × 7 map as large as possible.<br>
     Weight to ${escapeHtml(name(st.cls))}: <b>${fixed(W[st.cls * K + k], 3)}</b><br>
     Largest weights to: ${ws.map(x => `${escapeHtml(name(x.c))} <b>${fixed(x.w, 3)}</b>`).join(', ')}`;
-  $('dCap').textContent = `The ${FEATURES.top} photos, out of ${FEATURES.photos.toLocaleString('en')} from Open Images, where feature #${k} reaches its largest values. Yellow box: the cell with the largest value, the number under the photo. Red: the value in every cell, on the same scale.`;
+  const shown = st.shownFeature === k;
+  $('chkTop').checked = shown;
+  $('dCap').textContent = shown
+    ? `The ${FEATURES.top} photos, out of ${FEATURES.photos.toLocaleString('en')} from Open Images, where feature #${k} reaches its largest values. Yellow box: the cell with the largest value, the number under the photo. Red: the value in every cell, on the same scale.`
+    : `The ${FEATURES.top} photos, out of ${FEATURES.photos.toLocaleString('en')} from Open Images, where feature #${k} reaches its largest values, are hidden. Guess from the made image what this feature responds to, then show them.`;
+  if (!shown){ $('dGrid').innerHTML = ''; return; }
   $('dGrid').innerHTML = FEATURES.value[k].map((v, j) => `<figure><canvas data-r="${j}"></canvas><figcaption>${fmt2(v)}</figcaption></figure>`).join('');
   const gw = $('dGrid').clientWidth || 360;
   const css = Math.floor((gw - 3 * 8) / 4);
@@ -807,6 +817,10 @@ $('classSeg').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   st.cls = +b.dataset.c; pickTopFeature(); render();
 });
+$('contrib').addEventListener('change', e => {
+  if (e.target.id === 'chkList'){ st.listPhotos = e.target.checked; render(); }
+});
+$('chkTop').onchange = e => { st.shownFeature = e.target.checked ? st.feature : null; renderDetail(); };
 $('contrib').addEventListener('click', e => {
   const row = e.target.closest('.fr[data-k]'); if (!row) return;
   st.feature = +row.dataset.k; render();

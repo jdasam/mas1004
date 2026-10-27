@@ -1,0 +1,1284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Names RNN · MAS1004</title>
+<link rel="icon" href="data:,">
+<style>
+:root{
+  --surface:#fcfcfb; --ink:#0b0b0b; --sub:#52514e; --muted:#8a8985;
+  --rule:#dedcd6; --rule2:#c4c2bb; --soft:#f3f2ee; --data:#bcb8ae;
+  --accent:#b3001b; --accent-ink:#b3001b;
+  --pos:#d62728; --neg:#1f6fb4;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--surface); color:var(--ink);
+  font:400 16px/1.4 Inter,Pretendard,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased; min-height:100vh;
+}
+button,input{font-family:inherit;font-size:inherit;color:inherit}
+[hidden]{display:none !important}
+
+#top{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;gap:8px 26px;padding:10px 20px;
+  background:rgba(252,252,251,.97);border-bottom:1px solid var(--rule)}
+.brand{font-size:1.3rem;font-weight:700;letter-spacing:-.01em;line-height:1.2;max-width:330px}
+.brand .sub{display:block;font-size:.85rem;font-weight:500;color:var(--sub);letter-spacing:0}
+.grp{display:flex;align-items:center;gap:8px}
+.gl{font-size:.85rem;color:var(--sub);font-weight:600}
+.seg{display:flex;border:1px solid var(--rule2);border-radius:9px;overflow:hidden;background:#fff}
+.seg button{border:0;border-left:1px solid var(--rule);background:transparent;padding:6px 11px;color:var(--sub);font-weight:600;font-size:.92rem;cursor:pointer;font-variant-numeric:tabular-nums}
+.seg button:first-child{border-left:0}
+.seg button:hover{color:var(--ink)}
+.seg button.on{background:var(--ink);color:#fff}
+#segView button{padding:7px 14px;font-size:1rem}
+.fact span{display:block;font-size:.78rem;color:var(--sub);font-weight:600}
+.fact b{display:block;font-size:1.45rem;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
+
+.btn{padding:7px 13px;border-radius:9px;border:1px solid var(--ink);background:var(--ink);color:#fff;font-weight:600;font-size:.95rem;cursor:pointer}
+.btn:hover{background:#333}
+.btn.ghost{background:#fff;color:var(--ink)}
+.btn.ghost:hover{background:var(--soft)}
+.btn:disabled{opacity:.35;cursor:default}
+.btn:disabled:hover{background:var(--ink)}
+.btn.ghost:disabled:hover{background:#fff}
+.chk{display:inline-flex;align-items:center;gap:5px;font-size:.88rem;font-weight:600;color:var(--sub);cursor:pointer;user-select:none}
+.row{display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap}
+h3{margin:0;font-size:1.05rem;font-weight:700}
+.head{display:flex;align-items:baseline;gap:6px 18px;flex-wrap:wrap}
+.cap{margin:3px 0 0;font-size:.85rem;color:var(--sub);line-height:1.4}
+.cap b{color:var(--ink);font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono)}
+.chart{position:relative}
+.chart svg{display:block;overflow:visible}
+.tip{position:absolute;z-index:5;pointer-events:none;background:#fff;border:1px solid var(--rule2);border-radius:7px;padding:6px 9px;
+  font-size:.85rem;line-height:1.35;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.08);font-variant-numeric:tabular-nums}
+.tip b{font-family:var(--mono);font-size:1rem}
+
+main.view{display:grid;gap:14px 34px;padding:14px 20px 24px;max-width:1760px;margin:0 auto}
+
+/* ---- Generate ---- */
+#vGenerate{grid-template-columns:minmax(0,1fr) 400px;align-items:start}
+#genMain{display:flex;flex-direction:column;gap:10px;min-width:0}
+#tokens{display:flex;flex-wrap:wrap;align-items:flex-start;gap:4px 8px;min-height:80px}
+.tok{display:flex;flex-direction:column;align-items:center;min-width:32px}
+.tok b{font:600 42px/1.05 var(--mono)}
+.tok small{font-size:.8rem;color:var(--sub);font-variant-numeric:tabular-nums;margin-top:1px;white-space:nowrap}
+.tok.mark b{color:var(--muted)}
+.tok.end b{color:var(--accent)}
+.tok.newest b{color:var(--accent)}
+.tok.next b{color:var(--rule2);font-weight:400}
+.tok canvas{display:block;margin-top:5px;border:1px solid var(--rule)}
+#nameMsg{margin:0;font-size:1.05rem;line-height:1.45;min-height:1.5em}
+#nameMsg b{font-family:var(--mono)}
+#nameMsg .mk{font-weight:600}
+#nameMsg .mk.new{color:var(--accent-ink)}
+#genButtons{gap:8px}
+#genButtons .sep{width:1px;height:26px;background:var(--rule);margin:0 4px}
+#barsBox svg .grid{stroke:var(--rule);stroke-width:1}
+svg text{font-family:Inter,Pretendard,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+svg .yl{font-size:12px;fill:var(--sub);text-anchor:end;font-variant-numeric:tabular-nums}
+svg .xl{font:600 18px var(--mono);fill:var(--ink);text-anchor:middle}
+svg .xs{font-size:10.5px;fill:var(--muted);text-anchor:middle}
+svg .vl{font-size:12.5px;font-weight:600;fill:var(--ink);text-anchor:middle;font-variant-numeric:tabular-nums}
+svg .sl{font-size:11px;fill:var(--sub);text-anchor:middle;font-variant-numeric:tabular-nums}
+svg .mb{fill:var(--ink)}
+svg .db{fill:var(--data)}
+svg .mb.flash{fill:var(--accent)}
+svg .mb.off{fill:var(--rule2)}
+svg .mb.chosen{fill:var(--accent)}
+svg .slot{cursor:pointer}
+svg .slot .hit{fill:transparent}
+svg .slot:hover .hit{fill:rgba(0,0,0,.045)}
+svg.locked .slot{cursor:default}
+svg.locked .slot:hover .hit{fill:transparent}
+#stripBox svg .seg0{fill:#ebe8e2}
+#stripBox svg .seg1{fill:#d9d5cc}
+#stripBox svg .segOn{fill:var(--accent)}
+#stripBox svg .segl{font:600 12px var(--mono);fill:var(--ink);text-anchor:middle}
+#stripBox svg .segl.on{fill:#fff}
+#stripBox svg .mk{stroke:var(--ink);stroke-width:2}
+#stripBox svg .mkl{font-size:12px;font-weight:700;fill:var(--ink);font-variant-numeric:tabular-nums}
+#tempRow input[type=range]{width:260px}
+#tVal{font:700 1.15rem var(--mono);min-width:3ch}
+.rule{font-size:.88rem;color:var(--sub)}
+.rule code{font:600 .95rem var(--mono);color:var(--ink)}
+#seed{width:6.5em;padding:5px 8px;border:1px solid var(--rule2);border-radius:8px;font:600 1rem var(--mono)}
+#nameNo{font-size:.9rem;font-weight:600;font-variant-numeric:tabular-nums}
+#genSide{border-left:1px solid var(--rule);padding-left:26px;display:flex;flex-direction:column;gap:8px;min-width:0}
+#share{font-size:1.02rem;line-height:1.4;font-variant-numeric:tabular-nums;min-height:2.8em}
+#share b{font-size:1.35rem}
+#share small{display:block;font-size:.82rem;color:var(--sub)}
+#list{list-style:none;margin:0;padding:0}
+#list li{display:grid;grid-template-columns:2.6em minmax(0,1fr) auto;align-items:baseline;gap:8px;padding:3px 0;border-bottom:1px solid var(--rule)}
+#list .no{font-size:.8rem;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+#list .nm{font:600 1.05rem var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#list .mk,.mkSmall{font-size:.8rem;color:var(--sub);white-space:nowrap}
+#list .mk.new,.mkSmall.new{color:var(--accent-ink);font-weight:700}
+#list .empty{color:var(--muted);font-family:inherit;font-weight:400;font-style:italic;font-size:.9rem}
+
+/* ---- Score ---- */
+#vScore{grid-template-columns:minmax(0,1fr)}
+#nameIn{width:12em;padding:6px 10px;border:1px solid var(--rule2);border-radius:9px;font:600 1.35rem var(--mono)}
+#nameIn:focus{outline:2px solid var(--ink);outline-offset:1px}
+#presets{display:flex;gap:6px;flex-wrap:wrap}
+#presets button{padding:5px 10px;border-radius:8px;border:1px solid var(--rule2);background:#fff;cursor:pointer;font:600 .95rem var(--mono);color:var(--sub)}
+#presets button:hover{color:var(--ink);border-color:var(--ink)}
+#presets button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+#nameStatus{margin:0;font-size:1.05rem}
+#nameStatus b{font-family:var(--mono)}
+#inNote{min-height:1.2em}
+table{border-collapse:collapse;font-variant-numeric:tabular-nums}
+#tScore{width:100%;max-width:1400px}
+#tScore th,#tScore td{border-bottom:1px solid var(--rule);padding:6px 12px;text-align:right;vertical-align:middle}
+#tScore th{font-size:.82rem;color:var(--sub);font-weight:600;vertical-align:bottom;line-height:1.25}
+#tScore th.l,#tScore td.l{text-align:left}
+#tScore th.c,#tScore td.c{text-align:center}
+#tScore td.seen{font:500 1.1rem var(--mono);white-space:pre}
+#tScore td.next{font:700 1.3rem var(--mono)}
+#tScore td.p{font-weight:600;font-size:1.05rem}
+#tScore td.nll{font-weight:700;font-size:1.1rem}
+#tScore td small{display:block;font-size:.76rem;color:var(--sub);font-weight:400;white-space:nowrap}
+#tScore td.pbar{width:180px;padding-left:4px}
+#tScore .bar{height:12px;background:var(--soft);border-radius:2px;overflow:hidden}
+#tScore .bar i{display:block;height:100%;background:var(--ink)}
+#tScore td.split{border-left:1px solid var(--rule2)}
+#tScore th.split{border-left:1px solid var(--rule2)}
+#tScore tr.low td.p,#tScore tr.low td.nll,#tScore tr.low td.next{color:var(--accent-ink)}
+#tScore tr.low .bar i{background:var(--accent)}
+#tScore tr.low td.lowmk{color:var(--accent-ink);font-weight:700;font-size:.82rem;text-align:left;white-space:nowrap}
+#tScore td.lowmk{width:7.5em}
+#tScore td.inf{color:var(--accent-ink)}
+#scoreSum{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 40px;max-width:1400px;margin-top:6px}
+#scoreSum > div{border-top:2px solid var(--ink);padding-top:8px}
+#scoreSum span{display:block;font-size:.85rem;color:var(--sub);font-weight:600}
+#scoreSum b{display:block;font-size:2rem;font-weight:700;line-height:1.15;font-variant-numeric:tabular-nums}
+#scoreSum small{display:block;font-size:.88rem;color:var(--sub);line-height:1.45;margin-top:2px}
+#scoreSum small b{display:inline;font-size:inherit;color:var(--ink)}
+
+/* ---- Training ---- */
+#vTraining{grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);align-items:start}
+#vTraining section{display:flex;flex-direction:column;gap:6px;min-width:0}
+#trSamples{grid-column:1 / -1}
+#curveBox svg .grid{stroke:var(--rule);stroke-width:1}
+#curveBox svg .batch{fill:none;stroke:var(--muted);stroke-width:1.4}
+#curveBox svg .trd{fill:var(--ink)}
+#curveBox svg .vad{fill:none;stroke:var(--ink);stroke-width:1.8}
+#curveBox svg .sel{stroke:var(--accent);stroke-width:2.5}
+#curveBox svg .ck{cursor:pointer}
+#curveBox svg{cursor:pointer}
+.legend{display:flex;gap:6px 20px;flex-wrap:wrap;font-size:.82rem;color:var(--sub)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block}
+.legend .line{width:22px;height:0;border-top:2px solid var(--muted)}
+.legend .dot{width:10px;height:10px;border-radius:50%;background:var(--ink)}
+.legend .ring{width:13px;height:13px;border-radius:50%;border:2px solid var(--ink);background:transparent}
+.legend .sw{width:14px;height:12px}
+#tCk{margin-top:4px;width:100%}
+#tCk th,#tCk td{padding:4px 8px;border-bottom:1px solid var(--rule);text-align:right;font-size:.9rem}
+#tCk th{font-weight:600;color:var(--sub);text-align:left;white-space:nowrap}
+#tCk td{cursor:pointer}
+#tCk thead td{font-weight:700;color:var(--sub)}
+#tCk td.on{color:var(--ink);font-weight:700;box-shadow:inset 0 -3px 0 var(--accent)}
+#tCk tbody td.on{box-shadow:none}
+#firstSentence{margin:0;font-size:1.02rem;line-height:1.45}
+#firstSentence b{font-variant-numeric:tabular-nums}
+#firstSentence .mono{font-weight:700}
+#tSamples{width:100%;table-layout:fixed}
+#tSamples th,#tSamples td{padding:2px 8px;border-bottom:1px solid var(--rule);text-align:left;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#tSamples td .cell{display:flex;align-items:baseline;min-width:0}
+#tSamples td .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:0 1 auto}
+#tSamples td .mkSmall{flex:none}
+#tSamples th{font-size:.85rem;font-weight:600;color:var(--sub);cursor:pointer;font-variant-numeric:tabular-nums}
+#tSamples th:first-child{width:2.6em;cursor:default}
+#tSamples td:first-child{color:var(--muted);font-size:.8rem;text-align:right;font-variant-numeric:tabular-nums}
+#tSamples td{font:500 1rem var(--mono);color:var(--muted)}
+#tSamples td.on{color:var(--ink);font-weight:700}
+#tSamples th.on{color:var(--ink);box-shadow:inset 0 -3px 0 var(--accent)}
+#tSamples td .empty{font-family:Inter,system-ui,sans-serif;font-style:italic;font-weight:400;font-size:.85rem}
+#tSamples td .mkSmall{font-family:Inter,system-ui,sans-serif;margin-left:6px;font-size:.75rem}
+#samplesNote{margin:2px 0 0}
+
+#loading{position:fixed;inset:0;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;
+  background:rgba(252,252,251,.95);font-size:1.25rem;color:var(--sub);z-index:30;text-align:center;padding:24px}
+#loading small{font-size:.95rem;max-width:640px;line-height:1.5}
+#foot{font-size:.78rem;color:var(--muted);padding:0 20px 14px;max-width:1760px;margin:0 auto}
+#foot a{color:var(--muted)}
+
+@media(max-width:1500px){
+  body{font-size:15px}
+  #top{gap:8px 18px;padding:8px 16px}
+  .brand{font-size:1.2rem}
+  .seg button{padding:5px 9px}
+  #segView button{padding:6px 11px}
+  main.view{padding:12px 16px 20px;gap:12px 26px}
+  #vGenerate{grid-template-columns:minmax(0,1fr) 340px}
+  .tok b{font-size:36px}
+}
+@media(max-width:1100px){
+  #vGenerate,#vTraining{grid-template-columns:minmax(0,1fr)}
+  #genSide{border-left:0;padding-left:0;border-top:1px solid var(--rule);padding-top:12px}
+  #scoreSum{grid-template-columns:minmax(0,1fr)}
+}
+</style>
+</head>
+<body>
+<header id="top">
+  <div class="brand">Names RNN<span class="sub">Predicts the next character of a name. 23,451 parameters, trained on 28,829 US names.</span></div>
+  <div class="seg" id="segView"></div>
+  <div class="grp"><span class="gl">Model after</span><div class="seg" id="segStep"></div><span class="gl">training steps</span></div>
+  <div class="fact"><span>Validation loss</span><b id="fVal">–</b></div>
+</header>
+
+<main id="vGenerate" class="view">
+  <section id="genMain">
+    <div id="tokens"></div>
+    <p class="cap" id="hiddenCap" hidden>Under each character: the 128 hidden values h after the RNN has read it, in 16 rows of 8. Red above 0, blue below 0, full colour at 1 and −1. These numbers are all that the model carries to the next step.</p>
+    <p id="nameMsg"></p>
+    <div class="row" id="genButtons">
+      <button class="btn" id="bSample" title="Enter">Sample next</button>
+      <button class="btn ghost" id="bLikely">Most likely next</button>
+      <button class="btn ghost" id="bFinish">Finish the name</button>
+      <span class="sep"></span>
+      <button class="btn ghost" id="bUndo" title="Backspace">Undo</button>
+      <button class="btn ghost" id="bStart">Start over</button>
+      <span class="sep"></span>
+      <label class="chk" title="The 128 numbers h that the RNN passes to the next step"><input type="checkbox" id="chkHidden">Hidden values</label>
+    </div>
+    <div class="head">
+      <h3 id="barsTitle">Next character</h3>
+      <label class="chk"><input type="checkbox" id="chkSort">Sort by probability</label>
+      <label class="chk"><input type="checkbox" id="chkScores">Show scores</label>
+      <label class="chk"><input type="checkbox" id="chkData">Compare with training names</label>
+    </div>
+    <div class="chart" id="barsBox"><svg id="bars"></svg><div class="tip" id="tip" hidden></div></div>
+    <p class="cap" id="barsCap"></p>
+    <div class="chart" id="stripBox"><svg id="strip"></svg></div>
+    <p class="cap" id="stripCap"></p>
+    <div class="row" id="tempRow">
+      <span class="gl">Temperature T</span>
+      <input type="range" id="rT" min="0.2" max="2" step="0.1" value="1">
+      <span id="tVal">1.0</span>
+      <span class="rule">Probabilities = <code>softmax(scores / T)</code>. Below 1, the likely characters get more likely. Above 1, the probabilities move closer to each other.</span>
+    </div>
+    <div class="row" id="seedRow">
+      <span class="gl">Seed</span>
+      <input type="number" id="seed" min="0" step="1" value="1">
+      <span id="nameNo"></span>
+      <span class="rule">The seed and the name number fix the random numbers, so the same seed gives everyone the same names.</span>
+    </div>
+  </section>
+  <section id="genSide">
+    <h3>20 names at a time</h3>
+    <p class="cap">Sampled with the model, temperature and seed set on this page: names 1 to 20, then 21 to 40, and so on. Each name is marked: in training names, in validation names (not trained on), or new.</p>
+    <div class="row"><button class="btn" id="bMany">Generate 20 names</button><button class="btn ghost" id="bClear">Clear</button></div>
+    <div id="share"></div>
+    <ol id="list"></ol>
+  </section>
+</main>
+
+<main id="vScore" class="view" hidden>
+  <section>
+    <div class="row">
+      <label class="gl" for="nameIn">Name</label>
+      <input id="nameIn" type="text" autocomplete="off" spellcheck="false" maxlength="60">
+      <div id="presets"></div>
+      <label class="chk" title="Probability from counting, in the training names, the character after the same 2 previous letters"><input type="checkbox" id="chkCount">Compare with counting (previous 2 letters)</label>
+    </div>
+    <p class="cap" id="inNote"></p>
+    <p id="nameStatus"></p>
+  </section>
+  <section>
+    <table id="tScore"></table>
+  </section>
+  <section id="scoreSum"></section>
+</main>
+
+<main id="vTraining" class="view" hidden>
+  <section id="trCurve">
+    <div class="head"><h3>Loss during training</h3><span class="gl">Steps axis</span><div class="seg" id="segAxis"></div></div>
+    <div class="chart" id="curveBox"><svg id="curve"></svg></div>
+    <div class="legend">
+      <span><i class="line"></i>one batch of 64 training names, every 50 steps</span>
+      <span><i class="dot"></i>all training names</span>
+      <span><i class="ring"></i>validation names (not trained on)</span>
+    </div>
+    <table id="tCk"></table>
+  </section>
+  <section id="trFirst">
+    <h3>The first character of a name</h3>
+    <p id="firstSentence"></p>
+    <div class="chart" id="firstBox"><svg id="first"></svg><div class="tip" id="tip3" hidden></div></div>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--ink)"></i>probability from the model after the start '.'</span>
+      <span><i class="sw" style="background:var(--data)"></i>share of the 28,829 training names that start with the character</span>
+    </div>
+  </section>
+  <section id="trSamples">
+    <h3>12 names from the model after each number of steps</h3>
+    <p class="cap" id="samplesCap"></p>
+    <table id="tSamples"></table>
+    <p class="cap" id="samplesNote"></p>
+  </section>
+</main>
+
+<div id="foot">Names: <a href="https://github.com/karpathy/makemore">makemore names.txt</a> (MIT license), from US Social Security Administration data. The model runs in this page with <a href="https://onnxruntime.ai/docs/tutorials/web/">ONNX Runtime Web</a><span id="status"></span>.</div>
+<div id="loading">Loading the model…<small id="loadMsg"></small></div>
+
+<script src="data.js"></script>
+<script src="model/step0.js"></script>
+<script src="model/step30.js"></script>
+<script src="model/step100.js"></script>
+<script src="model/step300.js"></script>
+<script src="model/step1000.js"></script>
+<script src="model/step3000.js"></script>
+<script src="model/step12000.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.wasm.min.js"></script>
+<script id="nr-core">
+// NR: everything in the demo that is not the model or the page. No DOM access, so test/core.test.js can load it in node.
+const NR = (() => {
+  'use strict';
+  const CHARS = '.abcdefghijklmnopqrstuvwxyz';   // '.' marks both the start and the end of a name
+  const V = CHARS.length, HIDDEN = 128;
+  const MAX_LEN = 30;                             // generation stops after 30 letters without '.', as in the training script
+  const INDEX = {};
+  for (let i = 0; i < V; i++) INDEX[CHARS[i]] = i;
+
+  // softmax(scores / T): the probabilities the page shows and samples from.
+  function softmax(scores, T = 1){
+    let m = -Infinity;
+    for (let i = 0; i < scores.length; i++) m = Math.max(m, scores[i] / T);
+    const p = new Float64Array(scores.length);
+    let t = 0;
+    for (let i = 0; i < scores.length; i++){ p[i] = Math.exp(scores[i] / T - m); t += p[i]; }
+    for (let i = 0; i < p.length; i++) p[i] /= t;
+    return p;
+  }
+
+  function argmax(a){ let b = 0; for (let i = 1; i < a.length; i++) if (a[i] > a[b]) b = i; return b; }
+
+  // Random numbers between 0 and 1: xmur3 and mulberry32, the generators of the lecture 3 and 4 demos.
+  function xmur3(str){
+    let h = 1779033703 ^ str.length;
+    for (let i = 0; i < str.length; i++){ h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = h << 13 | h >>> 19; }
+    return () => { h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return (h ^= h >>> 16) >>> 0; };
+  }
+  function mulberry32(a){
+    return () => {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  // The random numbers of name number `no` (1, 2, ...) of a seed, one per position in the name.
+  // Name 5 of seed 1 always uses the same numbers, whatever was sampled before it.
+  function uniforms(seed, no, n = MAX_LEN + 1){
+    const r = mulberry32(xmur3(`names-rnn|${seed}|${no}`)());
+    return Array.from({length: n}, () => r());
+  }
+
+  // Sampling: lay the probabilities end to end from 0 to 1 in the fixed order '.', a, b, ..., z
+  // and return the character whose part holds the random number u.
+  function pick(p, u){
+    let c = 0;
+    for (let i = 0; i < p.length; i++){ c += p[i]; if (u < c) return i; }
+    for (let i = p.length - 1; i > 0; i--) if (p[i] > 0) return i;   // u above the total after rounding
+    return 0;
+  }
+
+  // Typed text -> the letters a to z, lowercased. Everything else is dropped and reported.
+  function clean(text, max = MAX_LEN){
+    const letters = [], ignored = [];
+    for (const ch of String(text == null ? '' : text).toLowerCase()) (ch >= 'a' && ch <= 'z' ? letters : ignored).push(ch);
+    return {name: letters.slice(0, max).join(''), ignored: [...new Set(ignored)], cut: Math.max(0, letters.length - max)};
+  }
+
+  // Counting with the previous 2 characters. '..' pads the start and '.' marks the end,
+  // so emma gives the pairs and next characters  ..e  .em  emm  mma  ma.
+  function trigramCounts(names){
+    const ctx = new Map(), tri = new Map();
+    for (const w of names){
+      const s = '..' + w + '.';
+      for (let i = 0; i + 2 < s.length; i++){
+        const c = s.slice(i, i + 2), k = c + s[i + 2];
+        ctx.set(c, (ctx.get(c) || 0) + 1);
+        tri.set(k, (tri.get(k) || 0) + 1);
+      }
+    }
+    return {ctx, tri};
+  }
+  // One row per character of name + '.': the previous two characters, how often they were followed by this
+  // character (k) and by anything (n), p = k / n, and -log p (Infinity when k = 0).
+  function countingRows(counts, name){
+    const s = '..' + name + '.', rows = [];
+    for (let i = 0; i + 2 < s.length; i++){
+      const prev = s.slice(i, i + 2), next = s[i + 2];
+      const k = counts.tri.get(prev + next) || 0, n = counts.ctx.get(prev) || 0;
+      rows.push({prev, next, k, n, p: n ? k / n : 0, nll: k ? -Math.log(k / n) : Infinity});
+    }
+    return rows;
+  }
+  // Average -log p of counting over every character of `names` (the end '.' included).
+  // Characters never seen after their two previous characters would make it infinite; they are counted apart.
+  function countingLoss(counts, names){
+    let chars = 0, unseen = 0, sum = 0, namesUnseen = 0;
+    for (const w of names){
+      let bad = false;
+      for (const r of countingRows(counts, w)){
+        chars++;
+        if (r.k === 0){ unseen++; bad = true; } else sum += r.nll;
+      }
+      if (bad) namesUnseen++;
+    }
+    return {chars, unseen, namesUnseen, names: names.length, avgSeen: sum / (chars - unseen), avg: unseen ? Infinity : sum / chars};
+  }
+
+  // Among the names that start with `letters`, the share followed by each character ('.' = the name ends there).
+  // With letters = '' this is the share of names starting with each character.
+  function nextShares(names, letters){
+    const counts = new Float64Array(V), L = letters.length;
+    let n = 0;
+    for (const w of names) if (w.startsWith(letters)){ n++; counts[L < w.length ? INDEX[w[L]] : 0]++; }
+    return {n, counts, shares: counts.map(c => (n ? c / n : 0))};
+  }
+
+  // 'train' if the name is among the training names, 'val' if only among the validation names, 'new' if in neither.
+  function markOf(name, trainSet, valSet){
+    if (!name) return 'empty';
+    return trainSet.has(name) ? 'train' : valSet.has(name) ? 'val' : 'new';
+  }
+
+  return {CHARS, V, HIDDEN, MAX_LEN, INDEX, softmax, argmax, xmur3, mulberry32, uniforms, pick, clean,
+          trigramCounts, countingRows, countingLoss, nextShares, markOf};
+})();
+if (typeof module !== 'undefined') module.exports = NR;
+</script>
+<script id="nr-ui">
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const {CHARS, V, HIDDEN, MAX_LEN, INDEX} = NR;
+const META = window.RNN_META;
+const STEPS = META ? META.checkpoints.map(c => c.step) : [];
+const TRAIN = window.TRAIN_NAMES || [], VAL = window.VAL_NAMES || [];
+const TRAIN_SET = new Set(TRAIN), VAL_SET = new Set(VAL);
+const VIEWS = [['generate', 'Generate'], ['score', 'Score a name'], ['training', 'Training']];
+const PRESETS = ['emma', 'olivia', 'jennifer', 'christiana', 'dasaem', 'minji', 'seoyeon', 'zzyzx'];
+const MARK_TEXT = {train: 'in training names', val: 'in validation names (not trained on)', new: 'new', empty: "empty: '.' came first"};
+const MARK_SHORT = {train: 'training', val: 'validation', new: 'new', empty: ''};
+const DEFAULT_NAME = 'dasaem';
+const SAMPLES = 12;            // names per checkpoint in the Training view
+const LIST_STEP = 20;          // names per click in the Generate view
+const LIST_MAX = 1000;
+
+const st = {
+  view: 'generate', step: 12000, T: 1, seed: 1,
+  no: 1, prefix: '.', done: false,      // the name being built: '.' + letters; done once '.' was chosen
+  flash: null,                          // the bar just picked, drawn in the accent colour for a moment
+  sort: false, scores: false, data: false, hidden: false, count: false,
+  listCount: 0,
+  scoreName: DEFAULT_NAME, scoreNote: '',
+  axis: 'log',
+  // the numbers last shown, for state()
+  gen: null, list: null, score: null, training: null,
+};
+
+// ---------------------------------------------------------------------------
+// The model. One ONNX session per checkpoint, created the first time that checkpoint is used.
+// One step of the RNN: (x = one-hot of the character just read, h) -> (scores for the next character, new h).
+// ---------------------------------------------------------------------------
+function fromBase64(b64){
+  const s = atob(b64), out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+  return out;
+}
+const sessions = new Map();
+const timing = {runs: 0, runMs: 0, sessionMs: {}, recent: []};
+// average time of the last 200 runs. One run is shorter than the 0.1 ms steps of the browser's clock,
+// so single runs read as 0 or 0.1 ms; the average over many runs is still right.
+function runMean(){
+  const r = timing.recent;
+  return r.length >= 20 ? r.reduce((a, b) => a + b, 0) / r.length : null;
+}
+function session(step){
+  if (!sessions.has(step)){
+    const job = (async () => {
+      const b64 = window.RNN_MODELS && window.RNN_MODELS[step];
+      if (!b64) throw new Error(`model/step${step}.js is missing. Copy the whole folder, including the folder model.`);
+      const t0 = performance.now();
+      const s = await ort.InferenceSession.create(fromBase64(b64), {executionProviders: ['wasm']});
+      timing.sessionMs[step] = performance.now() - t0;
+      return s;
+    })();
+    job.catch(() => sessions.delete(step));
+    sessions.set(step, job);
+  }
+  return sessions.get(step);
+}
+// One run at a time, in order.
+let chain = Promise.resolve();
+function runStep(step, x, h){
+  const job = chain.then(async () => {
+    const s = await session(step);
+    const onehot = new Float32Array(V);
+    onehot[x] = 1;
+    const t0 = performance.now();
+    const out = await s.run({x: new ort.Tensor('float32', onehot, [1, V]), h: new ort.Tensor('float32', h, [1, HIDDEN])});
+    const ms = performance.now() - t0;
+    timing.runs++; timing.runMs += ms; timing.recent.push(ms);
+    if (timing.recent.length > 200) timing.recent.shift();
+    return {scores: Float32Array.from(out.scores.data), h: Float32Array.from(out.h_next.data)};
+  });
+  chain = job.catch(() => {});
+  return job;
+}
+// The scores and h after the model has read `prefix` ('.' + letters), starting from h = 0. Kept for reuse.
+const states = new Map();
+const ZERO = new Float32Array(HIDDEN);
+function stateAfter(step, prefix){
+  const key = step + '|' + prefix;
+  let s = states.get(key);
+  if (!s){
+    if (states.size > 200000) states.clear();
+    s = (async () => {
+      const h = prefix.length > 1 ? (await stateAfter(step, prefix.slice(0, -1))).h : ZERO;
+      return runStep(step, INDEX[prefix[prefix.length - 1]], h);
+    })();
+    s.catch(() => states.delete(key));
+    states.set(key, s);
+  }
+  return s;
+}
+async function probsAfter(step, prefix, T){ return NR.softmax((await stateAfter(step, prefix)).scores, T); }
+
+// Name number `no` of a seed: sample, append, repeat until '.' or 30 letters. The k-th character uses the
+// k-th random number of that name, so the same seed, model and T always give the same name.
+const named = new Map();
+function sampleName(step, T, seed, no){
+  const key = `${step}|${T}|${seed}|${no}`;
+  if (!named.has(key)){
+    named.set(key, (async () => {
+      const us = NR.uniforms(seed, no);
+      let prefix = '.';
+      for (let k = 0; k < MAX_LEN; k++){
+        const j = NR.pick(await probsAfter(step, prefix, T), us[k]);
+        if (j === 0){ const name = prefix.slice(1); return {no, name, end: true, mark: NR.markOf(name, TRAIN_SET, VAL_SET)}; }
+        prefix += CHARS[j];
+      }
+      const name = prefix.slice(1);
+      return {no, name, end: false, mark: NR.markOf(name, TRAIN_SET, VAL_SET)};
+    })());
+  }
+  return named.get(key);
+}
+
+// ---------------------------------------------------------------------------
+// Formatting
+// ---------------------------------------------------------------------------
+// Probabilities as in the n-gram demo and the slides: three decimals, two significant digits below 0.01.
+function fmtP(p){
+  if (p === 0) return '0';
+  if (p >= 0.995) return p === 1 ? '1' : p.toFixed(3);
+  if (p >= 0.01) return p.toFixed(3);
+  return p.toPrecision(2);
+}
+// axis labels: as many decimals as the gap between two lines needs
+const tick = (t, gap) => (t === 0 ? '0' : t.toFixed(gap < 0.1 - 1e-9 ? 2 : 1));
+const signed = (v, d) => { const t = Math.abs(v).toFixed(d); return (v < 0 && +t !== 0 ? '−' : '') + t; };
+const nll = v => (Number.isFinite(v) ? v.toFixed(2) : '∞');
+const int = n => n.toLocaleString('en-US');
+const loss3 = v => (Number.isFinite(v) ? v.toFixed(3) : '∞');
+const tStr = T => T.toFixed(1);
+const spaced = s => s.split('').join(' ');
+const q = c => `'${c}'`;
+function esc(s){ return String(s).replace(/[&<>"]/g, ch => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[ch])); }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const valLoss = step => META.checkpoints.find(c => c.step === step).val_loss;
+
+// ---------------------------------------------------------------------------
+// Rendering. render() redraws the current view; calls made while it runs are merged into one more redraw.
+// ---------------------------------------------------------------------------
+let rendering = false, again = false, waiters = [];
+function render(){
+  return new Promise(resolve => {
+    waiters.push(resolve);
+    if (rendering){ again = true; return; }
+    loop();
+  });
+}
+async function loop(){
+  rendering = true;
+  do {
+    again = false;
+    const batch = waiters; waiters = [];
+    try { await renderNow(); } catch (e) { console.error(e); fail(`${e.message || e}. Reload the page.`, 'Something went wrong.'); }
+    batch.forEach(r => r());
+  } while (again || waiters.length);
+  rendering = false;
+}
+async function renderNow(){
+  for (const [v] of VIEWS) $('v' + v[0].toUpperCase() + v.slice(1)).hidden = st.view !== v;
+  document.querySelectorAll('#segView button').forEach(b => b.classList.toggle('on', b.dataset.v === st.view));
+  document.querySelectorAll('#segStep button').forEach(b => b.classList.toggle('on', +b.dataset.v === st.step));
+  $('fVal').textContent = loss3(valLoss(st.step));
+  if (st.view === 'generate') await renderGenerate();
+  else if (st.view === 'score') await renderScore();
+  else await renderTraining();
+  const ms = runMean();
+  $('status').textContent = ms == null ? '' : `, one RNN step in ${ms.toFixed(2)} ms`;
+  writeParams();
+}
+
+// --- Generate ---------------------------------------------------------------
+const letters = () => st.prefix.length - 1;
+const capped = () => !st.done && letters() >= MAX_LEN;
+const locked = () => st.done || capped();
+
+async function renderGenerate(){
+  const {step, T, prefix, done} = st;
+  // every character so far with the probability it had when it was added, and the h after reading it
+  const toks = [{c: '.', p: null, h: (await stateAfter(step, '.')).h, kind: 'mark'}];
+  for (let i = 1; i < prefix.length; i++){
+    const p = (await probsAfter(step, prefix.slice(0, i), T))[INDEX[prefix[i]]];
+    toks.push({c: prefix[i], p, h: (await stateAfter(step, prefix.slice(0, i + 1))).h, kind: 'letter'});
+  }
+  const last = await stateAfter(step, prefix);
+  const probs = NR.softmax(last.scores, T);
+  if (done) toks.push({c: '.', p: probs[0], h: null, kind: 'end'});
+  const k = letters(), u = k < MAX_LEN ? NR.uniforms(st.seed, st.no)[k] : null;
+  const next = u == null ? null : NR.pick(probs, u);
+  const data = st.data ? NR.nextShares(TRAIN, prefix.slice(1)) : null;
+  await renderList();
+  if (st.view !== 'generate') return;
+
+  st.gen = {prefix, done, capped: capped(), tokens: toks.map(t => t.c), tokenProbs: toks.map(t => t.p),
+    scores: Array.from(last.scores), probs: Array.from(probs), u, next: next == null ? null : CHARS[next],
+    data: data && {n: data.n, shares: Array.from(data.shares)}};
+
+  // the name so far
+  const newest = !done && prefix.length > 1 ? prefix.length - 1 : -1;
+  $('tokens').innerHTML = toks.map((t, i) => {
+    const cls = t.kind === 'mark' ? 'mark' : t.kind === 'end' ? 'end' : (i === newest ? 'newest' : '');
+    const sub = t.kind === 'mark' ? 'start' : fmtP(t.p);
+    return `<span class="tok ${cls}"><b>${t.c}</b><small>${sub}</small>${st.hidden && t.h ? `<canvas data-i="${i}"></canvas>` : ''}</span>`;
+  }).join('') + (locked() ? '' : `<span class="tok next"><b>_</b><small>next</small></span>`);
+  if (st.hidden) $('tokens').querySelectorAll('canvas').forEach(cv => drawHidden(cv, toks[+cv.dataset.i].h));
+  $('hiddenCap').hidden = !st.hidden;
+
+  const seen = `<b>${spaced(prefix)}</b>`, nm = prefix.slice(1);
+  let msg;
+  if (done){
+    const mark = NR.markOf(nm, TRAIN_SET, VAL_SET);
+    msg = nm
+      ? `Finished: <b>${nm}</b>. ${q('.')} was chosen, so the name ends here. <span class="mk${mark === 'new' ? ' new' : ''}">${nm} is ${mark === 'new' ? 'new: it is not in the training names or the validation names' : MARK_TEXT[mark]}.</span>`
+      : `Finished at once: ${q('.')} was chosen as the first character, so the name is empty.`;
+  } else if (capped()) msg = `${MAX_LEN} letters and no ${q('.')} yet. This page stops a name here. Undo, or start over.`;
+  else if (prefix === '.') msg = `The model has read ${seen}, the start of a name. Below: its probability for each possible first character.`;
+  else msg = `The model has read ${seen}. Below: its probability for each possible next character.`;
+  $('nameMsg').innerHTML = msg;
+
+  for (const id of ['bSample', 'bLikely', 'bFinish']) $(id).disabled = locked();
+  $('bUndo').disabled = prefix === '.' && !done;
+  $('barsTitle').textContent = done ? `The last choice, at T = ${tStr(T)}` : `Next character: probabilities at T = ${tStr(T)}`;
+  $('nameNo').textContent = `name ${st.no}`;
+
+  drawBars(probs, last.scores, data);
+  const after = prefix === '.' ? 'the start' : spaced(prefix);
+  $('barsCap').innerHTML = (done
+      ? `Bars: the probabilities after ${esc(after)}, where ${q('.')} was chosen. Start over for a new name.`
+      : `27 bars, one per character. The 27 probabilities add up to 1. Click a bar to add that character.`)
+    + (!data ? '' : prefix === '.'
+      ? ` Grey: the share of the <b>${int(data.n)}</b> training names that start with each character.`
+      : data.n ? ` Grey: among the <b>${int(data.n)}</b> training names that start with ${q(prefix.slice(1))}, the share followed by each character (${q('.')}: the name ends there).`
+      : ` Grey: no training name starts with ${q(prefix.slice(1))}, so there is nothing to count. The model still gives a probability to every character.`);
+  drawStrip(probs, u, next);
+  $('stripCap').innerHTML = u == null || locked()
+    ? (done ? 'The name is finished.' : '')
+    : `How Sample next chooses: the 27 probabilities laid end to end from 0 to 1. The random number for this position, <b>${u.toFixed(3)}</b>, falls in ${q(CHARS[next])}, so Sample next adds ${q(CHARS[next])}.`;
+}
+
+function barsHeight(){ return Math.round(Math.max(220, Math.min(390, window.innerHeight - 560 - (st.hidden ? 130 : 0)))); }
+function niceMax(v){ for (const m of [0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1]) if (v <= m * 0.97) return m; return 1; }
+function tickStep(m){ return m <= 0.05 ? 0.01 : m <= 0.1 ? 0.02 : m <= 0.2 ? 0.05 : m <= 0.5 ? 0.1 : 0.2; }
+
+let barGeom = null;
+function drawBars(probs, scores, data){
+  const svg = $('bars'), W = $('barsBox').clientWidth, H = barsHeight();
+  if (!W) return;
+  const ml = 44, mr = 6, mt = 24, mb = st.scores ? 56 : 40;
+  const pw = W - ml - mr, ph = H - mt - mb, slot = pw / V;
+  const ymax = niceMax(Math.max(...probs, ...(data ? data.shares : [0])));
+  const y = v => mt + ph * (1 - v / ymax);
+  const order = Array.from({length: V}, (_, i) => i);
+  if (st.sort) order.sort((a, b) => probs[b] - probs[a] || a - b);
+  const top = new Set(Array.from({length: V}, (_, i) => i).sort((a, b) => probs[b] - probs[a]).slice(0, 5).filter(i => probs[i] >= 0.005));
+  let lastLabel = null;   // {right edge, lifted} of the previous label, to keep neighbours apart
+  const lock = locked();
+  let s = '';
+  const step = tickStep(ymax);
+  for (let t = 0; t <= ymax + 1e-9; t += step){
+    s += `<line class="grid" x1="${ml}" x2="${W - mr}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}"/>`;
+    s += `<text class="yl" x="${ml - 7}" y="${(y(t) + 4).toFixed(1)}">${tick(t, step)}</text>`;
+  }
+  order.forEach((i, pos) => {
+    const x0 = ml + pos * slot, cx = x0 + slot / 2;
+    const bw = data ? slot * 0.36 : slot * 0.6;
+    const xm = data ? cx - bw - 1 : cx - bw / 2;
+    let cls = 'mb';
+    if (st.flash === i) cls += ' flash';
+    else if (st.done) cls += i === 0 ? ' chosen' : ' off';
+    s += `<g class="slot" data-i="${i}"><rect class="hit" x="${x0.toFixed(1)}" y="${mt - 18}" width="${slot.toFixed(1)}" height="${(ph + 18 + mb).toFixed(1)}"/>`;
+    s += `<rect class="${cls}" x="${xm.toFixed(1)}" y="${y(probs[i]).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0, y(0) - y(probs[i])).toFixed(1)}"/>`;
+    if (data) s += `<rect class="db" x="${(cx + 1).toFixed(1)}" y="${y(data.shares[i]).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0, y(0) - y(data.shares[i])).toFixed(1)}"/>`;
+    if (top.has(i)){
+      const text = fmtP(probs[i]), lx = xm + bw / 2, half = text.length * 3.6 + 2;
+      const lift = lastLabel && !lastLabel.lifted && lx - half < lastLabel.right && Math.abs(lastLabel.y - y(probs[i])) < 15;
+      const ly = y(probs[i]) - 6 - (lift ? 15 : 0);
+      s += `<text class="vl" x="${lx.toFixed(1)}" y="${ly.toFixed(1)}">${text}</text>`;
+      lastLabel = {right: lx + half, lifted: lift, y: y(probs[i])};
+    }
+    s += `<text class="xl" x="${cx.toFixed(1)}" y="${(H - mb + 21).toFixed(1)}">${CHARS[i]}</text>`;
+    if (i === 0) s += `<text class="xs" x="${cx.toFixed(1)}" y="${(H - mb + 34).toFixed(1)}">end</text>`;
+    if (st.scores) s += `<text class="sl" x="${cx.toFixed(1)}" y="${(H - mb + (i === 0 ? 50 : 44)).toFixed(1)}">${signed(scores[i], 1)}</text>`;
+    s += '</g>';
+  });
+  if (st.scores) s += `<text class="yl" x="${ml - 7}" y="${(H - mb + 44).toFixed(1)}">score</text>`;
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.classList.toggle('locked', lock);
+  svg.innerHTML = s;
+  barGeom = {probs, scores, data};
+}
+
+function drawStrip(probs, u, next){
+  const svg = $('strip'), W = $('stripBox').clientWidth, H = 54;
+  if (!W) return;
+  if (u == null || locked()){ svg.setAttribute('height', 0); svg.innerHTML = ''; return; }
+  const ml = 44, mr = 6, top = 18, h = 24, pw = W - ml - mr;
+  let s = '', c = 0;
+  for (let i = 0; i < V; i++){
+    const x0 = ml + c * pw, w = probs[i] * pw;
+    c += probs[i];
+    const on = i === next;
+    s += `<rect class="${on ? 'segOn' : 'seg' + (i % 2)}" x="${x0.toFixed(2)}" y="${top}" width="${Math.max(0, w).toFixed(2)}" height="${h}"/>`;
+    if (w >= 11) s += `<text class="segl${on ? ' on' : ''}" x="${(x0 + w / 2).toFixed(1)}" y="${top + 16.5}">${CHARS[i]}</text>`;
+  }
+  const xu = ml + u * pw;
+  s += `<line class="mk" x1="${xu.toFixed(1)}" x2="${xu.toFixed(1)}" y1="${top - 4}" y2="${top + h + 4}"/>`;
+  const label = `random number ${u.toFixed(3)}`;
+  const anchor = u < 0.12 ? 'start' : u > 0.88 ? 'end' : 'middle';
+  s += `<text class="mkl" x="${xu.toFixed(1)}" y="${top - 7}" text-anchor="${anchor}">${label}</text>`;
+  s += `<text class="yl" x="${ml - 7}" y="${top + 16}">0</text><text class="yl" x="${W - mr}" y="${top + h + 15}" style="text-anchor:end">1</text>`;
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = s;
+}
+
+// 128 hidden values as 16 rows of 8 cells: red positive, blue negative, full colour at ±1.
+function drawHidden(cv, h){
+  const cols = 8, rows = HIDDEN / cols, cell = 5, dpr = window.devicePixelRatio || 1;
+  cv.style.width = cols * cell + 'px'; cv.style.height = rows * cell + 'px';
+  cv.width = Math.round(cols * cell * dpr); cv.height = Math.round(rows * cell * dpr);
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  for (let i = 0; i < HIDDEN; i++){
+    const v = Math.max(-1, Math.min(1, h[i])), a = Math.abs(v);
+    const col = v >= 0 ? [214, 39, 40] : [31, 111, 180];
+    ctx.fillStyle = `rgb(${Math.round(255 + (col[0] - 255) * a)},${Math.round(255 + (col[1] - 255) * a)},${Math.round(255 + (col[2] - 255) * a)})`;
+    ctx.fillRect((i % cols) * cell, Math.floor(i / cols) * cell, cell, cell);
+  }
+}
+
+async function renderList(){
+  const count = st.listCount;
+  const items = [];
+  for (let no = 1; no <= count; no++) items.push(await sampleName(st.step, st.T, st.seed, no));
+  st.list = {count, step: st.step, T: st.T, seed: st.seed, items};
+  showList(items);
+}
+function showList(items){
+  const n = items.length, by = {train: 0, val: 0, new: 0, empty: 0};
+  items.forEach(it => by[it.mark]++);
+  const cut = items.filter(it => !it.end).length;
+  $('bMany').textContent = n ? 'Generate 20 more' : 'Generate 20 names';
+  $('bMany').disabled = n >= LIST_MAX;
+  $('bClear').disabled = !n;
+  $('share').innerHTML = n
+    ? `New names: <b>${by.new}</b> of ${n} (${Math.round(100 * by.new / n)}%)<small>in training names ${by.train}, in validation names only ${by.val}${by.empty ? `, empty ${by.empty}` : ''}${cut ? `; ${cut} of the new ones stopped at ${MAX_LEN} letters without ${q('.')}` : ''}${n > LIST_STEP ? `. The list shows the last ${LIST_STEP}; the counts are for all ${n}.` : ''}</small>`
+    : `<small>Model after ${int(st.step)} steps, T = ${tStr(st.T)}, seed ${st.seed}.</small>`;
+  $('list').innerHTML = items.slice(-LIST_STEP).map(it => {
+    const nm = it.name ? esc(it.name) + (it.end ? '' : '…') : '<span class="empty">(empty)</span>';
+    const mk = it.end ? MARK_TEXT[it.mark] : `no ${q('.')} after ${MAX_LEN} letters`;
+    return `<li><span class="no">${it.no}</span><span class="nm" title="${esc(it.name)}">${nm}</span><span class="mk ${it.mark}">${mk}</span></li>`;
+  }).join('');
+}
+
+// --- Score a name -------------------------------------------------------------
+let counts = null, countVal = null;
+function countsReady(){
+  if (!counts){ counts = NR.trigramCounts(TRAIN); countVal = NR.countingLoss(counts, VAL); }
+}
+async function renderScore(){
+  countsReady();
+  const name = st.scoreName, step = st.step;
+  $('nameIn').value === name || document.activeElement === $('nameIn') || ($('nameIn').value = name);
+  document.querySelectorAll('#presets button').forEach(b => b.classList.toggle('on', b.dataset.n === name));
+  $('inNote').textContent = st.scoreNote;
+  if (!name){
+    st.score = {name, rows: []};
+    $('nameStatus').textContent = 'Type a name with the letters a to z.';
+    $('tScore').innerHTML = ''; $('scoreSum').innerHTML = '';
+    return;
+  }
+  const crow = NR.countingRows(counts, name);
+  const rows = [];
+  for (let i = 0; i <= name.length; i++){
+    const seen = '.' + name.slice(0, i), next = i < name.length ? name[i] : '.';
+    const p = (await probsAfter(step, seen, 1))[INDEX[next]];
+    rows.push({seen, next, p, nll: -Math.log(p), count: crow[i]});
+  }
+  if (st.view !== 'score' || st.scoreName !== name || st.step !== step) return;
+  const avg = rows.reduce((a, r) => a + r.nll, 0) / rows.length;
+  const unseen = rows.filter(r => r.count.k === 0).length;
+  const cAvg = unseen ? Infinity : rows.reduce((a, r) => a + r.count.nll, 0) / rows.length;
+  let low = 0;
+  rows.forEach((r, i) => { if (r.p < rows[low].p) low = i; });
+  const mark = NR.markOf(name, TRAIN_SET, VAL_SET);
+  st.score = {name, step, mark, low, avg, countAvg: unseen ? Infinity : cAvg, unseenCount: unseen, valLoss: valLoss(step),
+    countVal: {...countVal}, rows: rows.map(r => ({seen: r.seen, next: r.next, p: r.p, nll: r.nll,
+      count: {prev: r.count.prev, k: r.count.k, n: r.count.n, p: r.count.p, nll: r.count.nll}}))};
+
+  const also = mark === 'train' && VAL_SET.has(name) ? ' It is also in the validation names: names.txt lists some names twice.' : '';
+  $('nameStatus').innerHTML = mark === 'train' ? `<b>${name}</b> is in the training names.${also}`
+    : mark === 'val' ? `<b>${name}</b> is in the validation names: the model was not trained on it.`
+    : `<b>${name}</b> is not in the training names or the validation names.`;
+
+  const head = `<thead><tr><th class="c">Position</th><th class="l">The model has seen</th><th class="c">Next<br>character</th>
+    <th>RNN<br>probability</th><th class="l"></th><th>−log p</th><th></th>
+    ${st.count ? '<th class="split">Counting<br>(previous 2 letters)</th><th>−log p</th>' : ''}</tr></thead>`;
+  const body = rows.map((r, i) => {
+    const c = r.count, isLow = i === low;
+    const cp = c.n === 0 ? `0 (never seen)<small>${q(c.prev)} is never followed by anything</small>`
+      : c.k === 0 ? `0 (never seen)<small>0 of ${int(c.n)} after ${q(c.prev)}</small>`
+      : `${fmtP(c.p)}<small>${int(c.k)} of ${int(c.n)} after ${q(c.prev)}</small>`;
+    return `<tr class="${isLow ? 'low' : ''}"><td class="c">${i + 1}</td><td class="l seen">${spaced(r.seen)}</td><td class="c next">${r.next}</td>
+      <td class="p">${fmtP(r.p)}</td><td class="pbar"><div class="bar"><i style="width:${(r.p * 100).toFixed(2)}%"></i></div></td>
+      <td class="nll">${nll(r.nll)}</td><td class="lowmk">${isLow ? 'least likely' : ''}</td>
+      ${st.count ? `<td class="split${c.k === 0 ? ' inf' : ''}">${cp}</td><td class="${c.k === 0 ? 'inf' : ''}">${nll(c.nll)}</td>` : ''}</tr>`;
+  }).join('');
+  $('tScore').innerHTML = head + `<tbody>${body}</tbody>`;
+
+  const v = st.score.countVal;
+  $('scoreSum').innerHTML = `
+    <div><span>RNN: average −log p over the ${rows.length} characters (the cross-entropy loss of ${name})</span><b>${nll(avg)}</b>
+      <small>This model's average on the ${int(VAL.length)} validation names: <b>${loss3(valLoss(step))}</b>.
+      The least likely character is ${q(rows[low].next)} after ${q(spaced(rows[low].seen))}: p = ${fmtP(rows[low].p)}, −log p = ${nll(rows[low].nll)}.</small></div>
+    ${st.count ? `<div><span>Counting with the previous 2 letters: average −log p</span><b>${nll(cAvg)}</b>
+      <small>${unseen ? `${unseen} of the ${rows.length} characters never follow the same 2 letters in the training names, so p = 0 and −log p = ∞.` : 'Every character was seen after the same 2 letters in the training names.'}
+      On the validation names, counting gives ∞: ${int(v.unseen)} of their ${int(v.chars)} characters were never seen after the same 2 letters. The other characters average <b>${v.avgSeen.toFixed(3)}</b>.</small></div>` : ''}`;
+}
+
+// --- Training -----------------------------------------------------------------
+let firstData = null;
+async function renderTraining(){
+  if (!firstData) firstData = NR.nextShares(TRAIN, '');
+  const step = st.step;
+  drawCurve();
+  drawCkTable();
+  const model = await probsAfter(step, '.', 1);
+  if (st.view !== 'training' || st.step !== step) return;
+  drawFirst(model, firstData.shares);
+  const a = INDEX.a;
+  $('firstSentence').innerHTML = `After the start ${q('.')}, the model after <b>${int(step)}</b> steps gives <span class="mono">a</span> the probability <b>${fmtP(model[a])}</b>.
+    Of the ${int(TRAIN.length)} training names, ${int(firstData.counts[a])} start with <span class="mono">a</span>: a share of <b>${fmtP(firstData.shares[a])}</b>.`;
+  st.training = {step, firstLetter: {model: Array.from(model), data: Array.from(firstData.shares)}, samples: null};
+  // the same 12 names (same random numbers) from every checkpoint
+  $('samplesCap').innerHTML = `Names 1 to ${SAMPLES} of seed <b>${st.seed}</b> at T = 1. Every column uses the same random numbers, so the names differ only because the model differs. Click a column to load that model.`;
+  const cols = {};
+  for (const s of STEPS){
+    cols[s] = [];
+    for (let no = 1; no <= SAMPLES; no++) cols[s].push(await sampleName(s, 1, st.seed, no));
+  }
+  if (st.view !== 'training' || st.step !== step) return;
+  st.training.samples = cols[step].map(it => it.name);
+  st.training.sampleMarks = cols[step].map(it => it.mark);
+  const head = `<thead><tr><th></th>${STEPS.map(s => `<th data-s="${s}" class="${s === step ? 'on' : ''}">${int(s)} steps</th>`).join('')}</tr></thead>`;
+  let body = '';
+  for (let r = 0; r < SAMPLES; r++){
+    body += `<tr><td>${r + 1}</td>` + STEPS.map(s => {
+      const it = cols[s][r], on = s === step;
+      const nm = it.name ? esc(it.name) + (it.end ? '' : '…') : '<span class="empty">(empty)</span>';
+      const mk = !on || !it.name ? '' : `<span class="mkSmall ${it.end ? it.mark : ''}">${it.end ? MARK_SHORT[it.mark] : 'no end'}</span>`;
+      return `<td class="${on ? 'on' : ''}" title="${esc(it.name)}"><span class="cell"><span class="nm">${nm}</span>${mk}</span></td>`;
+    }).join('') + '</tr>';
+  }
+  $('tSamples').innerHTML = head + `<tbody>${body}</tbody>`;
+  const by = {train: 0, val: 0, new: 0, empty: 0};
+  cols[step].forEach(it => by[it.mark]++);
+  const cut = cols[step].filter(it => !it.end).length;
+  $('samplesNote').innerHTML = `After ${int(step)} steps: <b>${by.new}</b> of ${SAMPLES} names are new${cut ? ` (${cut} of them stopped at ${MAX_LEN} letters without ${q('.')}: no end)` : ''}, ${by.train} are in the training names, ${by.val} only in the validation names${by.empty ? `, ${by.empty} empty` : ''}.`;
+}
+
+// the curve, its legend and the loss table on the left, and the 12 names below, fit in the window from about 1000 px high
+function trainingChartHeight(){ return Math.round(Math.max(220, Math.min(380, window.innerHeight - 735))); }
+function xOf(step, axis, x0, x1){
+  if (axis === 'log'){
+    const a = Math.log10(10), b = Math.log10(12000 + 10);
+    return x0 + (Math.log10(step + 10) - a) / (b - a) * (x1 - x0);
+  }
+  return x0 + step / 12000 * (x1 - x0);
+}
+let curveGeom = null;
+function drawCurve(){
+  const svg = $('curve'), W = $('curveBox').clientWidth, H = trainingChartHeight();
+  if (!W) return;
+  const ml = 46, mr = 14, mt = 26, mb = 34, x0 = ml, x1 = W - mr;
+  const lo = 1.8, hi = 3.4, y = v => mt + (H - mt - mb) * (1 - (v - lo) / (hi - lo));
+  const X = s => xOf(s, st.axis, x0, x1);
+  let s = '';
+  for (let v = lo; v <= hi + 1e-9; v += 0.2){
+    s += `<line class="grid" x1="${x0}" x2="${x1}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text class="yl" x="${x0 - 7}" y="${(y(v) + 4).toFixed(1)}">${v.toFixed(1)}</text>`;
+  }
+  const ticks = st.axis === 'log' ? [0, 10, 100, 1000, 10000] : [0, 2000, 4000, 6000, 8000, 10000, 12000];
+  for (const t of ticks) s += `<text class="yl" style="text-anchor:middle" x="${X(t).toFixed(1)}" y="${H - mb + 16}">${int(t)}</text>`;
+  s += `<text class="yl" style="text-anchor:end" x="${x1}" y="${H - 2}">training steps${st.axis === 'log' ? ' (log scale)' : ''}</text>`;
+  s += `<text class="yl" style="text-anchor:start" x="${x0 - 40}" y="${mt - 12}">loss (average −log p per character)</text>`;
+  s += `<polyline class="batch" points="${META.curve.map(([st_, v]) => `${X(st_).toFixed(1)},${y(v).toFixed(1)}`).join(' ')}"/>`;
+  for (const c of META.checkpoints){
+    const x = X(c.step), on = c.step === st.step;
+    if (on) s += `<line class="sel" x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${mt - 6}" y2="${H - mb}"/>`;
+    s += `<g class="ck" data-s="${c.step}"><circle class="trd" cx="${x.toFixed(1)}" cy="${y(c.train_loss).toFixed(1)}" r="${on ? 4.5 : 3.5}"/>`;
+    s += `<circle class="vad" cx="${x.toFixed(1)}" cy="${y(c.val_loss).toFixed(1)}" r="${on ? 8 : 6.5}"/></g>`;
+  }
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = s;
+  curveGeom = {X, y};
+}
+function drawCkTable(){
+  const cell = (s, text) => `<td data-s="${s}" class="${s === st.step ? 'on' : ''}">${text}</td>`;
+  $('tCk').innerHTML = `<thead><tr><th>Training steps</th>${META.checkpoints.map(c => cell(c.step, int(c.step))).join('')}</tr></thead>
+    <tbody><tr><th>Training loss</th>${META.checkpoints.map(c => cell(c.step, c.train_loss.toFixed(3))).join('')}</tr>
+    <tr><th>Validation loss</th>${META.checkpoints.map(c => cell(c.step, c.val_loss.toFixed(3))).join('')}</tr></tbody>`;
+}
+
+let firstGeom = null;
+function drawFirst(model, data){
+  const svg = $('first'), W = $('firstBox').clientWidth, H = trainingChartHeight() + 34;
+  if (!W) return;
+  const ml = 40, mr = 4, mt = 14, mb = 40, pw = W - ml - mr, ph = H - mt - mb, slot = pw / V, ymax = 0.15;
+  const y = v => mt + ph * (1 - Math.min(v, ymax) / ymax);
+  let s = '';
+  for (let t = 0; t <= ymax + 1e-9; t += 0.05)
+    s += `<line class="grid" x1="${ml}" x2="${W - mr}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}" style="stroke:var(--rule)"/><text class="yl" x="${ml - 6}" y="${(y(t) + 4).toFixed(1)}">${tick(t, 0.05)}</text>`;
+  for (let i = 0; i < V; i++){
+    const cx = ml + (i + 0.5) * slot, bw = slot * 0.36;
+    s += `<g class="slot" data-i="${i}"><rect class="hit" x="${(ml + i * slot).toFixed(1)}" y="${mt}" width="${slot.toFixed(1)}" height="${ph + mb}"/>`;
+    s += `<rect class="mb" x="${(cx - bw - 1).toFixed(1)}" y="${y(model[i]).toFixed(1)}" width="${bw.toFixed(1)}" height="${(y(0) - y(model[i])).toFixed(1)}"/>`;
+    s += `<rect class="db" x="${(cx + 1).toFixed(1)}" y="${y(data[i]).toFixed(1)}" width="${bw.toFixed(1)}" height="${(y(0) - y(data[i])).toFixed(1)}"/>`;
+    s += `<text class="xl" x="${cx.toFixed(1)}" y="${(H - mb + 20).toFixed(1)}">${CHARS[i]}</text>`;
+    if (i === 0) s += `<text class="xs" x="${cx.toFixed(1)}" y="${(H - mb + 33).toFixed(1)}">end</text>`;
+    s += '</g>';
+  }
+  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = s;
+  firstGeom = {model, data};
+}
+
+// ---------------------------------------------------------------------------
+// Actions
+// ---------------------------------------------------------------------------
+let actionId = 0;                // a new action stops a running animation
+function append(c){
+  if (locked()) return;
+  if (c === '.') st.done = true;
+  else st.prefix += c;
+}
+async function nextIndex(){
+  const probs = await probsAfter(st.step, st.prefix, st.T);
+  return NR.pick(probs, NR.uniforms(st.seed, st.no)[letters()]);
+}
+// Show the chosen bar for a moment, then add the character.
+async function choose(j, delay, id){
+  if (delay){
+    st.flash = j; await render(); await sleep(delay);
+    st.flash = null;
+    if (id !== actionId) return false;
+  }
+  append(CHARS[j]);
+  return true;
+}
+async function sampleNext(delay = 0){
+  if (locked()) return;
+  const id = ++actionId;
+  await choose(await nextIndex(), delay, id);
+  await render();
+}
+async function mostLikely(delay = 0){
+  if (locked()) return;
+  const id = ++actionId;
+  await choose(NR.argmax((await stateAfter(st.step, st.prefix)).scores), delay, id);
+  await render();
+}
+async function finish(delay = 0){
+  const id = ++actionId;
+  while (!locked()){
+    if (!await choose(await nextIndex(), delay, id)) return;
+    if (delay){ await render(); if (id !== actionId) return; }
+  }
+  await render();
+}
+async function appendChar(c){
+  ++actionId; st.flash = null;
+  c = String(c).toLowerCase();
+  if (INDEX[c] == null) return;
+  append(c);
+  await render();
+}
+async function undo(){
+  ++actionId; st.flash = null;
+  if (st.done) st.done = false;
+  else if (st.prefix.length > 1) st.prefix = st.prefix.slice(0, -1);
+  await render();
+}
+async function startOver(){
+  ++actionId; st.flash = null;
+  st.no++; st.prefix = '.'; st.done = false;
+  await render();
+}
+async function setPrefix(letters){
+  ++actionId; st.flash = null;
+  st.prefix = '.' + NR.clean(letters).name; st.done = false;
+  await render();
+}
+async function generateMore(n = LIST_STEP, delay = 0){
+  const id = ++actionId;
+  const target = Math.min(LIST_MAX, st.listCount + n);
+  if (!delay){ st.listCount = target; await render(); return st.list; }
+  const items = [];
+  for (let no = 1; no <= st.listCount; no++) items.push(await sampleName(st.step, st.T, st.seed, no));
+  while (st.listCount < target){
+    st.listCount++;
+    items.push(await sampleName(st.step, st.T, st.seed, st.listCount));
+    showList(items);
+    await sleep(delay);
+    if (id !== actionId) break;
+  }
+  await render();
+  return st.list;
+}
+async function clearList(){ ++actionId; st.listCount = 0; await render(); }
+async function setStep(s){
+  s = +s;
+  if (!STEPS.includes(s)) throw new Error(`no model after ${s} steps; there are ${STEPS.join(', ')}`);
+  ++actionId; st.step = s; st.flash = null; await render();
+}
+async function setView(v){
+  if (!VIEWS.some(([k]) => k === v)) throw new Error(`unknown view ${v}`);
+  ++actionId; st.view = v; st.flash = null; await render();
+}
+async function setTemperature(t){
+  t = Math.round(Math.max(0.2, Math.min(2, +t)) * 10) / 10;
+  if (t !== st.T){ ++actionId; st.flash = null; }
+  st.T = t; $('rT').value = t; $('tVal').textContent = tStr(t);
+  await render();
+}
+async function setSeed(seed){
+  seed = Math.max(0, Math.floor(+seed) || 0);
+  ++actionId;
+  st.seed = seed; $('seed').value = seed;
+  st.no = 1; st.prefix = '.'; st.done = false; st.flash = null;
+  await render();
+}
+function takeScoreName(text){
+  const c = NR.clean(text);
+  const notes = [];
+  if (c.ignored.length) notes.push(`Ignored: ${c.ignored.map(ch => (ch === ' ' ? 'space' : q(ch))).join(', ')}. The model only knows the letters a to z.`);
+  if (c.cut) notes.push(`Only the first ${MAX_LEN} letters are scored.`);
+  st.scoreName = c.name; st.scoreNote = notes.join(' ');
+}
+async function setScoreName(text){ takeScoreName(text); await render(); }
+
+// ---------------------------------------------------------------------------
+// Controls
+// ---------------------------------------------------------------------------
+function seg(id, items, onPick){
+  $(id).innerHTML = items.map(([v, t]) => `<button data-v="${v}">${t}</button>`).join('');
+  $(id).addEventListener('click', e => { const b = e.target.closest('button'); if (b) onPick(b.dataset.v); });
+}
+function buildControls(){
+  seg('segView', VIEWS, v => setView(v));
+  seg('segStep', STEPS.map(s => [s, int(s)]), v => setStep(v));
+  seg('segAxis', [['log', 'Log'], ['linear', 'Linear']], v => { st.axis = v; markAxis(); render(); });
+  markAxis();
+  $('bSample').onclick = () => sampleNext(240);
+  $('bLikely').onclick = () => mostLikely(240);
+  $('bFinish').onclick = () => finish(220);
+  $('bUndo').onclick = () => undo();
+  $('bStart').onclick = () => startOver();
+  $('bMany').onclick = () => generateMore(LIST_STEP, 45);
+  $('bClear').onclick = () => clearList();
+  for (const [id, key] of [['chkSort', 'sort'], ['chkScores', 'scores'], ['chkData', 'data'], ['chkHidden', 'hidden'], ['chkCount', 'count']]){
+    $(id).checked = st[key];
+    $(id).onchange = e => { st[key] = e.target.checked; render(); };
+  }
+  $('rT').value = st.T; $('tVal').textContent = tStr(st.T);
+  $('rT').oninput = e => setTemperature(e.target.value);
+  $('seed').value = st.seed;
+  $('seed').onchange = e => setSeed(e.target.value);
+  $('bars').addEventListener('click', e => {
+    const g = e.target.closest('.slot');
+    if (g && !locked()) appendChar(CHARS[+g.dataset.i]);
+  });
+  $('bars').addEventListener('mousemove', e => barTip(e));
+  $('bars').addEventListener('mouseleave', () => { $('tip').hidden = true; });
+  $('first').addEventListener('mousemove', e => firstTip(e));
+  $('first').addEventListener('mouseleave', () => { $('tip3').hidden = true; });
+  $('curve').addEventListener('click', e => {
+    const g = e.target.closest('.ck');
+    if (g) return setStep(g.dataset.s);
+    if (!curveGeom) return;
+    const b = $('curve').getBoundingClientRect(), x = e.clientX - b.left;
+    let best = null, d = Infinity;
+    for (const s of STEPS){ const dd = Math.abs(curveGeom.X(s) - x); if (dd < d){ d = dd; best = s; } }
+    if (d < 40) setStep(best);
+  });
+  $('tCk').addEventListener('click', e => { const td = e.target.closest('[data-s]'); if (td) setStep(td.dataset.s); });
+  $('tSamples').addEventListener('click', e => { const th = e.target.closest('th[data-s]'); if (th) setStep(th.dataset.s); });
+  $('presets').innerHTML = PRESETS.map(n => `<button data-n="${n}">${n}</button>`).join('');
+  $('presets').addEventListener('click', e => { const b = e.target.closest('button'); if (b){ $('nameIn').value = b.dataset.n; setScoreName(b.dataset.n); } });
+  let typing = null;
+  $('nameIn').addEventListener('input', e => { clearTimeout(typing); typing = setTimeout(() => setScoreName(e.target.value), 120); });
+  $('nameIn').addEventListener('keydown', e => { if (e.key === 'Enter'){ clearTimeout(typing); setScoreName(e.target.value); } });
+  // keyboard in Generate: a to z and '.' add a character, Backspace undoes, Enter samples
+  document.addEventListener('keydown', e => {
+    if (st.view !== 'generate' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target.closest && e.target.closest('input, textarea, select')) return;
+    const k = e.key.toLowerCase();
+    if (k.length === 1 && INDEX[k] != null){ e.preventDefault(); if (!locked()) appendChar(k); }
+    else if (e.key === 'Backspace'){ e.preventDefault(); undo(); }
+    else if (e.key === 'Enter' && !(e.target.closest && e.target.closest('button'))){ e.preventDefault(); sampleNext(240); }
+  });
+  let resizeTimer = null;
+  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 120); });
+}
+function markAxis(){ document.querySelectorAll('#segAxis button').forEach(b => b.classList.toggle('on', b.dataset.v === st.axis)); }
+
+function placeTip(tip, box, x, yTop){
+  tip.hidden = false;
+  const bw = box.clientWidth, tw = tip.offsetWidth;
+  tip.style.left = Math.max(0, Math.min(bw - tw, x - tw / 2)) + 'px';
+  tip.style.top = Math.max(0, yTop - tip.offsetHeight - 10) + 'px';
+}
+function barTip(e){
+  const g = e.target.closest('.slot');
+  if (!g || !barGeom){ $('tip').hidden = true; return; }
+  const i = +g.dataset.i, {probs, scores, data} = barGeom;
+  const T = st.T;
+  let html = `<b>${CHARS[i]}</b>${i === 0 ? ' (end of the name)' : ''}&nbsp; probability <b style="font-family:inherit">${fmtP(probs[i])}</b><br>score ${signed(scores[i], 2)}`;
+  if (T !== 1) html += `, score / T = ${signed(scores[i] / T, 2)}`;
+  if (data) html += `<br>training names: ${data.n ? `${fmtP(data.shares[i])} (${int(data.counts[i])} of ${int(data.n)})` : 'none start like this'}`;
+  if (!locked()) html += '<br>click to add it';
+  $('tip').innerHTML = html;
+  const b = $('barsBox').getBoundingClientRect(), r = g.getBoundingClientRect();
+  placeTip($('tip'), $('barsBox'), r.left - b.left + r.width / 2, e.clientY - b.top - 4);
+}
+function firstTip(e){
+  const g = e.target.closest('.slot');
+  if (!g || !firstGeom){ $('tip3').hidden = true; return; }
+  const i = +g.dataset.i, {model, data} = firstGeom;
+  $('tip3').innerHTML = `<b>${CHARS[i]}</b>${i === 0 ? ' (an empty name)' : ''}<br>model ${fmtP(model[i])}<br>training names ${fmtP(data[i])} (${int(firstData.counts[i])} of ${int(TRAIN.length)})`;
+  const b = $('firstBox').getBoundingClientRect(), r = g.getBoundingClientRect();
+  placeTip($('tip3'), $('firstBox'), r.left - b.left + r.width / 2, e.clientY - b.top - 4);
+}
+
+// ---------------------------------------------------------------------------
+// URL: ?view=generate|score|training&step=12000&t=1&seed=1&name=dasaem, and more (README)
+// ---------------------------------------------------------------------------
+function readParams(){
+  const p = new URLSearchParams(location.search);
+  if (VIEWS.some(([k]) => k === p.get('view'))) st.view = p.get('view');
+  if (p.has('step') && STEPS.includes(+p.get('step'))) st.step = +p.get('step');
+  if (p.has('t') && Number.isFinite(+p.get('t'))) st.T = Math.round(Math.max(0.2, Math.min(2, +p.get('t'))) * 10) / 10;
+  if (p.has('seed') && Number.isFinite(+p.get('seed'))) st.seed = Math.max(0, Math.floor(+p.get('seed')));
+  if (p.has('no') && +p.get('no') >= 1) st.no = Math.floor(+p.get('no'));
+  if (p.has('prefix')) st.prefix = '.' + NR.clean(p.get('prefix')).name;
+  if (p.get('done') === '1' && st.prefix.length > 1) st.done = true;
+  if (p.has('name')) takeScoreName(p.get('name'));
+  if (p.has('list')) st.listCount = Math.max(0, Math.min(LIST_MAX, Math.floor(+p.get('list')) || 0));
+  for (const key of ['sort', 'scores', 'data', 'hidden', 'count']) if (p.has(key)) st[key] = p.get(key) === '1';
+  if (['log', 'linear'].includes(p.get('axis'))) st.axis = p.get('axis');
+}
+function writeParams(){
+  const p = new URLSearchParams();
+  p.set('view', st.view); p.set('step', st.step); p.set('t', tStr(st.T)); p.set('seed', st.seed);
+  if (st.no !== 1) p.set('no', st.no);
+  if (st.prefix !== '.') p.set('prefix', st.prefix.slice(1));
+  if (st.done) p.set('done', '1');
+  if (st.listCount) p.set('list', st.listCount);
+  if (st.view === 'score' || st.scoreName !== DEFAULT_NAME) p.set('name', st.scoreName);
+  for (const key of ['sort', 'scores', 'data', 'hidden', 'count']) if (st[key]) p.set(key, '1');
+  if (st.axis !== 'log') p.set('axis', st.axis);
+  try { history.replaceState(null, '', '?' + p.toString()); } catch (e) { /* some browsers refuse on file:// */ }
+}
+
+// ---------------------------------------------------------------------------
+// Start
+// ---------------------------------------------------------------------------
+function fail(msg, title = 'The demo could not start.'){
+  $('loading').hidden = false;
+  $('loading').innerHTML = `${esc(title)}<small>${esc(msg)}</small>`;
+}
+const ready = (async () => {
+  if (!META || !window.TRAIN_NAMES || !window.VAL_NAMES){
+    fail('data.js is missing. Copy the whole folder: index.html, data.js and the folder model.');
+    throw new Error('data.js is missing');
+  }
+  if (typeof ort === 'undefined'){
+    fail('ONNX Runtime Web, which runs the model, could not be loaded from cdn.jsdelivr.net. This page needs an internet connection. Check the connection and reload the page.');
+    throw new Error('onnxruntime-web did not load');
+  }
+  ort.env.wasm.numThreads = 1;   // GitHub Pages cannot send the headers that multi-threaded WebAssembly needs
+  ort.env.logLevel = 'error';
+  readParams();
+  buildControls();
+  try {
+    $('loadMsg').textContent = 'Starting ONNX Runtime Web';
+    await stateAfter(st.step, '.');
+  } catch (e) {
+    fail(`The model could not be started: ${e.message || e}. If you are offline, connect to the internet and reload: ONNX Runtime Web comes from cdn.jsdelivr.net.`);
+    throw e;
+  }
+  $('loading').hidden = true;
+  await render();
+})();
+ready.catch(e => console.warn(e));
+
+window.RNN_DEMO = {
+  ready, st, timing,
+  hooks: {
+    setStep, setView, setTemperature, setSeed,
+    setName: setScoreName,
+    appendChar, sampleNext: () => sampleNext(0), mostLikely: () => mostLikely(0), finish: () => finish(0),
+    undo, startOver, setPrefix,
+    generateMany: (n = LIST_STEP) => generateMore(n, 0), clearList,
+    probsAfter: async (step, prefix, T = 1) => Array.from(await probsAfter(step, prefix, T)),
+    sampleName: (step, T, seed, no) => sampleName(step, T, seed, no),
+    render,
+    state: () => JSON.parse(JSON.stringify({
+      view: st.view, step: st.step, T: st.T, seed: st.seed, no: st.no, prefix: st.prefix, done: st.done,
+      sort: st.sort, scores: st.scores, data: st.data, hidden: st.hidden, listCount: st.listCount,
+      gen: st.gen, list: st.list, score: st.score, training: st.training,
+      timing: {runs: timing.runs, msPerRun: timing.runs ? timing.runMs / timing.runs : null, msRecent: runMean(), sessionMs: timing.sessionMs},
+    }, (k, v) => (v === Infinity ? 'Infinity' : v))),
+  },
+};
+})();
+</script>
+</body>
+</html>
